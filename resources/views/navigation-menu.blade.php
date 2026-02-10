@@ -58,14 +58,14 @@
             href="{{ route('personnel.index') }}"
             :active="request()->routeIs('personnel.index')"
             icon="heroicon-o-cpu-chip">
-            {{ __('Station Overview') }}
+            {{ __('Assigned Lab') }}
         </x-sidebar-link>
 
         <x-sidebar-link
             href="{{ route('personnel.labs') }}"
             :active="request()->routeIs('personnel.labs')"
             icon="heroicon-o-beaker">
-            {{ __('Assigned Labs') }}
+            {{ __('Lab Overview') }}
         </x-sidebar-link>
         @endif
 

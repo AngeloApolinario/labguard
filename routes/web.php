@@ -31,5 +31,9 @@ Route::middleware(['auth', 'verified', 'clearance:personnel'])
     ->name('personnel.')
     ->group(function () {
         Route::get('/', [PersonnelController::class, 'index'])->name('index');
-        Route::get('/labs', [PersonnelLabController::class, 'index'])->name('labs');
+        Route::get('/labs', [PersonnelController::class, 'labs'])->name('labs');
+        // Inside the 'personnel.' group in web.php
+        Route::get('/lab/{name}', [PersonnelController::class, 'showLab'])->name('lab.show');
+        Route::post('/assign/{computer}', [PersonnelController::class, 'assign'])->name('assign');
+        Route::post('/release/{computer}', [PersonnelController::class, 'release'])->name('release');
     });

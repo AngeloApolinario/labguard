@@ -78,7 +78,7 @@
             </div>
 
             <p class="mt-8 text-center text-[9px] text-slate-600 uppercase tracking-[0.5em] font-medium">
-                Araullo University &bull; Infrastructure Management
+                Araullo University &bull; Computer Laboratory Management System
             </p>
         </div>
     </div>

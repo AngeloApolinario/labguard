@@ -75,7 +75,7 @@
             </div>
 
             <p class="mt-8 text-center text-[9px] text-slate-600 uppercase tracking-[0.5em] font-medium">
-                Infrastructure Management Security &bull; AU
+                ARAULLO UNIVERSITY &bull; COMPUTER LABORATORY MANAGEMENT SYSTEM
             </p>
         </div>
     </div>

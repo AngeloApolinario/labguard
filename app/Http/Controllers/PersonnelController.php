@@ -10,7 +10,7 @@ class PersonnelController extends Controller
 {
     public function index()
     {
-        // Group computers by lab to show a summary on the selection page
+
         $labs = Computer::select('lab_name')
             ->selectRaw('count(*) as total')
             ->selectRaw("sum(case when status = 'active' then 1 else 0 end) as occupied")
@@ -22,8 +22,7 @@ class PersonnelController extends Controller
 
     public function showLab($name)
     {
-        $computers = Computer::where('lab_name', $name)->get();
-        return view('personnel.lab-view', compact('computers', 'name'));
+        return view('personnel.lab-view', compact('name'));
     }
 
     public function assign(Request $request, Computer $computer)

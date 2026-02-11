@@ -31,8 +31,17 @@ class Computer extends Model
     /**
      * Relationship: Get the one student currently assigned to this PC
      */
+
+
     public function activeSession()
     {
-        return $this->hasOne(LabSession::class)->whereNull('time_out');
+        // Primary: Look for currently open session
+        return $this->hasOne(LabSession::class)->whereNull('time_out')->latestOfMany();
+    }
+
+    public function lastSession()
+    {
+        // Fallback: Just get the last person who sat here
+        return $this->hasOne(LabSession::class)->latestOfMany();
     }
 }

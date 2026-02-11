@@ -29,6 +29,10 @@ class LabSession extends Model
     {
         return $this->belongsTo(Computer::class);
     }
+    protected $casts = [
+        'time_in' => 'datetime',
+        'time_out' => 'datetime',
+    ];
 
     /**
      * Get the teacher who recorded this session.

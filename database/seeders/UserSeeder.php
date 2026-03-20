@@ -6,6 +6,7 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Carbon\Carbon;
 
 class UserSeeder extends Seeder
 {
@@ -14,20 +15,42 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create Admin
+        $now = Carbon::now();
+
+        // 1. Create Super Admin (The Boss)
+        User::create([
+            'name' => 'Master Super Admin',
+            'email' => 'superadmin@labguard.com',
+            'password' => Hash::make('password'),
+            'role' => 'super-admin',
+            'email_verified_at' => $now, // Verified instantly
+        ]);
+
+        // 2. Create Admin
         User::create([
             'name' => 'System Admin',
             'email' => 'admin@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'admin',
+            'email_verified_at' => $now,
         ]);
 
-        // Create Personnel
+        // 3. Create Personnel
         User::create([
             'name' => 'John Teacher',
             'email' => 'teacher@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'personnel',
+            'email_verified_at' => $now,
+        ]);
+
+        // 4. Create Student
+        User::create([
+            'name' => 'Juan Dela Cruz',
+            'email' => 'student@labguard.com',
+            'password' => Hash::make('password'),
+            'role' => 'student',
+            'email_verified_at' => $now, // Verified instantly
         ]);
     }
 }

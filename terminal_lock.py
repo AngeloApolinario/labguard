@@ -6,7 +6,7 @@ import time
 import atexit
 
 # --- CONFIGURATION ---
-API_URL = "http://labguard.test/api/pc" 
+API_URL = "https://labguard.test/api/pc" 
 PC_NUMBER = "PC-01"  
 LAB_NAME = "Lab 1"
 # ---------------------
@@ -55,7 +55,7 @@ class LabGuardClient:
     def attempt_login(self):
         name = self.entry_name.get()
         student_id = self.entry_id.get()
-        
+        print(f"DEBUG: Attempting login for {name} ({student_id})")
         if not name or not student_id:
             messagebox.showwarning("Input Required", "Please fill in both Name and ID.")
             return
@@ -67,7 +67,7 @@ class LabGuardClient:
         }
 
         try:
-            response = requests.post(f"{API_URL}/login", json=payload, timeout=5)
+            response = requests.post(f"{API_URL}/login", json=payload, timeout=5, verify=False)
             
             if response.status_code == 200:
                 messagebox.showinfo("Success", f"Access Granted. Hello, {name}!")
@@ -81,7 +81,7 @@ class LabGuardClient:
     def heartbeat_loop(self):
         while True:
             try:
-                response = requests.get(f"{API_URL}/status/{PC_NUMBER}", timeout=5)
+                response = requests.get(f"{API_URL}/status/{PC_NUMBER}", timeout=5, verify=False)
                 if response.status_code == 200 and response.json().get('status') == 'locked':
                     self.lock_ui_again()
                     break

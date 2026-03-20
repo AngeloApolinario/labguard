@@ -3,7 +3,9 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use App\Http\Middleware\CheckClearance; // [1] Import your custom middleware
+use App\Http\Middleware\CheckClearance;
+use App\Http\Middleware\RestrictStudents;
+use App\Http\Middleware\EnsureSuperAdmin;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -12,12 +14,15 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware): void {
-        // [2] Register your middleware alias here
+    ->withMiddleware(function (Middleware $middleware) {
+        // [Put ALL your aliases in this one single list]
         $middleware->alias([
-            'clearance' => CheckClearance::class,
+            'clearance'    => CheckClearance::class,
+            'student.lock' => RestrictStudents::class,
+            'super-admin'  => EnsureSuperAdmin::class,
         ]);
     })
-    ->withExceptions(function (Exceptions $exceptions): void {
+    ->withExceptions(function (Exceptions $exceptions) {
         //
-    })->create();
+    })
+    ->create(); // This MUST be at the very end

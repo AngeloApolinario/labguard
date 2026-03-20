@@ -2,8 +2,16 @@
 
     <div class="flex items-center p-6 space-x-3 border-b border-[#D4AF37]/40 bg-white/5 backdrop-blur-md">
         <div class="shrink-0 flex items-center">
-            {{-- Dynamic Logo Link: Points to the user's respective home --}}
-            <a href="{{ Auth::user()->role === 'admin' ? route('dashboard.index') : route('personnel.index') }}">
+            {{-- Dynamic Logo Link --}}
+            @php
+            $homeRoute = match(Auth::user()->role) {
+            'super-admin' => route('super-admin.index'),
+            'admin' => route('dashboard.index'),
+            'personnel' => route('personnel.index'),
+            default => route('profile.show'),
+            };
+            @endphp
+            <a href="{{ $homeRoute }}">
                 <x-application-mark class="block h-10 w-auto bg-white p-1.5 rounded-xl shadow-[0_0_15px_rgba(212,175,55,0.3)]" />
             </a>
         </div>
@@ -17,31 +25,45 @@
 
     <div class="flex-1 px-4 mt-8 space-y-3">
 
+        {{-- SUPER ADMIN SECTION --}}
+        @if(Auth::user()->role === 'super-admin')
+        <p class="text-[10px] px-3 font-bold text-yellow-500 uppercase tracking-widest">Master Control</p>
+
+        <x-sidebar-link href="{{ route('super-admin.index') }}" :active="request()->routeIs('super-admin.index')" icon="heroicon-o-shield-check">
+            {{ __('System Overview') }}
+        </x-sidebar-link>
+
+        <x-sidebar-link href="{{ route('super-admin.users') }}" :active="request()->routeIs('super-admin.users')" icon="heroicon-o-user-group">
+            {{ __('User Management') }}
+        </x-sidebar-link>
+
+        <x-sidebar-link href="{{ route('super-admin.security') }}" :active="request()->routeIs('super-admin.security')" icon="heroicon-o-lock-closed">
+            {{ __('System Security') }}
+        </x-sidebar-link>
+
+        <x-sidebar-link href="{{ route('super-admin.analytics') }}" :active="request()->routeIs('super-admin.analytics')" icon="heroicon-o-chart-bar">
+            {{ __('Analytics') }}
+        </x-sidebar-link>
+
+        <x-sidebar-link href="{{ route('super-admin.settings') }}" :active="request()->routeIs('super-admin.settings')" icon="heroicon-o-adjustments-horizontal">
+            {{ __('Settings') }}
+        </x-sidebar-link>
+
+
+        @endif
+
         {{-- ADMIN ONLY SECTION --}}
         @if(Auth::user()->role === 'admin')
-        <p class="text-[10px] px-3 font-bold text-[#D4AF37]/60 uppercase tracking-widest">Master Control</p>
-
-        <x-sidebar-link
-            href="{{ route('dashboard.index') }}"
-            :active="request()->routeIs('dashboard.index')"
-            icon="heroicon-o-squares-2x2">
+        <p class="text-[10px] px-3 font-bold text-[#D4AF37]/60 uppercase tracking-widest">Admin Control</p>
+        <x-sidebar-link href="{{ route('dashboard.index') }}" :active="request()->routeIs('dashboard.index')" icon="heroicon-o-squares-2x2">
             {{ __('Dashboard') }}
         </x-sidebar-link>
-
-        <x-sidebar-link
-            href="{{ route('dashboard.labs') }}"
-            :active="request()->routeIs('dashboard.labs')"
-            icon="heroicon-o-computer-desktop">
+        <x-sidebar-link href="{{ route('dashboard.labs') }}" :active="request()->routeIs('dashboard.labs')" icon="heroicon-o-computer-desktop">
             {{ __('Computer Labs') }}
         </x-sidebar-link>
-
-        <x-sidebar-link
-            href="{{ route('dashboard.alerts') }}"
-            :active="request()->routeIs('dashboard.alerts')"
-            icon="heroicon-o-bell">
+        <x-sidebar-link href="{{ route('dashboard.alerts') }}" :active="request()->routeIs('dashboard.alerts')" icon="heroicon-o-bell">
             {{ __('Alert History') }}
         </x-sidebar-link>
-
         <x-sidebar-link
             href="{{ route('dashboard.settings') }}"
             :active="request()->routeIs('dashboard.settings')"
@@ -53,19 +75,19 @@
         {{-- PERSONNEL ONLY SECTION --}}
         @if(Auth::user()->role === 'personnel')
         <p class="text-[10px] px-3 font-bold text-cyan-400/60 uppercase tracking-widest">Station Terminal</p>
-
-        <x-sidebar-link
-            href="{{ route('personnel.index') }}"
-            :active="request()->routeIs('personnel.index')"
-            icon="heroicon-o-cpu-chip">
+        <x-sidebar-link href="{{ route('personnel.index') }}" :active="request()->routeIs('personnel.index')" icon="heroicon-o-cpu-chip">
             {{ __('Assigned Lab') }}
         </x-sidebar-link>
-
-        <x-sidebar-link
-            href="{{ route('personnel.labs') }}"
-            :active="request()->routeIs('personnel.labs')"
-            icon="heroicon-o-beaker">
+        <x-sidebar-link href="{{ route('personnel.labs') }}" :active="request()->routeIs('personnel.labs')" icon="heroicon-o-beaker">
             {{ __('Lab Overview') }}
+        </x-sidebar-link>
+        @endif
+
+        {{-- STUDENT ONLY SECTION --}}
+        @if(Auth::user()->role === 'student')
+        <p class="text-[10px] px-3 font-bold text-indigo-400 uppercase tracking-widest">Student Portal</p>
+        <x-sidebar-link href="{{ route('profile.show') }}" :active="request()->routeIs('profile.show')" icon="heroicon-o-user-circle">
+            {{ __('My Profile') }}
         </x-sidebar-link>
         @endif
 
@@ -85,7 +107,15 @@
                             <p class="text-sm font-bold text-white truncate">{{ Auth::user()->name }}</p>
                             {{-- Dynamic Role Badge --}}
                             <p class="text-[10px] text-slate-400 truncate uppercase tracking-tighter">
-                                {{ Auth::user()->role === 'admin' ? 'System Admin' : 'Lab Personnel' }}
+                                @if(Auth::user()->role === 'super-admin')
+                                <span class="text-yellow-500 font-bold">Super Admin</span>
+                                @elseif(Auth::user()->role === 'admin')
+                                System Admin
+                                @elseif(Auth::user()->role === 'personnel')
+                                Lab Personnel
+                                @else
+                                Student
+                                @endif
                             </p>
                         </div>
                         <svg class="size-4 text-[#D4AF37] group-hover:translate-y-[-2px] transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -97,7 +127,7 @@
                 <x-slot name="content">
                     <div class="px-4 py-3 border-b border-[#D4AF37]/20">
                         <p class="text-[10px] font-bold text-[#D4AF37] uppercase tracking-widest">
-                            {{ Auth::user()->role === 'admin' ? 'Master Control' : 'Personnel Access' }}
+                            @if(Auth::user()->role === 'super-admin') Master Access @else Account Access @endif
                         </p>
                     </div>
 

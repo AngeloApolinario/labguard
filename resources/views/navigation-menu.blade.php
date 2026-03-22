@@ -64,6 +64,10 @@
         <x-sidebar-link href="{{ route('dashboard.alerts') }}" :active="request()->routeIs('dashboard.alerts')" icon="heroicon-o-bell">
             {{ __('Alert History') }}
         </x-sidebar-link>
+        <x-sidebar-link href="{{ route('dashboard.users') }}" :active="request()->routeIs('dashboard.users')" icon="heroicon-o-users">
+            {{ __('User Management') }}
+        </x-sidebar-link>
+
         <x-sidebar-link
             href="{{ route('dashboard.settings') }}"
             :active="request()->routeIs('dashboard.settings')"

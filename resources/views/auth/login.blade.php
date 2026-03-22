@@ -33,15 +33,15 @@
                     @csrf
 
                     <div class="space-y-2">
-                        <label for="email" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Command Identity</label>
+                        <label for="email" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Email</label>
                         <input id="email"
                             class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-4 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600 shadow-inner"
                             type="email" name="email" :value="old('email')"
-                            placeholder="Admin Email" required autofocus />
+                            placeholder="Email" required autofocus />
                     </div>
 
                     <div class="space-y-2">
-                        <label for="password" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Access Password</label>
+                        <label for="password" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Password</label>
                         <input id="password"
                             class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-4 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600 shadow-inner"
                             type="password" name="password"
@@ -62,12 +62,12 @@
                     </div>
 
                     <button class="relative w-full group overflow-hidden rounded-xl bg-[#D4AF37] p-4 transition-all hover:bg-[#e6c152] active:scale-95 shadow-[0_10px_20px_-5px_rgba(212,175,55,0.4)]">
-                        <span class="relative z-10 text-xs font-black text-[#0f172a] uppercase tracking-[0.3em]">Initialize Access</span>
+                        <span class="relative z-10 text-xs font-black text-[#0f172a] uppercase tracking-[0.3em]">LOGIN</span>
                     </button>
                 </form>
 
                 <div class="mt-8 pt-6 border-t border-white/10 text-center">
-                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">New Personnel?</p>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">New User?</p>
                     <a href="{{ route('register') }}" class="inline-flex items-center justify-center w-full p-3 rounded-xl border border-[#D4AF37]/30 text-[#D4AF37] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#D4AF37]/10 transition-all group">
                         Request System Credentials
                         <svg class="ms-2 size-3 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">

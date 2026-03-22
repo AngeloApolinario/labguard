@@ -3,33 +3,15 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TerminalController;
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
-Route::post('/pc/login', [TerminalController::class, 'handleLogin']);
-//STATUS ROUTES
-Route::get('/pc/status/{pc_number}', [TerminalController::class, 'checkStatus']);
-Route::post('/pc/logout', [TerminalController::class, 'handleLogout']);
+// The Python script calls these via https://labguard.test/api/pc/...
+Route::prefix('pc')->group(function () {
+    // We use the 'login' method we built earlier for ID + Password + Verification check
+    Route::post('/login', [TerminalController::class, 'login']);
 
-Route::post('/pc-unlock', function (Request $request) {
-    $user = User::where('email', $request->email)->first();
+    // Status check for the heartbeat loop
+    Route::get('/status/{pc_number}', [TerminalController::class, 'checkStatus']);
 
-    if ($user && Hash::check($request->password, $user->password)) {
-
-        // CHECK: Has the student clicked the verification button?
-        if (!$user->hasVerifiedEmail()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Please verify your email on the website first!'
-            ], 403);
-        }
-
-        // Logic to create session history and unlock
-        return response()->json(['status' => 'success', 'user' => $user->name]);
-    }
-
-    return response()->json(['status' => 'error', 'message' => 'Invalid Credentials'], 401);
+    // Logout for when the script closes
+    Route::post('/logout', [TerminalController::class, 'handleLogout']);
 });

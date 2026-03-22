@@ -23,7 +23,9 @@ class UserSeeder extends Seeder
             'email' => 'superadmin@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'super-admin',
-            'email_verified_at' => $now, // Verified instantly
+            'student_number' => 'SA-01', // Added
+            'phone' => '09000000001',    // Added
+            'email_verified_at' => $now,
         ]);
 
         // 2. Create Admin
@@ -32,6 +34,8 @@ class UserSeeder extends Seeder
             'email' => 'admin@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'admin',
+            'student_number' => 'AD-01', // Added
+            'phone' => '09000000002',    // Added
             'email_verified_at' => $now,
         ]);
 
@@ -41,16 +45,20 @@ class UserSeeder extends Seeder
             'email' => 'teacher@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'personnel',
+            'student_number' => 'PR-01', // Added
+            'phone' => '09000000003',    // Added
             'email_verified_at' => $now,
         ]);
 
         // 4. Create Student
         User::create([
             'name' => 'Juan Dela Cruz',
-            'email' => 'student@labguard.com',
+            'email' => 'juan.student@phinmaed.com',
             'password' => Hash::make('password'),
             'role' => 'student',
-            'email_verified_at' => $now, // Verified instantly
+            'student_number' => '01-2324-048389',
+            'phone' => '09123456789',
+            'email_verified_at' => $now,
         ]);
     }
 }

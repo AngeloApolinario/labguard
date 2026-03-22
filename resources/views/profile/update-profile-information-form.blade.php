@@ -81,6 +81,19 @@
             @endif
             @endif
         </div>
+
+
+        <div class="col-span-6 sm:col-span-4">
+            <x-label for="student_number" value="{{ __('Student ID') }}" />
+            <x-input id="student_number" type="text" class="mt-1 block w-full" wire:model="state.student_number" required />
+            <x-input-error for="student_number" class="mt-2" />
+        </div>
+
+        <div class="col-span-6 sm:col-span-4">
+            <x-label for="phone" value="{{ __('Contact Number') }}" />
+            <x-input id="phone" type="text" class="mt-1 block w-full" wire:model="state.phone" required />
+            <x-input-error for="phone" class="mt-2" />
+        </div>
     </x-slot>
 
     <x-slot name="actions">

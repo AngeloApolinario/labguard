@@ -38,6 +38,18 @@
 
                     <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-1">
+                            <label for="student_number" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Student ID</label>
+                            <input id="student_number" class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600" type="text" name="student_number" :value="old('student_number')" placeholder="01-2324-048389" required />
+                        </div>
+
+                        <div class="space-y-1">
+                            <label for="phone" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Contact No.</label>
+                            <input id="phone" class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600" type="text" name="phone" :value="old('phone')" placeholder="09XXXXXXXXX" required />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1">
                             <label for="password" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">New Password</label>
                             <input id="password" class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600" type="password" name="password" placeholder="••••••••" required autocomplete="new-password" />
                         </div>

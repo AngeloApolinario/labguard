@@ -58,6 +58,19 @@ Route::middleware([
     Route::get('/labs', [LabController::class, 'index'])->name('labs');
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+
+    // --- New User Management Routes ---
+    // URL: /dashboard/users | Route Name: dashboard.users
+    Route::get('/users', [DashboardController::class, 'userManagement'])->name('users');
+
+    // URL: /dashboard/users/store | Route Name: dashboard.users.store
+    Route::post('/users/store', [DashboardController::class, 'storeUser'])->name('users.store');
+
+    // New Edit/Update/Delete Routes
+    Route::patch('/users/{user}', [DashboardController::class, 'updateUser'])->name('users.update');
+    Route::delete('/users/{user}', [DashboardController::class, 'destroyUser'])->name('users.destroy');
+    //TERMINATE SESSION
+    Route::patch('/sessions/{session}/terminate', [DashboardController::class, 'terminateSession'])->name('sessions.terminate');
 });
 
 // 5. PERSONNEL TERMINAL (Requires Verified Status)

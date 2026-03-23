@@ -20,6 +20,7 @@
         </div>
     </x-slot>
 
+    {{-- Initializing with 'all' ensures all PCs show on load --}}
     <div class="py-12 px-6 min-h-screen bg-[#F8FAFC]" x-data="{ activeLab: 'all' }">
         <div class="max-w-7xl mx-auto space-y-10">
 
@@ -46,27 +47,31 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+                <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Network Health</p>
                     <div class="px-5 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-500 font-black text-sm uppercase">Optimal</div>
                 </div>
             </div>
 
-            {{-- Lab Filter --}}
-            <div class="flex items-center space-x-3 bg-slate-200/50 p-1.5 rounded-2xl w-fit">
+            {{-- Lab Filter (Using ID for 100% Reliability) --}}
+            <div class="flex flex-wrap items-center gap-3 bg-slate-200/50 p-2 rounded-3xl w-fit">
                 <button @click="activeLab = 'all'"
-                    :class="activeLab === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'"
-                    class="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">All Nodes</button>
+                    :class="activeLab === 'all' ? 'bg-white text-slate-800 shadow-sm scale-105' : 'text-slate-500 hover:text-slate-800'"
+                    class="px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-200">
+                    All Nodes
+                </button>
                 @foreach($labs as $lab)
-                <button @click="activeLab = '{{ $lab }}'"
-                    :class="activeLab === '{{ $lab }}' ? 'bg-[#D4AF37] text-white shadow-lg' : 'text-slate-500 hover:text-slate-800'"
-                    class="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">{{ $lab }}</button>
+                <button @click="activeLab = {{ $lab->id }}"
+                    :class="activeLab === {{ $lab->id }} ? 'bg-[#D4AF37] text-white shadow-lg scale-105' : 'text-slate-500 hover:text-slate-800'"
+                    class="px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-200">
+                    {{ $lab->name }}
+                </button>
                 @endforeach
             </div>
 
             {{-- Topology Map --}}
-            <div class="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-sm">
-                <div class="flex justify-between items-center mb-10 pb-6 border-b border-slate-50">
+            <div class="bg-white rounded-[3rem] p-10 border border-slate-200 shadow-sm relative">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-10 pb-6 border-b border-slate-50 gap-4">
                     <h4 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">Terminal <span class="text-[#D4AF37]">Topology</span></h4>
                     <div class="flex items-center space-x-6">
                         <div class="flex items-center space-x-2">
@@ -80,33 +85,36 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-4">
-                    @foreach($computers as $pc)
-                    {{-- THE WRAPPER: relative and isolate prevent mouse axis issues --}}
+                {{-- The Grid Container --}}
+                <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-4">
+                    @forelse($computers as $pc)
                     <div
-                        x-show="activeLab === 'all' || activeLab === '{{ $pc->lab_name }}'"
+                        x-show="activeLab === 'all' || activeLab === {{ $pc->lab_id }}"
                         x-transition:enter="transition ease-out duration-300"
                         x-transition:enter-start="opacity-0 scale-90"
                         x-transition:enter-end="opacity-100 scale-100"
-                        class="group relative z-10 aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all duration-300 transform-gpu
-                            {{ $pc->status === 'active' ? 'bg-rose-500 border-rose-600 text-white shadow-lg scale-105' : '' }}
-                            {{ $pc->status === 'available' ? 'bg-slate-50 border-slate-100 text-slate-400 hover:border-[#D4AF37] hover:bg-white' : '' }}
-                            {{ $pc->status === 'maintinance' ? 'bg-amber-500 border-amber-600 text-white' : '' }}">
+                        class="group relative aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all duration-300 transform-gpu cursor-default
+                            {{ $pc->status === 'active' ? 'bg-rose-500 border-rose-600 text-white shadow-lg z-20 scale-105' : '' }}
+                            {{ $pc->status === 'available' ? 'bg-slate-50 border-slate-100 text-slate-400 hover:border-[#D4AF37] hover:bg-white z-10' : '' }}
+                            {{ $pc->status === 'maintenance' ? 'bg-amber-500 border-amber-600 text-white z-10' : '' }}">
 
                         <span class="text-[10px] font-black tracking-tighter">{{ $pc->pc_number }}</span>
 
                         @if($pc->status === 'active')
-                        <svg class="size-4 mt-1 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="size-4 mt-1 opacity-80 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                         @endif
 
-                        {{-- THE TOOLTIP: pointer-events-none by default fixes the 'offset' hover bug --}}
-                        <div class="absolute bottom-[110%] left-1/2 -translate-x-1/2 w-48 p-4 bg-slate-800 rounded-2xl 
-                                    opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto 
+                        {{-- Tooltip: Z-indexed to always appear on top --}}
+                        <div class="absolute bottom-[115%] left-1/2 -translate-x-1/2 w-52 p-4 bg-slate-900 rounded-2xl 
+                                    opacity-0 group-hover:opacity-100 invisible group-hover:visible pointer-events-none group-hover:pointer-events-auto 
                                     transition-all duration-200 z-[100] shadow-2xl border border-white/10">
 
-                            <div class="text-[8px] font-black text-[#D4AF37] uppercase mb-1 tracking-widest">{{ $pc->lab_name }}</div>
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-[8px] font-black text-[#D4AF37] uppercase tracking-widest">{{ $pc->lab->name ?? 'Unknown Lab' }}</span>
+                                <span class="text-[8px] font-black text-white/30 uppercase">ID: {{ $pc->id }}</span>
+                            </div>
 
                             @if($pc->status === 'active' && $pc->activeSession)
                             <div class="text-[11px] font-bold text-white truncate">{{ $pc->activeSession->student_name ?? 'Logged In' }}</div>
@@ -114,23 +122,29 @@
                                 Since {{ $pc->activeSession->login_at?->format('h:i A') ?? 'N/A' }}
                             </div>
 
-                            <div class="mt-3 pt-3 border-t border-white/10">
+                            <div class="mt-4 pt-3 border-t border-white/10">
                                 <form method="POST" action="{{ route('dashboard.sessions.terminate', $pc->activeSession->id) }}"
                                     onsubmit="return confirm('Kill session for {{ $pc->activeSession->student_name }}?')">
                                     @csrf @method('PATCH')
-                                    <button type="submit" class="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-colors shadow-lg">Kill Session</button>
+                                    <button type="submit" class="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-colors shadow-lg">
+                                        Kill Session
+                                    </button>
                                 </form>
                             </div>
                             @else
                             <div class="text-[10px] font-bold text-white uppercase tracking-widest">{{ $pc->status }}</div>
-                            <div class="text-[7px] text-slate-500 mt-1 uppercase">Ready for login</div>
+                            <div class="text-[7px] text-slate-500 mt-1 uppercase italic text-center">Ready for deployment</div>
                             @endif
 
                             {{-- Tooltip Arrow --}}
-                            <div class="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800"></div>
+                            <div class="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900"></div>
                         </div>
                     </div>
-                    @endforeach
+                    @empty
+                    <div class="col-span-full py-20 text-center">
+                        <p class="text-slate-300 font-black uppercase tracking-widest">No terminal nodes found in directory</p>
+                    </div>
+                    @endforelse
                 </div>
             </div>
         </div>

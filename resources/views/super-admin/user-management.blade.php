@@ -132,7 +132,7 @@
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Add Personnel or Student</p>
                 </div>
 
-                <form action="{{ route('dashboard.users.store') }}" method="POST" class="space-y-5">
+                <form action="{{ route('super-admin.users.store') }}" method="POST" class="space-y-5">
                     @csrf
 
                     <div class="grid grid-cols-2 gap-4">
@@ -166,6 +166,7 @@
                                 <option value="student" {{ old('role') == 'student' ? 'selected' : '' }}>Student</option>
                                 <option value="personnel" {{ old('role') == 'personnel' ? 'selected' : '' }}>Personnel (Teacher)</option>
                                 <option value="admin" {{ old('role') == 'admin' ? 'selected' : '' }}>System Admin</option>
+                                <option value="super-admin" {{ old('role') == 'super-admin' ? 'selected' : '' }}>Super Admin</option>
                             </select>
                             @error('role') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
                         </div>
@@ -241,6 +242,7 @@
                             <option value="student">Student</option>
                             <option value="personnel">Personnel (Teacher)</option>
                             <option value="admin">Administrator</option>
+                            <option value="super-admin">Super Admin</option>
                         </select>
                     </div>
 

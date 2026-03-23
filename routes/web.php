@@ -54,24 +54,35 @@ Route::middleware([
     'clearance:admin',
     'student.lock',
 ])->prefix('dashboard')->name('dashboard.')->group(function () {
+
+    // Core Dashboard & Analytics
     Route::get('/', [DashboardController::class, 'index'])->name('index');
-    Route::get('/labs', [LabController::class, 'index'])->name('labs');
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
 
-    // --- New User Management Routes ---
-    // URL: /dashboard/users | Route Name: dashboard.users
+    // --- User Management ---
     Route::get('/users', [DashboardController::class, 'userManagement'])->name('users');
-
-    // URL: /dashboard/users/store | Route Name: dashboard.users.store
-    Route::post('/users/store', [DashboardController::class, 'storeUser'])->name('users.store');
-
-    // New Edit/Update/Delete Routes
+    Route::post('/users', [DashboardController::class, 'storeUser'])->name('users.store');
     Route::patch('/users/{user}', [DashboardController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [DashboardController::class, 'destroyUser'])->name('users.destroy');
-    //TERMINATE SESSION
+
+    // --- Session Control ---
     Route::patch('/sessions/{session}/terminate', [DashboardController::class, 'terminateSession'])->name('sessions.terminate');
+
+    // --- Laboratory & Hardware Management ---
+    // URL: /dashboard/labs
+    Route::get('/labs', [LabController::class, 'index'])->name('labs');
+
+    // --- Laboratory Scheduling ---
+    // These now use the 'lab' ID to identify which room is being scheduled
+    Route::get('/labs/{lab}/schedule', [LabController::class, 'viewSchedule'])->name('labs.schedule');
+    Route::post('/labs/{lab}/schedule', [LabController::class, 'storeSchedule'])->name('labs.schedule.store');
+
+    // Using {schedule} allows Route Model Binding in LabController@destroySchedule
+    Route::delete('/schedule/{schedule}', [LabController::class, 'destroySchedule'])->name('labs.schedule.destroy');
 });
+
+
 
 // 5. PERSONNEL TERMINAL (Requires Verified Status)
 Route::middleware([
@@ -80,11 +91,25 @@ Route::middleware([
     'clearance:personnel',
     'student.lock',
 ])->prefix('terminal')->name('personnel.')->group(function () {
+
+    // Main Dashboard / Overview
     Route::get('/', [PersonnelController::class, 'index'])->name('index');
     Route::get('/labs', [PersonnelController::class, 'labs'])->name('labs');
-    Route::get('/lab/{name}', [PersonnelController::class, 'showLab'])->name('lab.show');
+
+    /**
+     * Lab Monitoring & PC Grid
+     * URL: /terminal/lab/{lab} | Route: personnel.lab.show
+     */
+    Route::get('/lab/{lab}', [PersonnelController::class, 'showLab'])->name('lab.show');
+
+    /**
+     * Session Management
+     * Using POST for Assign and Release actions
+     */
     Route::post('/assign/{computer}', [PersonnelController::class, 'assign'])->name('assign');
     Route::post('/release/{computer}', [PersonnelController::class, 'release'])->name('release');
+
+    Route::get('/schedule-overview', [PersonnelController::class, 'fullSchedule'])->name('full-schedule');
 });
 
 // 6. SUPER ADMIN (Requires Verified Status)
@@ -96,9 +121,14 @@ Route::middleware([
     'student.lock',
 ])->prefix('super-admin')->name('super-admin.')->group(function () {
     Route::get('/overview', [SuperAdminController::class, 'index'])->name('index');
-    Route::get('/manage-users', [SuperAdminController::class, 'manageUsers'])->name('users');
     Route::get('/security', [SuperAdminController::class, 'security'])->name('security');
     Route::get('/analytics', [SuperAdminController::class, 'analytics'])->name('analytics');
     Route::get('/settings', [SuperAdminController::class, 'settings'])->name('settings');
     Route::get('/system-logs', [SuperAdminController::class, 'logs'])->name('logs');
+
+    //USER MANAGEMENT ROUTES FOR SUPER ADMIN
+    Route::get('/users', [SuperAdminController::class, 'userManagement'])->name('users');
+    Route::post('/users', [SuperAdminController::class, 'storeUser'])->name('users.store');
+    Route::patch('/users/{user}', [SuperAdminController::class, 'updateUser'])->name('users.update');
+    Route::delete('/users/{user}', [SuperAdminController::class, 'destroyUser'])->name('users.destroy');
 });

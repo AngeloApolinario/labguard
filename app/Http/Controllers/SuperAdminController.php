@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rules;
+use Illuminate\Support\Facades\Hash;
 
 class SuperAdminController extends Controller
 {
@@ -42,31 +44,7 @@ class SuperAdminController extends Controller
         return view('super-admin.index', compact('totalUsers', 'activeSessions', 'alerts', 'uptime', 'health', 'activities'));
     }
 
-    public function manageUsers(Request $request)
-    {
-        // Fetch real users from DB
-        $users = User::latest()->paginate(10);
 
-        // Hardcode statuses for the view logic since the column doesn't exist yet
-        $users->getCollection()->transform(function ($user, $key) {
-            // We'll just rotate statuses for the demo so the table looks varied
-            if ($key === 0) $user->status = 'locked';
-            elseif ($key % 3 === 0) $user->status = 'inactive';
-            else $user->status = 'active';
-
-            return $user;
-        });
-
-        // Hardcode the Stats for the top cards
-        $stats = [
-            'total'    => User::count(),
-            'active'   => User::count() - 3, // Just a guess for the demo
-            'inactive' => 2,
-            'locked'   => 1,
-        ];
-
-        return view('super-admin.users', compact('users', 'stats'));
-    }
     public function security()
     {
         // Hardcoded stats for the top cards
@@ -148,5 +126,66 @@ class SuperAdminController extends Controller
         ];
 
         return view('super-admin.settings', compact('settings'));
+    }
+
+    //USER MANAGEMENT CONTROLLER CODE 
+    public function userManagement()
+    {
+        // Super Admin sees EVERYONE
+        $users = User::orderBy('role', 'asc')
+            ->orderBy('name', 'asc')
+            ->paginate(15);
+
+        return view('super-admin.user-management', compact('users'));
+    }
+
+    public function storeUser(Request $request)
+    {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'password' => ['required', Rules\Password::defaults()],
+            'role' => ['required', 'in:student,personnel,admin,super-admin'], // Expanded roles
+            'student_number' => ['required', 'string', 'unique:users', 'regex:/^01-[0-9]{4}-[0-9]{6}$/'],
+            'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
+        ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'student_number' => $request->student_number,
+            'phone' => $request->phone,
+            'email_verified_at' => now(), // Auto-verify
+        ]);
+
+        return redirect()->back()->with('success', "{$user->role} account created successfully.");
+    }
+
+    public function updateUser(Request $request, User $user)
+    {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'student_number' => ['required', 'string', 'unique:users,student_number,' . $user->id],
+            'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
+            'role' => ['required', 'in:student,personnel,admin,super-admin'],
+        ]);
+
+        $user->update($request->all());
+
+        return redirect()->back()->with('status', 'Account updated.');
+    }
+
+    public function destroyUser(User $user)
+    {
+        // Prevent accidental self-deletion
+        if ($user->id === auth()->id()) {
+            return redirect()->back()->with('error', 'You cannot delete your own account.');
+        }
+
+        $user->delete();
+        return redirect()->back()->with('status', 'User removed from system.');
     }
 }

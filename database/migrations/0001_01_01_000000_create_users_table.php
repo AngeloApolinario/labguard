@@ -43,15 +43,6 @@ return new class extends Migration
             $table->integer('last_activity')->index();
             $table->date('session_date');
         });
-        Schema::create('lab_sessions', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('pc_identifier'); // The PC name or ID
-            $table->timestamp('login_at');
-            $table->timestamp('logout_at')->nullable();
-            $table->date('usage_date'); // Helpful for quick history filtering
-            $table->timestamps();
-        });
     }
 
     /**
@@ -62,6 +53,5 @@ return new class extends Migration
         Schema::dropIfExists('users');
         Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
-        Schema::dropIfExists('lab_sessions');
     }
 };

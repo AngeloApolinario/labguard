@@ -37,7 +37,8 @@
                         </div>
                     </div>
 
-                    <h3 class="text-4xl font-black text-slate-800 mb-2 tracking-tighter uppercase">{{ $lab->lab_name }}</h3>
+                    {{-- Updated from lab_name to name --}}
+                    <h3 class="text-4xl font-black text-slate-800 mb-2 tracking-tighter uppercase">{{ $lab->name }}</h3>
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">System-Verified Facility</p>
 
                     <div class="space-y-6">
@@ -65,10 +66,18 @@
                             </div>
                         </div>
 
-                        <div class="pt-6 border-t border-slate-50">
+                        {{-- Action Buttons --}}
+                        <div class="pt-6 border-t border-slate-50 grid grid-cols-2 gap-4">
+                            {{-- Inspect Button --}}
                             <button class="w-full py-4 bg-slate-50 text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl group-hover:bg-slate-800 group-hover:text-white transition-all">
-                                Inspect Hardware
+                                Inspect
                             </button>
+
+                            {{-- Schedule Button --}}
+                            <a href="{{ route('dashboard.labs.schedule', $lab->id) }}"
+                                class="w-full py-4 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] flex items-center justify-center font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#D4AF37] hover:text-white transition-all">
+                                Schedule
+                            </a>
                         </div>
                     </div>
                 </div>

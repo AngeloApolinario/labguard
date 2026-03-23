@@ -9,16 +9,21 @@ class Computer extends Model
 {
     use HasFactory;
 
-    /**
-     * The attributes that are mass assignable.
-     */
     protected $fillable = [
-        'lab_name',      // e.g., Lab 1
-        'pc_number',     // e.g., PC-01
-        'serial_number', // Hardware ID
-        'asset_tag',     // School Sticker ID
-        'status',        // available, active, or maintenance
+        'lab_id',
+        'pc_number',
+        'serial_number',
+        'asset_tag',
+        'status',
     ];
+
+    /**
+     * Relationship: A computer belongs to a specific Lab
+     */
+    public function lab()
+    {
+        return $this->belongsTo(Lab::class);
+    }
 
     /**
      * Relationship: A computer has many attendance sessions
@@ -31,17 +36,16 @@ class Computer extends Model
     /**
      * Relationship: Get the one student currently assigned to this PC
      */
-
-
     public function activeSession()
     {
-        // Primary: Look for currently open session
         return $this->hasOne(LabSession::class)->whereNull('time_out')->latestOfMany();
     }
 
+    /**
+     * Relationship: Fallback for the last person who used this PC
+     */
     public function lastSession()
     {
-        // Fallback: Just get the last person who sat here
         return $this->hasOne(LabSession::class)->latestOfMany();
     }
 }

@@ -22,6 +22,8 @@ class LabSession extends Model
         'teacher_id',
     ];
 
+
+
     /**
      * Get the computer associated with this session.
      */
@@ -40,5 +42,9 @@ class LabSession extends Model
     public function teacher()
     {
         return $this->belongsTo(User::class, 'teacher_id');
+    }
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'student_number', 'student_number');
     }
 }

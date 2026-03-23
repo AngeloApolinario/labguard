@@ -1,11 +1,9 @@
-<div class="max-w-7xl mx-auto px-6 py-8" wire:poll.2s>
+<div class="max-w-7xl mx-auto px-6 py-8" wire:poll.5s>
 
     {{-- COMMAND CENTER HEADER --}}
     <div class="relative mb-12 overflow-hidden rounded-[2.5rem] bg-white border border-slate-100 shadow-2xl shadow-slate-200/50">
         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500"></div>
         <div class="p-8 md:flex md:items-center md:justify-between">
-
-            {{-- Title & Status --}}
             <div class="flex items-center gap-6">
                 <div class="relative flex items-center justify-center size-16 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
                     <svg class="size-8 text-slate-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -21,7 +19,6 @@
                 </div>
             </div>
 
-            {{-- Live Data Pills --}}
             <div class="mt-6 md:mt-0 flex gap-4">
                 <div class="px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center min-w-[100px]">
                     <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active</span>
@@ -39,16 +36,9 @@
     <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
         @foreach($computers as $pc)
         @php
-        /** * STRICT LOGIC:
-        * We only pull the session if the PC status is explicitly 'active'.
-        * If the PC is 'available', we treat the session as null to clear the UI.
-        */
         $isActive = ($pc->status === 'active');
         $session = $isActive ? $pc->activeSession : null;
-
-        // Final check to ensure we have a session object before trying to read names
         $hasData = ($isActive && $session);
-
         $name = $hasData ? $session->student_name : null;
         $initial = $name ? strtoupper(substr($name, 0, 1)) : '?';
         @endphp
@@ -56,15 +46,7 @@
         <div class="group relative aspect-[4/5] bg-white rounded-[2rem] border transition-all duration-500 overflow-hidden
                 {{ $hasData ? 'border-rose-100 shadow-xl shadow-rose-100/50' : 'border-slate-100 shadow-sm hover:border-emerald-200' }}">
 
-            {{-- BACKGROUND GLOW --}}
-            @if($hasData)
-            <div class="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-rose-50/80 to-transparent opacity-50"></div>
-            @endif
-
-            {{-- CARD CONTENT --}}
             <div class="absolute inset-0 p-5 flex flex-col items-center justify-between z-10">
-
-                {{-- Top Status Row --}}
                 <div class="w-full flex justify-between items-center">
                     <span class="text-[10px] font-black {{ $hasData ? 'text-rose-400' : 'text-slate-300' }} uppercase tracking-wider">
                         {{ $pc->pc_number }}
@@ -77,14 +59,13 @@
                     </div>
                 </div>
 
-                {{-- Main Visual (Avatar or Icon) --}}
                 <div class="relative">
                     @if($hasData)
-                    <div class="size-20 rounded-[1.5rem] bg-gradient-to-br from-rose-500 to-rose-600 shadow-lg shadow-rose-200 flex items-center justify-center transform group-hover:scale-90 transition-transform duration-500">
+                    <div class="size-20 rounded-[1.5rem] bg-gradient-to-br from-rose-500 to-rose-600 shadow-lg shadow-rose-200 flex items-center justify-center">
                         <span class="text-3xl font-black text-white">{{ $initial }}</span>
                     </div>
                     @else
-                    <div class="size-20 rounded-[1.5rem] bg-slate-50 flex items-center justify-center transform group-hover:scale-110 transition-transform duration-500 border border-slate-100">
+                    <div class="size-20 rounded-[1.5rem] bg-slate-50 flex items-center justify-center border border-slate-100">
                         <svg class="size-8 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
@@ -92,50 +73,27 @@
                     @endif
                 </div>
 
-                {{-- Bottom Label Section --}}
                 <div class="w-full text-center pb-2">
                     @if($hasData)
-                    <p class="text-[11px] font-black text-slate-800 truncate uppercase tracking-tight">
-                        {{ $name }}
-                    </p>
-                    <p class="text-[9px] font-bold text-slate-400 font-mono mt-0.5">
-                        {{ $session->student_id_number ?? 'N/A' }}
-                    </p>
+                    <p class="text-[11px] font-black text-slate-800 truncate uppercase">{{ $name }}</p>
+                    <p class="text-[9px] font-bold text-slate-400 font-mono mt-0.5">{{ $session->student_number }}</p>
                     @else
                     <p class="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Available</p>
-                    <p class="text-[8px] font-medium text-slate-200 uppercase tracking-tighter">Station Ready</p>
                     @endif
                 </div>
             </div>
 
-            {{-- HOVER DRAWER (Details & Logout) --}}
             @if($hasData)
             <div class="absolute inset-x-0 bottom-0 bg-slate-900/95 backdrop-blur-md p-5 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-20">
-
-                <div class="w-8 h-1 bg-slate-700 rounded-full mx-auto mb-4"></div>
-
-                <div class="space-y-3 mb-5">
+                <div class="space-y-3 mb-5 text-left">
                     <div>
-                        <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Identity</p>
-                        <p class="text-xs font-bold text-white uppercase truncate">{{ $name }}</p>
-                    </div>
-                    <div class="flex justify-between">
-                        <div>
-                            <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest">In-Time</p>
-                            <p class="text-xs font-mono text-[#D4AF37]">
-                                {{ $session->time_in ? $session->time_in->format('h:i A') : '--:--' }}
-                            </p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Session</p>
-                            <p class="text-xs font-mono text-slate-400">#{{ $session->id }}</p>
-                        </div>
+                        <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest">In-Time</p>
+                        <p class="text-xs font-mono text-[#D4AF37]">{{ $session->time_in->format('h:i A') }}</p>
                     </div>
                 </div>
-
                 <form method="POST" action="{{ route('personnel.release', $pc->id) }}">
                     @csrf
-                    <button class="w-full py-3 bg-white text-slate-900 text-[10px] font-black uppercase rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-lg shadow-black/20">
+                    <button type="submit" class="w-full py-3 bg-white text-slate-900 text-[10px] font-black uppercase rounded-xl hover:bg-rose-500 hover:text-white transition-all">
                         Force Release
                     </button>
                 </form>

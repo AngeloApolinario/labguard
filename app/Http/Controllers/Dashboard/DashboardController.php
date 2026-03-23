@@ -6,21 +6,31 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Computer;
 use App\Models\LabSession;
+use App\Models\Lab; // Added Lab Model
 use App\Models\User;
 use Illuminate\Validation\Rules;
 use Illuminate\Support\Facades\Hash;
-//ADMIN CONTROLLER TO DASHBOARD LANG NALAGAY KO AND IT'S TOO LATE TO CHANGE IT 
+
 class DashboardController extends Controller
 {
     public function index()
     {
+        // Global Stats
         $totalComputers = Computer::count();
         $activeStations = Computer::where('status', 'active')->count();
-        $computers = Computer::orderBy('pc_number')->get();
 
-        $alertsToday = 0;
+        // Fetch Labs with calculated PC counts (Total vs Active)
+        $labs = Lab::withCount([
+            'computers as total_pcs',
+            'computers as active_pcs' => function ($query) {
+                $query->where('status', 'active');
+            }
+        ])->get();
 
-        $labs = Computer::select('lab_name')->distinct()->pluck('lab_name');
+        // For the detailed PC list (if you show them all on one page)
+        $computers = Computer::with('lab')->orderBy('pc_number')->get();
+
+        $alertsToday = 0; // Placeholder for your security alert logic
 
         return view('dashboard.index', compact(
             'totalComputers',
@@ -33,7 +43,6 @@ class DashboardController extends Controller
 
     public function userManagement()
     {
-        // Fetch users but EXCLUDE super-admins for safety
         $users = User::where('role', '!=', 'super-admin')
             ->orderBy('created_at', 'desc')
             ->paginate(10);
@@ -41,14 +50,13 @@ class DashboardController extends Controller
         return view('dashboard.user-management', compact('users'));
     }
 
-    //USER MAANGEMENT CONTROLLER
-    public function store(Request $request)
+    public function storeUser(Request $request)
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role' => ['required', 'in:student,personnel'], // Excludes super-admin
+            'password' => ['required', Rules\Password::defaults()],
+            'role' => ['required', 'in:student,personnel'],
             'student_number' => ['required', 'string', 'unique:users', 'regex:/^01-[0-9]{4}-[0-9]{6}$/'],
             'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
         ]);
@@ -60,14 +68,12 @@ class DashboardController extends Controller
             'role' => $request->role,
             'student_number' => $request->student_number,
             'phone' => $request->phone,
-            'email_verified_at' => now(), // Manual creation by admin usually pre-verifies
+            'email_verified_at' => now(),
         ]);
 
         return redirect()->back()->with('success', 'User successfully enrolled in LabGuard.');
     }
 
-
-    // Update User Details
     public function updateUser(Request $request, User $user)
     {
         $request->validate([
@@ -89,10 +95,8 @@ class DashboardController extends Controller
         return redirect()->back()->with('status', "Profile for {$user->name} has been updated.");
     }
 
-    // Delete User
     public function destroyUser(User $user)
     {
-        // Safety check: Prevent deleting yourself or a Super Admin
         if ($user->role === 'super-admin' || $user->id === auth()->id()) {
             return redirect()->back()->with('error', 'Unauthorized deletion attempt.');
         }
@@ -100,19 +104,17 @@ class DashboardController extends Controller
         $user->delete();
         return redirect()->back()->with('status', 'User successfully removed.');
     }
+
     public function terminateSession(Request $request, LabSession $session)
     {
-        // 1. Record the logout timestamp
         $session->update([
-            'logout_at' => now(),
+            'logout_at' => now(), // Changed to logout_at to match common session naming
         ]);
 
-        // 2. Set the computer status back to 'available'
-        // This matches your DB enum and fixes the SQL truncation error
         $session->computer->update([
             'status' => 'available'
         ]);
 
-        return redirect()->back()->with('status', "Session for {$session->student_name} terminated successfully.");
+        return redirect()->back()->with('status', "Session for {$session->user->name} terminated successfully.");
     }
 }

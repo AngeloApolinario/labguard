@@ -77,7 +77,7 @@
 
                         {{-- Action Button --}}
                         <div>
-                            <a href="{{ route('personnel.lab.show', $lab->lab_name) }}" class="flex items-center space-x-3 px-8 py-4 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest group-hover:bg-slate-800 group-hover:text-white transition-all shadow-sm">
+                            <a href="{{ route('personnel.lab.show', $lab) }}" class="flex items-center space-x-3 px-8 py-4 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest group-hover:bg-slate-800 group-hover:text-white transition-all shadow-sm">
                                 <span>Enter Terminal</span>
                                 <svg class="size-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />

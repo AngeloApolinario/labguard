@@ -45,6 +45,6 @@ class LabSession extends Model
     }
     public function user()
     {
-        return $this->belongsTo(User::class, 'student_number', 'student_number');
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

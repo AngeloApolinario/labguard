@@ -79,13 +79,6 @@
             </div>
         </div>
 
-        <div class="pt-4">
-            <form method="POST" action="{{ route('logout') }}" x-data>
-                @csrf
-                <button type="submit" @click.prevent="$root.submit();" class="group relative w-full overflow-hidden rounded-2xl bg-white border border-rose-200 p-4 transition-all hover:bg-rose-50">
-                    <span class="text-sm font-black text-rose-600 uppercase tracking-[0.3em] group-hover:scale-110 transition-transform block">Terminate Session</span>
-                </button>
-            </form>
-        </div>
+
     </div>
 </x-app-layout>

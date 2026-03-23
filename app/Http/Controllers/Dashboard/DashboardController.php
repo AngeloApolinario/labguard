@@ -115,6 +115,10 @@ class DashboardController extends Controller
             'status' => 'available'
         ]);
 
-        return redirect()->back()->with('status', "Session for {$session->user->name} terminated successfully.");
+        $userName = $session->user ? $session->user->name : 'Unknown User';
+
+
+
+        return redirect()->back()->with('status', "Session for {$userName} terminated successfully.");
     }
 }

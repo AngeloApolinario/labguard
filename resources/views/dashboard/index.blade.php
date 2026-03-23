@@ -119,7 +119,7 @@
                             @if($pc->status === 'active' && $pc->activeSession)
                             <div class="text-[11px] font-bold text-white truncate">{{ $pc->activeSession->student_name ?? 'Logged In' }}</div>
                             <div class="text-[8px] text-slate-400 mt-0.5 uppercase tracking-tighter">
-                                Since {{ $pc->activeSession->login_at?->format('h:i A') ?? 'N/A' }}
+                                Since {{ $pc->activeSession->time_in?->format('h:i A') ?? 'N/A' }}
                             </div>
 
                             <div class="mt-4 pt-3 border-t border-white/10">

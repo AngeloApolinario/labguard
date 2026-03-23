@@ -27,7 +27,7 @@
                     @csrf
 
                     <div class="space-y-1">
-                        <label for="name" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Legal Identity</label>
+                        <label for="name" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Full Name</label>
                         <input id="name" class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600" type="text" name="name" :value="old('name')" placeholder="Full Name" required autofocus autocomplete="name" />
                     </div>
 
@@ -48,15 +48,35 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-4" x-data="{ show: false }">
                         <div class="space-y-1">
                             <label for="password" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">New Password</label>
-                            <input id="password" class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600" type="password" name="password" placeholder="••••••••" required autocomplete="new-password" />
+                            <div class="relative group">
+                                <input id="password"
+                                    class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 pr-11 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600"
+                                    :type="show ? 'text' : 'password'"
+                                    name="password"
+                                    placeholder="••••••••" required autocomplete="new-password" />
+
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#D4AF37] transition-colors focus:outline-none">
+                                    <svg x-show="!show" xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    <svg x-show="show" x-cloak xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="space-y-1">
                             <label for="password_confirmation" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Confirm</label>
-                            <input id="password_confirmation" class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600" type="password" name="password_confirmation" placeholder="••••••••" required autocomplete="new-password" />
+                            <input id="password_confirmation"
+                                class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600"
+                                :type="show ? 'text' : 'password'"
+                                name="password_confirmation"
+                                placeholder="••••••••" required autocomplete="new-password" />
                         </div>
                     </div>
 
@@ -76,7 +96,7 @@
 
                     <div class="flex flex-col space-y-4 pt-2">
                         <button class="relative w-full group overflow-hidden rounded-xl bg-[#D4AF37] p-4 transition-all hover:bg-[#e6c152] active:scale-95 shadow-[0_10px_20px_-5px_rgba(212,175,55,0.4)]">
-                            <span class="relative z-10 text-xs font-black text-[#0f172a] uppercase tracking-[0.3em]">Authorize Enrollment</span>
+                            <span class="relative z-10 text-xs font-black text-[#0f172a] uppercase tracking-[0.3em]">Create New Account</span>
                         </button>
 
                         <a class="text-center text-[10px] font-bold text-slate-500 hover:text-[#D4AF37] uppercase tracking-[0.2em] transition-colors" href="{{ route('login') }}">

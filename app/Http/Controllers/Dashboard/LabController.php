@@ -8,16 +8,12 @@ use App\Models\Computer;
 use App\Models\LabSession;
 use App\Models\Schedule;
 use App\Models\User;
-use App\Models\Lab; // Ensure this is imported
+use App\Models\Lab;
 
 class LabController extends Controller
 {
-    /**
-     * Display all labs with their real-time PC metrics.
-     */
     public function index()
     {
-        // Using withCount is much cleaner than selectRaw for relational data
         $labs = Lab::withCount([
             'computers as total_pcs',
             'computers as active_pcs' => function ($query) {
@@ -28,12 +24,8 @@ class LabController extends Controller
         return view('dashboard.labs.index', compact('labs'));
     }
 
-    /**
-     * View the schedule for a specific lab.
-     */
     public function viewSchedule(Lab $lab)
     {
-        // Fetch and sort by day of the week and start time
         $schedules = Schedule::where('lab_id', $lab->id)
             ->with('user')
             ->orderByRaw("FIELD(day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
@@ -45,11 +37,9 @@ class LabController extends Controller
         return view('dashboard.labs.schedule', compact('lab', 'schedules', 'teachers'));
     }
 
-    /**
-     * Store a new schedule entry.
-     */
     public function storeSchedule(Request $request, Lab $lab)
     {
+        // 1. Validate
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'subject_code' => 'required|string|max:50',
@@ -58,6 +48,22 @@ class LabController extends Controller
             'end_time' => 'required|after:start_time',
         ]);
 
+        // 2. Check for Overlaps
+        // Logic: A conflict exists if (StartA < EndB) AND (EndA > StartB)
+        $overlap = Schedule::where('lab_id', $lab->id)
+            ->where('day', $validated['day'])
+            ->where(function ($query) use ($validated) {
+                $query->where('start_time', '<', $validated['end_time'])
+                    ->where('end_time', '>', $validated['start_time']);
+            })->exists();
+
+        if ($overlap) {
+            return back()
+                ->withInput()
+                ->with('error', 'Schedule Conflict: The selected time overlaps with an existing slot.');
+        }
+
+        // 3. Create
         Schedule::create([
             'lab_id' => $lab->id,
             'user_id' => $validated['user_id'],
@@ -70,26 +76,6 @@ class LabController extends Controller
         return back()->with('success', 'Schedule entry created successfully.');
     }
 
-    /**
-     * Optional: Update an existing schedule entry.
-     */
-    public function updateSchedule(Request $request, Schedule $schedule)
-    {
-        $validated = $request->validate([
-            'subject_code' => 'required|string',
-            'day' => 'required|in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
-            'start_time' => 'required',
-            'end_time' => 'required|after:start_time',
-        ]);
-
-        $schedule->update($validated);
-
-        return back()->with('success', 'Schedule slot updated.');
-    }
-
-    /**
-     * Remove a schedule entry.
-     */
     public function destroySchedule(Schedule $schedule)
     {
         $schedule->delete();

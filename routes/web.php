@@ -6,6 +6,7 @@ use App\Http\Controllers\Dashboard\LabController;
 use App\Http\Controllers\Dashboard\AlertController;
 use App\Http\Controllers\Dashboard\SettingsController;
 use App\Http\Controllers\PersonnelController;
+use App\Http\Controllers\Session;
 use App\Http\Controllers\SuperAdminController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
@@ -80,6 +81,14 @@ Route::middleware([
 
     // Using {schedule} allows Route Model Binding in LabController@destroySchedule
     Route::delete('/schedule/{schedule}', [LabController::class, 'destroySchedule'])->name('labs.schedule.destroy');
+
+    //ALERTS
+    Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');
+    Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
+
+    //SESSION HISTORY 
+    Route::get('/sessions', [Session::class, 'index'])->name('sessions.index');
+    Route::get('/sessions/student/{student}', [Session::class, 'show'])->name('sessions.student');
 });
 
 
@@ -110,6 +119,14 @@ Route::middleware([
     Route::post('/release/{computer}', [PersonnelController::class, 'release'])->name('release');
 
     Route::get('/schedule-overview', [PersonnelController::class, 'fullSchedule'])->name('full-schedule');
+
+
+    Route::get('/sessions', [PersonnelController::class, 'sessionHistory'])->name('sessions');
+    Route::get('/alerts', [PersonnelController::class, 'alertHistory'])->name('alerts');
+
+    //EXPORT ROUTES
+    Route::get('/export/{schedule}', [PersonnelController::class, 'exportScheduleAttendance'])
+        ->name('export');
 });
 
 // 6. SUPER ADMIN (Requires Verified Status)
@@ -131,4 +148,19 @@ Route::middleware([
     Route::post('/users', [SuperAdminController::class, 'storeUser'])->name('users.store');
     Route::patch('/users/{user}', [SuperAdminController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [SuperAdminController::class, 'destroyUser'])->name('users.destroy');
+
+    // Labs Inventory
+    Route::get('/labs', [SuperAdminController::class, 'labs'])->name('labs');
+
+    // Scheduling (Full Management)
+    Route::get('/labs/{lab}/schedule', [SuperAdminController::class, 'viewSchedule'])->name('labs.schedule');
+    Route::post('/labs/{lab}/schedule', [SuperAdminController::class, 'storeSchedule'])->name('labs.schedule.store');
+    Route::delete('/schedule/{schedule}', [SuperAdminController::class, 'destroySchedule'])->name('labs.schedule.destroy');
+    Route::get('/labs/{lab}', [SuperAdminController::class, 'show'])->name('labs.show');
+    // Other Global Monitoring
+    Route::get('/sessions', [SuperAdminController::class, 'sessions'])->name('sessions');
+    Route::get('/alerts', [SuperAdminController::class, 'alerts'])->name('alerts');
+    //ALERTS FOR SUPER ADMIN
+    Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
+    Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
 });

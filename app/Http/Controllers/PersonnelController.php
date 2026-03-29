@@ -6,8 +6,10 @@ use Illuminate\Http\Request;
 use App\Models\Computer;
 use App\Models\LabSession;
 use App\Models\Lab; // Added Lab Model
+use App\Models\Schedule;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PersonnelController extends Controller
 {
@@ -70,16 +72,17 @@ class PersonnelController extends Controller
     {
         $request->validate([
             'student_name' => 'required|string|max:255',
-            'student_number' => 'required|string|max:50', // Updated to match your schema naming
+            'student_number' => 'required|string|max:50',
         ]);
 
         // Create the LabSession record
         LabSession::create([
             'computer_id' => $computer->id,
             'student_name' => $request->student_name,
-            'student_number' => $request->student_number,
+            // CHANGE THIS: Use the exact column name in your DB (student_id_number)
+            'student_id_number' => $request->student_number,
             'time_in' => now(),
-            'teacher_id' => auth()->id(), // Personnel/Admin who authorized the session
+            'teacher_id' => auth()->id(),
         ]);
 
         // Mark PC as occupied
@@ -93,19 +96,34 @@ class PersonnelController extends Controller
      */
     public function release(Computer $computer)
     {
-        // Use the relationship defined in your Computer model
-        $session = $computer->activeSession();
+        // 1. Find the active session for this specific computer ID where time_out is still null
+        $session = LabSession::where('computer_id', $computer->id)
+            ->whereNull('time_out')
+            ->latest() // Get the most recent one just in case
+            ->first();
 
         if ($session) {
+            // 2. Close the session
             $session->update([
                 'time_out' => now()
             ]);
+
+            // 3. Set the PC status back to available
+            $computer->update(['status' => 'available']);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => "PC {$computer->pc_number} released successfully."
+            ]);
         }
 
-        // Mark PC as available
+        // Fallback: If no session was found but PC is 'active', force it to 'available'
         $computer->update(['status' => 'available']);
 
-        return back()->with('success', "{$computer->pc_number} has been cleared and is now available.");
+        return response()->json([
+            'status' => 'warning',
+            'message' => "PC status reset, but no active session record was found."
+        ]);
     }
 
     /**
@@ -127,8 +145,94 @@ class PersonnelController extends Controller
         $labs = Lab::with(['schedules.user'])->get();
 
         // Define the days of the week for the table headers
-        $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',];
 
         return view('personnel.full-schedule', compact('labs', 'days'));
+    }
+
+    /**
+     * View Session History
+     * Filters: Admins see all, Teachers see their own assigned sessions.
+     */
+    public function sessionHistory(Request $request)
+    {
+        $query = LabSession::with(['computer.lab', 'teacher'])
+            ->latest()->whereNotNull('time_out');;
+
+        // If not admin, only show sessions where this teacher was the one in charge
+        if (auth()->user()->role !== 'admin') {
+            $query->where('teacher_id', auth()->id());
+        }
+
+        // Optional: Filter by Date if provided in request
+        if ($request->has('date')) {
+            $query->whereDate('time_in', $request->date);
+        }
+
+        $sessions = $query->paginate(15);
+
+        return view('personnel.sessions', compact('sessions'));
+    }
+
+    /**
+     * View Alerts/Maintenance History
+     */
+    public function alertHistory()
+    {
+        // Fetch alerts with their related computer and lab info
+        $query = \App\Models\Alert::with(['computer.lab'])
+            ->latest();
+
+        // Admins see all alerts. 
+        // Teachers see alerts for all PCs (so they know if a station is broken before assigning it).
+        $alerts = $query->paginate(15);
+
+        return view('personnel.alerts', compact('alerts'));
+    }
+
+    //EXPORTING THE ATTENDACE REPORT AS CSV
+    public function exportScheduleAttendance($id)
+    {
+        $schedule = Schedule::findOrFail($id);
+
+        // Ensure the teacher is only exporting their own classes
+        if (auth()->id() !== $schedule->user_id && auth()->user()->role !== 'super-admin') {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $sessions = LabSession::where('lab_id', $schedule->lab_id)
+            ->where('teacher_id', $schedule->user_id)
+            ->whereDate('time_in', now()->toDateString())
+            ->whereTime('time_in', '>=', $schedule->start_time)
+            ->whereTime('time_in', '<=', $schedule->end_time)
+            ->whereNotNull('time_out')
+            ->get();
+
+        if ($sessions->isEmpty()) {
+            return back()->with('error', 'No attendance records found for today.');
+        }
+
+        $fileName = "Attendance_{$schedule->subject_code}_" . now()->format('Y-m-d') . ".csv";
+
+        return response()->streamDownload(function () use ($sessions, $schedule) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['LABGUARD SYSTEM - ATTENDANCE REPORT']);
+            fputcsv($file, ['Subject', $schedule->subject_code]);
+            fputcsv($file, ['Instructor', $schedule->user->name]);
+            fputcsv($file, ['Date', now()->format('M d, Y')]);
+            fputcsv($file, []);
+            fputcsv($file, ['STUDENT NAME', 'STUDENT NUMBER', 'TIME IN', 'TIME OUT', 'DURATION (MINS)']);
+
+            foreach ($sessions as $s) {
+                fputcsv($file, [
+                    strtoupper($s->student_name),
+                    $s->student_id_number,
+                    $s->time_in->format('h:i A'),
+                    $s->time_out->format('h:i A'),
+                    $s->time_in->diffInMinutes($s->time_out)
+                ]);
+            }
+            fclose($file);
+        }, $fileName);
     }
 }

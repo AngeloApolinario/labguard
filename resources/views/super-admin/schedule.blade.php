@@ -56,7 +56,7 @@
                 </p>
             </div>
             <a href="{{ route('dashboard.labs') }}" class="px-6 py-2 bg-slate-800 text-white text-[10px] font-black uppercase rounded-xl hover:bg-slate-700 transition-all">
-                Back
+                Back to Command
             </a>
         </div>
 
@@ -110,25 +110,12 @@
             </div>
 
             {{-- Right Column: Schedule Table --}}
-            {{-- Right Column: Schedule Table --}}
-            <div class="lg:col-span-2 bg-slate-900 rounded-[3rem] p-10 shadow-2xl overflow-hidden" x-data="{ activeDay: 'All' }">
-                <div class="mb-8 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-                    <div>
-                        <h4 class="text-white font-black uppercase tracking-tighter text-xl">Active <span class="text-[#D4AF37]">Roster</span></h4>
-                        <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-1">Filtering by: <span class="text-[#D4AF37]" x-text="activeDay"></span></p>
-                    </div>
-
-                    {{-- Day Filter Chips --}}
-                    <div class="flex flex-wrap gap-2">
-                        <template x-for="day in ['All', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']">
-                            <button
-                                @click="activeDay = day"
-                                :class="activeDay === day ? 'bg-[#D4AF37] text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'"
-                                class="px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border border-white/5 shadow-sm"
-                                x-text="day">
-                            </button>
-                        </template>
-                    </div>
+            <div class="lg:col-span-2 bg-slate-900 rounded-[3rem] p-10 shadow-2xl overflow-hidden">
+                <div class="mb-8 flex items-center justify-between">
+                    <h4 class="text-white font-black uppercase tracking-tighter text-xl">Active <span class="text-[#D4AF37]">Roster</span></h4>
+                    <span class="px-4 py-1 bg-slate-800 text-slate-400 text-[8px] font-black uppercase rounded-full tracking-widest border border-slate-700">
+                        {{ count($schedules) }} Slots Assigned
+                    </span>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -143,21 +130,14 @@
                         </thead>
                         <tbody class="divide-y divide-slate-800">
                             @forelse($schedules as $entry)
-                            {{-- Alpine.js Row Filter --}}
-                            <tr class="group hover:bg-white/5 transition-colors"
-                                x-show="activeDay === 'All' || activeDay === '{{ $entry->day }}'"
-                                x-transition:enter="transition ease-out duration-200"
-                                x-transition:enter-start="opacity-0 transform -translate-y-2">
-
+                            <tr class="group hover:bg-white/5 transition-colors">
                                 <td class="py-6 font-black text-white text-sm uppercase">
                                     <div class="flex flex-col">
                                         {{ $entry->user->name }}
                                         <span class="text-[9px] text-[#D4AF37] tracking-widest italic">{{ $entry->subject_code }}</span>
                                     </div>
                                 </td>
-                                <td class="py-6 font-bold text-slate-400 text-xs uppercase tracking-widest">
-                                    <span :class="activeDay !== 'All' ? 'text-[#D4AF37]' : ''">{{ $entry->day }}</span>
-                                </td>
+                                <td class="py-6 font-bold text-slate-400 text-xs uppercase tracking-widest">{{ $entry->day }}</td>
                                 <td class="py-6 font-bold text-white text-xs">
                                     <span class="px-3 py-1 bg-slate-800 rounded-lg border border-slate-700">
                                         {{ date('h:i A', strtotime($entry->start_time)) }} — {{ date('h:i A', strtotime($entry->end_time)) }}
@@ -177,13 +157,6 @@
                                 <td colspan="4" class="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-[10px]">No scheduled slots found</td>
                             </tr>
                             @endforelse
-
-                            {{-- Empty State for Filter --}}
-                            <tr x-show="document.querySelectorAll('tbody tr:not([style*=\'display: none\'])').length === 0" x-cloak>
-                                <td colspan="4" class="py-20 text-center text-slate-600 font-black uppercase tracking-widest text-[10px]">
-                                    No sessions scheduled for <span x-text="activeDay"></span>
-                                </td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>

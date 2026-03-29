@@ -14,17 +14,16 @@ return new class extends Migration
         Schema::create('lab_sessions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('computer_id')->constrained()->onDelete('cascade');
-
-            // Student Info (Manual input by teacher)
             $table->string('student_name');
             $table->string('student_id_number');
 
-            $table->timestamp('time_in');
-            $table->timestamp('time_out')->nullable();
+            // Use 'dateTime' instead of 'timestamp' to avoid MySQL auto-update bugs
+            $table->dateTime('time_in')->nullable();
+            $table->dateTime('time_out')->nullable();
 
-            // The Teacher who is responsible for this entry
-            $table->foreignId('teacher_id')->constrained('users');
-            $table->timestamps();
+            $table->foreignId('teacher_id')->nullable()->constrained('users')->onDelete('set null');;
+            $table->foreignId('lab_id')->nullable()->constrained()->onDelete('cascade')->after('computer_id');
+            $table->timestamps(); // This creates created_at and updated_at
         });
     }
 

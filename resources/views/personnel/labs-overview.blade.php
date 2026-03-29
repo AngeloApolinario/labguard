@@ -1,3 +1,61 @@
+{{-- SweetAlert2 for Cinematic Popups --}}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+    // Create a reusable Gold/Slate Toast configuration
+    const LabGuardToast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        background: '#1e293b',
+        color: '#ffffff',
+        iconColor: '#D4AF37',
+    });
+
+    /**
+     * Call this function from any button to release a PC without leaving the page
+     * Example: <button onclick="forceReleasePC(5)"> 
+     */
+    function forceReleasePC(computerId) {
+        // Construct the URL dynamically
+        const url = `/terminal/release/${computerId}`;
+
+        fetch(url, {
+                method: 'GET', // Or POST if you update your routes
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    LabGuardToast.fire({
+                        icon: 'success',
+                        title: data.message
+                    });
+
+                    // Refresh specific UI elements or reload after 1.5s
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    LabGuardToast.fire({
+                        icon: 'warning',
+                        title: data.message,
+                        iconColor: '#f59e0b'
+                    });
+                }
+            })
+            .catch(error => {
+                LabGuardToast.fire({
+                    icon: 'error',
+                    title: 'System Error',
+                    text: 'Could not communicate with the terminal.'
+                });
+            });
+    }
+</script>
 <x-app-layout>
     <x-slot name="header">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -71,7 +129,7 @@
                             </div>
                             <div class="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
                                 <div class="h-full bg-slate-800 rounded-full transition-all duration-1000 group-hover:bg-[#D4AF37]"
-                                    style="width: {{ ($lab->occupied / $lab->total) * 100 }}%"></div>
+                                    style="width: {{ $lab->total > 0 ? ($lab->occupied / $lab->total) * 100 : 0 }}%"></div>
                             </div>
                         </div>
 
@@ -90,4 +148,71 @@
             </div>
         </div>
     </div>
+
+    {{-- SCRIPTS FOR AJAX POPUPS --}}
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configuration for the Gold/Slate Toast
+            const LabGuardToast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true,
+                background: '#1e293b', // Slate-800
+                color: '#ffffff',
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer)
+                    toast.addEventListener('mouseleave', Swal.resumeTimer)
+                }
+            });
+
+            // If you have a force-release button in THIS view, 
+            // add a class like 'force-release-btn' to it.
+            // This listener intercepts the click and handles the JSON response.
+            document.querySelectorAll('.force-release-btn').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const url = this.getAttribute('href') || this.dataset.url;
+
+                    fetch(url, {
+                            method: 'POST', // or GET depending on your route
+                            headers: {
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                'Accept': 'application/json'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'success') {
+                                LabGuardToast.fire({
+                                    icon: 'success',
+                                    title: data.message,
+                                    iconColor: '#D4AF37' // Your signature Gold
+                                });
+                                // Optional: Refresh the page or update the UI live
+                                setTimeout(() => location.reload(), 1500);
+                            }
+                        })
+                        .catch(error => {
+                            LabGuardToast.fire({
+                                icon: 'error',
+                                title: 'Communication Error',
+                                text: 'Could not reach the terminal.'
+                            });
+                        });
+                });
+            });
+
+            // Handle Flash Messages from Controller redirects
+            @if(session('success'))
+            LabGuardToast.fire({
+                icon: 'success',
+                title: "{{ session('success') }}",
+                iconColor: '#D4AF37'
+            });
+            @endif
+        });
+    </script>
 </x-app-layout>

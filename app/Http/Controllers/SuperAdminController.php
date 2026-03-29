@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Lab;
+use App\Models\LabSession;
+use App\Models\Schedule;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules;
@@ -187,5 +190,105 @@ class SuperAdminController extends Controller
 
         $user->delete();
         return redirect()->back()->with('status', 'User removed from system.');
+    }
+
+
+    //LAB AND SCHEDULE ROUTES 
+    public function labs()
+    {
+        $labs = Lab::withCount([
+            'computers as total_pcs',
+            'computers as active_pcs' => function ($query) {
+                $query->where('status', 'active');
+            }
+        ])->get();
+
+        return view('super-admin.labs', compact('labs'));
+    }
+
+    // View the Schedule for a specific Lab
+    public function viewSchedule(Lab $lab)
+    {
+        $schedules = Schedule::where('lab_id', $lab->id)
+            ->with('user')
+            ->orderByRaw("FIELD(day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
+            ->orderBy('start_time', 'asc')
+            ->get();
+
+        // Get all personnel/admins to assign to schedules
+        $teachers = User::whereIn('role', ['personnel', 'admin', 'super-admin'])->get();
+
+        return view('super-admin.schedule', compact('lab', 'schedules', 'teachers'));
+    }
+
+    // Store a New Schedule
+    public function storeSchedule(Request $request, Lab $lab)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'subject_code' => 'required|string|max:50',
+            'day' => 'required|in:Monday,Tuesday,Wednesday,Thursday,Friday,Saturday',
+            'start_time' => 'required',
+            'end_time' => 'required|after:start_time',
+        ]);
+
+        // Check for Overlaps
+        $overlap = Schedule::where('lab_id', $lab->id)
+            ->where('day', $validated['day'])
+            ->where(function ($query) use ($validated) {
+                $query->where('start_time', '<', $validated['end_time'])
+                    ->where('end_time', '>', $validated['start_time']);
+            })->exists();
+
+        if ($overlap) {
+            return back()->withInput()->with('error', 'Schedule Conflict: This time slot is already taken.');
+        }
+
+        Schedule::create([
+            'lab_id' => $lab->id,
+            'user_id' => $validated['user_id'],
+            'subject_code' => $validated['subject_code'],
+            'day' => $validated['day'],
+            'start_time' => $validated['start_time'],
+            'end_time' => $validated['end_time'],
+        ]);
+
+        return back()->with('success', 'Master Schedule updated successfully.');
+    }
+
+    // Delete a Schedule
+    public function destroySchedule(Schedule $schedule)
+    {
+        $schedule->delete();
+        return back()->with('success', 'Schedule entry removed from Master Control.');
+    }
+
+    //SESSION HISTORY FOR THE SUPER ADMIN DASHBOARD
+    public function sessions(Request $request)
+    {
+        // 1. Same logic: Only finished sessions
+        $query = LabSession::with(['computer'])
+            ->whereNotNull('time_out')
+            ->latest('time_out');
+
+        // 2. Same RAD Filters
+        if ($request->filled('student_name')) {
+            $query->where('student_name', 'like', '%' . $request->student_name . '%');
+        }
+
+        if ($request->filled('pc_number')) {
+            $query->whereHas('computer', function ($q) use ($request) {
+                $q->where('pc_number', 'like', '%' . $request->pc_number . '%');
+            });
+        }
+
+        if ($request->filled('date')) {
+            $query->whereDate('time_in', $request->date);
+        }
+
+        $sessions = $query->paginate(15)->withQueryString();
+
+        // Change this path to match your actual view folder
+        return view('super-admin.sessions', compact('sessions'));
     }
 }

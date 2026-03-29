@@ -8,10 +8,9 @@
                 <p class="text-xs font-bold text-slate-400 uppercase tracking-[0.3em] mt-1">Database-Synced Lab Nodes</p>
             </div>
 
+            {{-- FIXED: This button no longer uses $lab->id because it's for creating a NEW lab --}}
             <button class="flex items-center space-x-2 bg-slate-800 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] transition-all shadow-xl shadow-slate-200">
-                <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4" />
-                </svg>
+                <x-heroicon-o-plus class="size-4" stroke-width="3" />
                 <span>Provision New Lab</span>
             </button>
         </div>
@@ -27,22 +26,20 @@
                     {{-- Status Badge --}}
                     <div class="flex justify-between items-start mb-12">
                         <div class="p-4 bg-slate-50 rounded-2xl group-hover:bg-[#D4AF37]/10 transition-colors">
-                            <svg class="size-8 text-slate-400 group-hover:text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
+                            <x-heroicon-o-building-office-2 class="size-8 text-slate-400 group-hover:text-[#D4AF37]" />
                         </div>
                         <div class="text-right">
-                            <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">LABORATORY</span>
-                            <p class="text-xs font-black text-slate-700 uppercase">A{{ $loop->iteration }}-SEC</p>
+                            <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">Network Node</span>
+                            {{-- SAFE: Inside loop, $lab exists --}}
+                            <p class="text-xs font-black text-slate-700 uppercase italic">AU-{{ str_pad($lab->id, 3, '0', STR_PAD_LEFT) }}</p>
                         </div>
                     </div>
 
-                    {{-- Updated from lab_name to name --}}
+                    {{-- SAFE: Inside loop --}}
                     <h3 class="text-4xl font-black text-slate-800 mb-2 tracking-tighter uppercase">{{ $lab->name }}</h3>
-
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-8">System-Verified Facility</p>
 
                     <div class="space-y-6">
-                        {{-- Data Stats --}}
                         <div class="grid grid-cols-2 gap-4">
                             <div class="bg-slate-50 p-4 rounded-2xl">
                                 <p class="text-[8px] font-black text-slate-400 uppercase">Total Units</p>
@@ -55,26 +52,27 @@
                         </div>
 
                         {{-- Occupancy Bar --}}
+                        @php
+                        $percent = $lab->total_pcs > 0 ? ($lab->active_pcs / $lab->total_pcs) * 100 : 0;
+                        @endphp
                         <div class="space-y-2">
                             <div class="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500">
                                 <span>Utilization</span>
-                                <span>{{ $lab->total_pcs > 0 ? round(($lab->active_pcs / $lab->total_pcs) * 100) : 0 }}%</span>
+                                <span>{{ round($percent) }}%</span>
                             </div>
                             <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                 <div class="h-full bg-slate-800 transition-all duration-1000"
-                                    style="width: {{ $lab->total_pcs > 0 ? ($lab->active_pcs / $lab->total_pcs) * 100 : 0 }}%"></div>
+                                    style="width: {{ $percent }}%"></div>
                             </div>
                         </div>
 
-                        {{-- Action Buttons --}}
                         <div class="pt-6 border-t border-slate-50 grid grid-cols-2 gap-4">
-                            {{-- Inspect Button --}}
-                            <button class="w-full py-4 bg-slate-50 text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl group-hover:bg-slate-800 group-hover:text-white transition-all">
+                            {{-- SAFE: Inside loop --}}
+                            <a href="{{ route('super-admin.labs.show', $lab->id) }}" class="w-full py-4 bg-slate-50 text-slate-600 text-center text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl group-hover:bg-slate-800 group-hover:text-white transition-all">
                                 Inspect
-                            </button>
+                            </a>
 
-                            {{-- Schedule Button --}}
-                            <a href="{{ route('dashboard.labs.schedule', $lab->id) }}"
+                            <a href="{{ route('super-admin.labs.schedule', $lab->id) }}"
                                 class="w-full py-4 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] flex items-center justify-center font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#D4AF37] hover:text-white transition-all">
                                 Schedule
                             </a>

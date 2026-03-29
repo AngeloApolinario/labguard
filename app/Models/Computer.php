@@ -48,4 +48,20 @@ class Computer extends Model
     {
         return $this->hasOne(LabSession::class)->latestOfMany();
     }
+
+    /**
+     * Relationship: A computer can have many technical reports/remarks
+     */
+    public function alerts()
+    {
+        return $this->hasMany(Alert::class);
+    }
+
+    /**
+     * Helper: Check if this terminal currently has an unaddressed issue
+     */
+    public function hasPendingAlert(): bool
+    {
+        return $this->alerts()->where('status', '!=', 'resolved')->exists();
+    }
 }

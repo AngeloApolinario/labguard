@@ -23,8 +23,8 @@ class UserSeeder extends Seeder
             'email' => 'superadmin@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'super-admin',
-            'student_number' => 'SA-01', // Added
-            'phone' => '09000000001',    // Added
+            'student_number' => 'SA-01',
+            'phone' => '09000000001',
             'email_verified_at' => $now,
         ]);
 
@@ -34,23 +34,45 @@ class UserSeeder extends Seeder
             'email' => 'admin@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'admin',
-            'student_number' => 'AD-01', // Added
-            'phone' => '09000000002',    // Added
+            'student_number' => 'AD-01',
+            'phone' => '09000000002',
             'email_verified_at' => $now,
         ]);
 
-        // 3. Create Personnel
+        // 3. Create Personnel (Original Teacher)
         User::create([
             'name' => 'John Teacher',
             'email' => 'teacher@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'personnel',
-            'student_number' => 'PR-01', // Added
-            'phone' => '09000000003',    // Added
+            'student_number' => 'PR-01',
+            'phone' => '09000000003',
             'email_verified_at' => $now,
         ]);
 
-        // 4. Create Student
+        // 4. Create Personnel (Teacher 2)
+        User::create([
+            'name' => 'Maria Santos',
+            'email' => 'msantos@labguard.com',
+            'password' => Hash::make('password'),
+            'role' => 'personnel',
+            'student_number' => 'PR-02',
+            'phone' => '09000000004',
+            'email_verified_at' => $now,
+        ]);
+
+        // 5. Create Personnel (Teacher 3)
+        User::create([
+            'name' => 'Ricardo Dalisay',
+            'email' => 'rdalisay@labguard.com',
+            'password' => Hash::make('password'),
+            'role' => 'personnel',
+            'student_number' => 'PR-03',
+            'phone' => '09000000005',
+            'email_verified_at' => $now,
+        ]);
+
+        // 6. Create Student
         User::create([
             'name' => 'Juan Dela Cruz',
             'email' => 'juan.student@phinmaed.com',

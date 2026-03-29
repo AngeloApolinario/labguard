@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('lab_id')->constrained();
             $table->foreignId('user_id')->constrained(); // The Teacher
-            $table->enum('day', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
+            $table->enum('day', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
             $table->time('start_time');
             $table->time('end_time');
             $table->string('subject_code')->nullable();

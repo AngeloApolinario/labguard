@@ -91,15 +91,70 @@
                         <p class="text-xs font-mono text-[#D4AF37]">{{ $session->time_in->format('h:i A') }}</p>
                     </div>
                 </div>
-                <form method="POST" action="{{ route('personnel.release', $pc->id) }}">
-                    @csrf
-                    <button type="submit" class="w-full py-3 bg-white text-slate-900 text-[10px] font-black uppercase rounded-xl hover:bg-rose-500 hover:text-white transition-all">
-                        Force Release
-                    </button>
-                </form>
+
+                {{-- UPDATED BUTTON: Removed Form, Added JS Action --}}
+                <button type="button"
+                    onclick="handleForceRelease({{ $pc->id }}, '{{ $pc->pc_number }}')"
+                    class="w-full py-3 bg-white text-slate-900 text-[10px] font-black uppercase rounded-xl hover:bg-rose-500 hover:text-white transition-all">
+                    Force Release
+                </button>
             </div>
             @endif
         </div>
         @endforeach
     </div>
+
+    {{-- SCRIPTS FOR TOAST LOGIC --}}
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Setup the cinematic toast
+        const LabGuardToast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            background: '#1e293b',
+            color: '#ffffff',
+            iconColor: '#D4AF37',
+        });
+
+        async function handleForceRelease(pcId, pcNumber) {
+            try {
+                // Change cursor to waiting
+                document.body.style.cursor = 'wait';
+
+                const response = await fetch(`/terminal/release/${pcId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success' || data.status === 'warning') {
+                    LabGuardToast.fire({
+                        icon: data.status === 'success' ? 'success' : 'warning',
+                        title: data.message
+                    });
+
+                    // Since we are using wire:poll, the UI will update naturally 
+                    // within 5 seconds, but let's refresh manually for instant feedback.
+                    if (window.Livewire) {
+                        window.Livewire.dispatch('$refresh');
+                    }
+                }
+            } catch (error) {
+                LabGuardToast.fire({
+                    icon: 'error',
+                    title: 'System Communication Error'
+                });
+            } finally {
+                document.body.style.cursor = 'default';
+            }
+        }
+    </script>
 </div>

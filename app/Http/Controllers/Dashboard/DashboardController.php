@@ -10,6 +10,7 @@ use App\Models\Lab; // Added Lab Model
 use App\Models\User;
 use Illuminate\Validation\Rules;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -120,5 +121,48 @@ class DashboardController extends Controller
 
 
         return redirect()->back()->with('status', "Session for {$userName} terminated successfully.");
+    }
+
+
+    //ADD NEW LAB FUNCTION 
+
+
+    public function storeNewLaboratory(Request $request)
+    {
+        // 1. Validation
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:labs,name',
+            'location' => 'required|string|max:255',
+            'pc_count' => 'required|integer|min:1|max:100',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            // 2. Create the Lab Node
+            $lab = Lab::create([
+                'name' => $validated['name'],
+                'location' => $validated['location'],
+            ]);
+
+            // 3. Automated PC Node Generation Loop
+            for ($i = 1; $i <= $validated['pc_count']; $i++) {
+                // Formats: PC-01, PC-02, PC-10...
+                $pcNumber = "PC-" . str_pad($i, 2, '0', STR_PAD_LEFT);
+
+                $lab->computers()->create([
+                    'pc_number' => $pcNumber,
+                    'status' => 'available',
+                    // 'ip_address' => null, // Optional: if your system tracks IPs
+                ]);
+            }
+
+            DB::commit();
+
+            return back()->with('success', "Facility {$lab->name} initialized with {$validated['pc_count']} active nodes.");
+        } catch (\Exception $e) {
+            DB::rollback();
+            return back()->with('error', 'Critical System Error: Could not initialize facility nodes.');
+        }
     }
 }

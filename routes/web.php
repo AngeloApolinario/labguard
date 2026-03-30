@@ -89,6 +89,9 @@ Route::middleware([
     //SESSION HISTORY 
     Route::get('/sessions', [Session::class, 'index'])->name('sessions.index');
     Route::get('/sessions/student/{student}', [Session::class, 'show'])->name('sessions.student');
+
+    //NEW LABORATORY CREATION ROUTES
+    Route::post('/labs/store', [DashboardController::class, 'storeNewLaboratory'])->name('labs.store');
 });
 
 

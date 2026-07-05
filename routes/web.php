@@ -58,7 +58,6 @@ Route::middleware([
 
     // Core Dashboard & Analytics
     Route::get('/', [DashboardController::class, 'index'])->name('index');
-    Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
 
     // --- User Management ---
@@ -71,26 +70,22 @@ Route::middleware([
     Route::patch('/sessions/{session}/terminate', [DashboardController::class, 'terminateSession'])->name('sessions.terminate');
 
     // --- Laboratory & Hardware Management ---
-    // URL: /dashboard/labs
     Route::get('/labs', [LabController::class, 'index'])->name('labs');
 
     // --- Laboratory Scheduling ---
-    // These now use the 'lab' ID to identify which room is being scheduled
     Route::get('/labs/{lab}/schedule', [LabController::class, 'viewSchedule'])->name('labs.schedule');
     Route::post('/labs/{lab}/schedule', [LabController::class, 'storeSchedule'])->name('labs.schedule.store');
-
-    // Using {schedule} allows Route Model Binding in LabController@destroySchedule
     Route::delete('/schedule/{schedule}', [LabController::class, 'destroySchedule'])->name('labs.schedule.destroy');
 
-    //ALERTS
+    // --- Terminal Incident Alerts (Fixed Duplicates) ---
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
 
-    //SESSION HISTORY 
+    // SESSION HISTORY 
     Route::get('/sessions', [Session::class, 'index'])->name('sessions.index');
     Route::get('/sessions/student/{student}', [Session::class, 'show'])->name('sessions.student');
 
-    //NEW LABORATORY CREATION ROUTES
+    // NEW LABORATORY CREATION ROUTES
     Route::post('/labs/store', [DashboardController::class, 'storeNewLaboratory'])->name('labs.store');
 });
 
@@ -126,6 +121,7 @@ Route::middleware([
 
     Route::get('/sessions', [PersonnelController::class, 'sessionHistory'])->name('sessions');
     Route::get('/alerts', [PersonnelController::class, 'alertHistory'])->name('alerts');
+    Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
 
     //EXPORT ROUTES
     Route::get('/export/{schedule}', [PersonnelController::class, 'exportScheduleAttendance'])
@@ -160,10 +156,21 @@ Route::middleware([
     Route::post('/labs/{lab}/schedule', [SuperAdminController::class, 'storeSchedule'])->name('labs.schedule.store');
     Route::delete('/schedule/{schedule}', [SuperAdminController::class, 'destroySchedule'])->name('labs.schedule.destroy');
     Route::get('/labs/{lab}', [SuperAdminController::class, 'show'])->name('labs.show');
+
     // Other Global Monitoring
     Route::get('/sessions', [SuperAdminController::class, 'sessions'])->name('sessions');
     Route::get('/alerts', [SuperAdminController::class, 'alerts'])->name('alerts');
+
     //ALERTS FOR SUPER ADMIN
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
+    Route::get('/analytics/export', [SuperAdminController::class, 'exportReport'])->name('analytics.export');
+
+    //ROUTES FOR THE SUPER ADMIN OVERVIEW 
+    Route::get('/logs', [SuperAdminController::class, 'logs'])->name('logs');
+
+    // Super Admin System Utilities
+    Route::post('/reports/generate', [SuperAdminController::class, 'generateReport'])->name('reports.generate');
+    Route::post('/system/backup', [SuperAdminController::class, 'triggerBackup'])->name('system.backup');
+    Route::post('/system/lockout', [SuperAdminController::class, 'emergencyLockout'])->name('system.lockout');
 });

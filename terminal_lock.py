@@ -12,7 +12,6 @@ import sys
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- CONFIGURATION ---
-# Ensure API_URL points to your Laravel API
 API_URL = "https://labguard.test/api/pc"
 PC_NUMBER = "PC-01" 
 HEADERS = {"Host": "labguard.test", "Accept": "application/json"}
@@ -21,7 +20,6 @@ HEADERS = {"Host": "labguard.test", "Accept": "application/json"}
 def send_logout_signal():
     """Tells Laravel to release this PC and set time_out."""
     try:
-        # We use a small timeout so the shutdown isn't delayed if the server is slow
         requests.post(f"{API_URL}/logout", 
                       json={"pc_number": PC_NUMBER}, 
                       headers=HEADERS, 
@@ -32,15 +30,13 @@ def send_logout_signal():
         print(f"Logout signal failed: {e}")
 
 def handle_exit_signal(sig, frame):
-    """Handles OS-level termination signals (like Task Manager or Ctrl+C)."""
+    """Handles OS-level termination signals."""
     print("Force shutdown detected...")
     send_logout_signal()
     sys.exit(0)
 
 # Register shutdown handlers
-# 1. Register for normal script exit/atexit
 atexit.register(send_logout_signal)
-# 2. Register for SIGINT (Ctrl+C) and SIGTERM (Termination)
 signal.signal(signal.SIGINT, handle_exit_signal)
 signal.signal(signal.SIGTERM, handle_exit_signal)
 
@@ -70,7 +66,7 @@ class CinematicNotify(tk.Toplevel):
         self.progress_bg = tk.Frame(self, bg='#0f172a', height=4)
         self.progress_bg.pack(side="bottom", fill="x")
         
-        self.after(6000, self.fade_out)
+        self.after(4000, self.fade_out)
 
     def fade_out(self):
         alpha = self.attributes("-alpha")
@@ -122,7 +118,8 @@ class LabGuardClient:
         self.overlay.configure(bg='#1e293b')
         self.overlay.overrideredirect(True) 
 
-        width, height = 500, 480
+        # Extended layout dimensions to fit credentials elegantly
+        width, height = 500, 640
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
         x = (screen_w // 2) - (width // 2)
@@ -132,19 +129,30 @@ class LabGuardClient:
         self.overlay.attributes("-topmost", True)
         self.overlay.grab_set() 
 
-        tk.Label(self.overlay, text="REPORT AN ISSUE", fg='#D4AF37', bg='#1e293b', font=("Arial Black", 16)).pack(pady=(30, 10))
+        tk.Label(self.overlay, text="REPORT AN ISSUE", fg='#D4AF37', bg='#1e293b', font=("Arial Black", 16)).pack(pady=(25, 5))
         
-        tk.Label(self.overlay, text="Select Category", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(20, 5))
+        # Accountability Identity Sub-form
+        tk.Label(self.overlay, text="Confirm Student Number", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
+        self.report_student_id = tk.Entry(self.overlay, font=("Arial", 12), bg='#0f172a', fg='white', border=0, insertbackground='white')
+        self.report_student_id.pack(fill="x", padx=60, ipady=6)
+        
+        tk.Label(self.overlay, text="Confirm Password", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(10, 2))
+        self.report_password = tk.Entry(self.overlay, font=("Arial", 12), show="*", bg='#0f172a', fg='white', border=0, insertbackground='white')
+        self.report_password.pack(fill="x", padx=60, ipady=6)
+
+        # Issue Metadata fields
+        tk.Label(self.overlay, text="Select Category", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
         self.issue_var = tk.StringVar(value="Hardware Issue")
         
         dropdown = tk.OptionMenu(self.overlay, self.issue_var, "Hardware Issue", "Software/App Error", "No Internet", "Peripheral (Mouse/KB)")
         dropdown.config(bg="#0f172a", fg="white", activebackground="#D4AF37", font=("Arial", 10), relief="flat", borderwidth=0)
         dropdown.pack(fill="x", padx=60)
 
-        tk.Label(self.overlay, text="Describe the Problem", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 5))
-        self.remarks_box = tk.Text(self.overlay, height=4, font=("Arial", 11), bg='#0f172a', fg='white', border=0, padx=15, pady=15, insertbackground='white')
-        self.remarks_box.pack(padx=60)
-        self.remarks_box.focus_set()
+        tk.Label(self.overlay, text="Describe the Problem", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
+        self.remarks_box = tk.Text(self.overlay, height=4, font=("Arial", 11), bg='#0f172a', fg='white', border=0, padx=15, pady=10, insertbackground='white')
+        self.remarks_box.pack(padx=60, fill="x")
+        
+        self.report_student_id.focus_set()
 
         def close_overlay():
             self.overlay.grab_release()
@@ -152,28 +160,48 @@ class LabGuardClient:
             self.root.attributes("-topmost", True)
 
         def handle_submit():
+            student_id = self.report_student_id.get().strip()
+            password = self.report_password.get()
             remarks = self.remarks_box.get("1.0", tk.END).strip()
+
+            if not student_id or not password:
+                CinematicNotify(self.overlay, "Identity Required", "Credentials required to verify report authenticity.", color="#ef4444")
+                return
             if not remarks:
-                CinematicNotify(self.overlay, "Incomplete", "Please describe the problem.", color="#ef4444")
+                CinematicNotify(self.overlay, "Incomplete", "Please detail the issue descriptions.", color="#ef4444")
                 return
 
-            self.btn_send.config(state="disabled", text="SENDING...")
-            payload = {"pc_number": PC_NUMBER, "issue_type": self.issue_var.get(), "remarks": remarks}
+            self.btn_send.config(state="disabled", text="VERIFYING & SENDING...")
+            
+            # Pack payload exactly with attributes requested by API validate schema
+            payload = {
+                "pc_number": PC_NUMBER, 
+                "student_id": student_id,
+                "password": password,
+                "issue_type": self.issue_var.get(), 
+                "remarks": remarks
+            }
 
             try:
                 response = requests.post(f"{API_URL}/alerts", json=payload, headers=HEADERS, verify=False, timeout=8)
+                
                 if response.status_code in [200, 201]:
-                    CinematicNotify(self.root, "Report Sent", "Feedback received!", color="#10b981")
+                    CinematicNotify(self.root, "Report Logged", "Identity verified and ticket created.", color="#10b981")
                     close_overlay()
                 else:
+                    msg = response.json().get('message', 'Identity verification failed.')
+                    CinematicNotify(self.overlay, "Auth Failure", msg, color="#ef4444")
                     self.btn_send.config(state="normal", text="SEND REPORT")
-            except:
+            except Exception:
+                CinematicNotify(self.overlay, "Connection Error", "Could not connect to database server.", color="#ef4444")
                 self.btn_send.config(state="normal", text="SEND REPORT")
 
         btn_container = tk.Frame(self.overlay, bg='#1e293b')
-        btn_container.pack(pady=30)
-        self.btn_send = tk.Button(btn_container, text="SEND REPORT", command=handle_submit, bg='#ef4444', fg='white', font=("Arial", 9, "bold"), width=15, height=2, relief="flat")
+        btn_container.pack(pady=25)
+        
+        self.btn_send = tk.Button(btn_container, text="SEND REPORT", command=handle_submit, bg='#ef4444', fg='white', font=("Arial", 9, "bold"), width=18, height=2, relief="flat")
         self.btn_send.pack(side="left", padx=10)
+        
         tk.Button(btn_container, text="CANCEL", command=close_overlay, bg='#475569', fg='white', font=("Arial", 9, "bold"), width=15, height=2, relief="flat").pack(side="left", padx=10)
 
     def force_on_top(self):
@@ -203,7 +231,7 @@ class LabGuardClient:
                 msg = response.json().get('message', 'Invalid Credentials.')
                 CinematicNotify(self.root, "Auth Failed", msg, color="#ef4444")
                 self.btn_unlock.config(state="normal", text="UNLOCK STATION")
-        except:
+        except Exception:
             CinematicNotify(self.root, "Error", "Server is offline.", color="#ef4444")
             self.btn_unlock.config(state="normal", text="UNLOCK STATION")
 
@@ -219,7 +247,7 @@ class LabGuardClient:
                 if response.status_code == 200 and response.json().get('status') == 'available':
                     self.root.after(0, self.lock_ui_again)
                     break
-            except: pass 
+            except Exception: pass 
             time.sleep(15) 
 
     def lock_ui_again(self):

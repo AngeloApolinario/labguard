@@ -79,6 +79,7 @@
                 <thead>
                     <tr class="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] bg-slate-50/50">
                         <th class="py-6 px-10">System Node</th>
+                        <th class="py-6 px-4">Reported By</th>
                         <th class="py-6 px-4">Classification</th>
                         <th class="py-6 px-4">Transmission</th>
                         <th class="py-6 px-4">Log Time</th>
@@ -98,6 +99,19 @@
                                 <span class="font-black text-slate-900 tracking-tighter">{{ $alert->computer->pc_number }}</span>
                             </div>
                         </td>
+
+                        {{-- Added Column: Displays accountability information cleanly --}}
+                        <td class="py-8 px-4">
+                            <div class="flex flex-col">
+                                <span class="font-black text-slate-900 text-xs tracking-tight">
+                                    {{ $alert->reporter->name ?? 'Unknown System Student' }}
+                                </span>
+                                <span class="text-[9px] text-slate-400 font-bold uppercase mt-0.5 tracking-tight">
+                                    {{ $alert->reporter->student_number ?? 'N/A' }}
+                                </span>
+                            </div>
+                        </td>
+
                         <td class="py-8 px-4">
                             <div class="flex flex-col">
                                 {{-- Issue Type: Rose moved to Gold --}}
@@ -121,11 +135,13 @@
                         </td>
                         <td class="py-8 px-10 text-right">
                             @if($alert->status == 'pending')
-                            <form action="{{ route('dashboard.alerts.resolve', $alert->id) }}" method="POST">
-                                @csrf @method('PATCH')
-                                {{-- Resolve Button: Rose to Solid, Glowing Gold --}}
-                                <button class="group/btn relative overflow-hidden bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[9px] font-black uppercase px-8 py-3 rounded-2xl transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)]">
-                                    <span class="relative z-10">Resolve Incident</span>
+                            {{-- Change route target from dashboard.alerts.resolve to personnel.alerts.resolve --}}
+                            <form action="{{ route('personnel.alerts.resolve', $alert->id) }}" method="POST">
+                                @csrf
+                                @method('PATCH')
+
+                                <button type="submit" class="group/btn relative overflow-hidden bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[9px] font-black uppercase px-8 py-3 rounded-2xl transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)]">
+                                <span class="relative z-10">Resolve Incident</span>
                                     <div class="absolute inset-0 bg-white/10 translate-y-full group-hover/btn:translate-y-0 transition-transform"></div>
                                 </button>
                             </form>
@@ -140,7 +156,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="py-32 text-center">
+                        <td colspan="6" class="py-32 text-center">
                             <div class="space-y-4">
                                 {{-- Empty State: Neutral light Gray --}}
                                 <div class="text-slate-100 text-6xl font-black">CLEAN</div>

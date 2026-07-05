@@ -15,7 +15,8 @@ class Alert extends Model
         'issue_type',
         'remarks',
         'status',
-        'resolved_at'
+        'resolved_at',
+        'reported_by',
     ];
 
     /**
@@ -26,11 +27,20 @@ class Alert extends Model
         return $this->belongsTo(Computer::class);
     }
 
+
     /**
      * Scope to quickly get only unresolved issues for the HUD.
      */
     public function scopeUnresolved($query)
     {
         return $query->where('status', '!=', 'resolved');
+    }
+    public function reporter()
+    {
+        return $this->belongsTo(User::class, 'reported_by');
+    }
+    public function laboratory()
+    {
+        return $this->belongsTo(Lab::class);
     }
 }

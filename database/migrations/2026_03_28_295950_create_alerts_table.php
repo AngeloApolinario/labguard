@@ -13,8 +13,14 @@ return new class extends Migration
     {
         Schema::create('alerts', function (Blueprint $table) {
             $table->id();
+
             // Links the alert to a specific PC
             $table->foreignId('computer_id')->constrained()->onDelete('cascade');
+
+            $table->foreignId('lab_id')->constrained()->onDelete('cascade');
+
+            // Tracks accountability by linking the alert to the student who reported it
+            $table->foreignId('reported_by')->constrained('users')->onDelete('cascade');
 
             // Categorize the issue (e.g., 'Hardware', 'Software', 'Network')
             $table->string('issue_type')->default('Technical');

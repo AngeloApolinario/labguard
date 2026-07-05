@@ -8,45 +8,65 @@ use App\Models\Schedule;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon;
+use App\Models\Alert;
 use Illuminate\Support\Facades\Hash;
 
 class SuperAdminController extends Controller
 {
     public function index()
     {
-        // Actual Database Counts
+        // 1. Fetch Summary Card Metrics
         $totalUsers = User::count();
-        $activeSessions = rand(300, 450); // Mocking active sessions
-        $alerts = 23;
-        $uptime = '99.8%';
+        $activeSessionsCount = LabSession::whereNull('time_out')->count();
+        $pendingAlertsCount = Alert::where('status', 'pending')->count();
 
-        // System Health Stats (Percentages)
-        $health = [
-            'cpu' => 45,
-            'memory' => 62,
-            'database' => 98,
-            'latency' => 23,
-        ];
+        // 2. Fetch all Laboratories to ensure we list rooms even if they have 0 active users
+        $labs = Lab::all();
+        $totalLabs = $labs->count();
 
-        // Recent Activities Mock
-        $activities = [
-            [
-                'type' => 'warning',
-                'title' => 'Login Attempt',
-                'desc' => 'User admin@au.edu failed 3 login attempts',
-                'time' => '2 minutes ago'
-            ],
-            [
-                'type' => 'info',
-                'title' => 'System Update',
-                'desc' => 'Security patch applied to all terminals',
-                'time' => '1 hour ago'
-            ]
-        ];
+        // 3. Count active sessions explicitly grouped by their laboratory connection point
+        $activeSessionsPerLab = LabSession::whereNull('time_out')
+            ->select('lab_id', \DB::raw('count(*) as active_count'))
+            ->groupBy('lab_id')
+            ->pluck('active_count', 'lab_id')
+            ->all(); // Returns an array like: [lab_id => active_count]
 
-        return view('super-admin.index', compact('totalUsers', 'activeSessions', 'alerts', 'uptime', 'health', 'activities'));
+        // 4. Map computed metrics out safely to your view variables
+        $labUtilization = [];
+        foreach ($labs as $lab) {
+            // Get current session volume from our map, defaulting to 0 if no match
+            $currentActiveCount = $activeSessionsPerLab[$lab->id] ?? 0;
+
+            // Protect against a division by zero fallback context
+            $capacity = $lab->capacity > 0 ? $lab->capacity : 1;
+            $percentage = ($currentActiveCount / $capacity) * 100;
+
+            $labUtilization[$lab->id] = [
+                'name' => $lab->room_name,
+                'percent' => min(100, round($percentage))
+            ];
+        }
+
+        // 5. Pull Recent Alert Feeds
+        $recentAlerts = Alert::with(['lab'])
+            ->latest()
+            ->take(5)
+            ->get();
+
+        return view('super-admin.index', [
+            'totalUsers' => $totalUsers,
+            'activeSessions' => $activeSessionsCount,
+            'alerts' => $pendingAlertsCount,
+            'totalLabs' => $totalLabs,
+            'labUtilization' => $labUtilization,
+            'recentAlerts' => $recentAlerts
+        ]);
     }
-
 
     public function security()
     {
@@ -97,26 +117,6 @@ class SuperAdminController extends Controller
         return view('super-admin.security', compact('securityStats', 'alerts'));
     }
 
-    public function analytics()
-    {
-        $stats = [
-            ['label' => 'Total Logins', 'value' => '12,456', 'change' => '+23% vs last month', 'color' => 'text-green-500'],
-            ['label' => 'Avg Session Time', 'value' => '2h 34m', 'change' => '+15% vs last month', 'color' => 'text-green-500'],
-            ['label' => 'Equipment Issues', 'value' => '18', 'change' => '-12% vs last month', 'color' => 'text-green-500'],
-            ['label' => 'User Satisfaction', 'value' => '4.7/5', 'change' => '+0.3 vs last month', 'color' => 'text-green-500'],
-        ];
-
-        $labUsage = [
-            ['name' => 'Lab 1', 'percent' => 85, 'color' => 'bg-blue-600'],
-            ['name' => 'Lab 2', 'percent' => 72, 'color' => 'bg-amber-400'],
-            ['name' => 'Lab 3', 'percent' => 68, 'color' => 'bg-emerald-500'],
-            ['name' => 'Lab 4', 'percent' => 55, 'color' => 'bg-orange-600'],
-            ['name' => 'Lab 5', 'percent' => 78, 'color' => 'bg-purple-500'],
-            ['name' => 'Lab 6', 'percent' => 62, 'color' => 'bg-rose-500'],
-        ];
-
-        return view('super-admin.analytics', compact('stats', 'labUsage'));
-    }
 
     public function settings()
     {
@@ -290,5 +290,354 @@ class SuperAdminController extends Controller
 
         // Change this path to match your actual view folder
         return view('super-admin.sessions', compact('sessions'));
+    }
+
+
+    // ==========================================
+    // SUPERADMIN OVERVIEW FUNCTIONS (FIXED)
+    // ==========================================
+
+    public function generateReport(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|in:utilization,security',
+            'range' => 'required|in:today,week,month',
+        ]);
+
+        $timeframe = match ($request->range) {
+            'today' => now()->startOfDay(),
+            'week' => now()->subDays(7),
+            'month' => now()->startOfMonth(),
+        };
+
+        // Query the data depending on selected report type
+        if ($request->type === 'utilization') {
+            // MATCHED: 'lab' instead of 'laboratory', 'time_in' instead of 'created_at'
+            $data = LabSession::with(['user', 'lab'])
+                ->where('time_in', '>=', $timeframe)
+                ->get();
+        } else {
+            // MATCHED: 'lab' instead of 'laboratory'
+            $data = Alert::with(['lab', 'computer'])
+                ->where('created_at', '>=', $timeframe)
+                ->get();
+        }
+
+        // Log the administrative audit trail action
+        Log::info("Super Admin generated a {$request->type} report for range: {$request->range}");
+
+        // Build a clean streamable CSV payload text block inline
+        $fileName = "labguard_{$request->type}_report_" . now()->format('Y-m-d') . ".csv";
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=$fileName",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $callback = function () use ($data, $request) {
+            $file = fopen('php://output', 'w');
+
+            if ($request->type === 'utilization') {
+                fputcsv($file, ['Session ID', 'Student', 'Laboratory Room', 'Logged In At', 'Logged Out At']);
+                foreach ($data as $row) {
+                    // MATCHED: utilizing 'lab' and your 'time_in' / 'time_out' schema columns
+                    fputcsv($file, [
+                        $row->id,
+                        $row->user->name ?? $row->student_name ?? 'N/A',
+                        $row->lab->room_name ?? 'N/A',
+                        $row->time_in,
+                        $row->time_out ?? 'Active'
+                    ]);
+                }
+            } else {
+                fputcsv($file, ['Alert ID', 'Room', 'Station PC', 'Issue Category', 'Status', 'Logged At']);
+                foreach ($data as $row) {
+                    // MATCHED: utilizing 'lab' relation structure
+                    fputcsv($file, [
+                        $row->id,
+                        $row->lab->room_name ?? 'N/A',
+                        $row->computer->pc_number ?? 'N/A',
+                        $row->issue_type ?? 'Technical',
+                        $row->status,
+                        $row->created_at
+                    ]);
+                }
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Run a secure production MySQL backup dump
+     */
+    public function triggerBackup()
+    {
+        $filename = "backup_" . env('DB_DATABASE') . "_" . now()->format('Y_m_dH_i_s') . ".sql";
+
+        // Build path context for secure internal app directory
+        $storagePath = storage_path("app/backups/");
+        if (!file_exists($storagePath)) {
+            mkdir($storagePath, 0755, true);
+        }
+
+        $fullPath = $storagePath . $filename;
+
+        // Construct standard mysqldump command layout safely
+        $command = sprintf(
+            "mysqldump --user=%s --password=%s --host=%s %s > %s 2>&1",
+            escapeshellarg(env('DB_USERNAME')),
+            escapeshellarg(env('DB_PASSWORD')),
+            escapeshellarg(env('DB_HOST', '127.0.0.1')),
+            escapeshellarg(env('DB_DATABASE')),
+            escapeshellarg($fullPath)
+        );
+
+        $output = [];
+        $returnVar = null;
+        exec($command, $output, $returnVar);
+
+        if ($returnVar === 0) {
+            Log::info("Super Admin successfully initialized database snapshot dump file: {$filename}");
+            return redirect()->back()->with('status', 'Database architectural snapshot generated and archived to secure local path successfully.');
+        }
+
+        Log::error("Database dump routine failed execution. Output details: " . implode("\n", $output));
+        return redirect()->back()->with('error', 'Database utility structural engine execution failed. Check server permissions.');
+    }
+
+    /**
+     * Emergency Broadcast Protocol - Immediate Global System Lockout
+     */
+    public function emergencyLockout()
+    {
+        DB::beginTransaction();
+        try {
+            // MATCHED: Update 'time_out' instead of 'ended_at' where 'time_out' is null
+            LabSession::whereNull('time_out')->update([
+                'time_out' => now()
+            ]);
+
+            // Set all computers to maintenance status to block new student log-ins immediately
+            DB::table('computers')->update([
+                'status' => 'maintenance'
+            ]);
+
+            DB::commit();
+
+            Log::emergency("CRITICAL CRITERIA: Super Admin invoked physical Emergency Lockout protocol. All campus terminal stations forced offline.");
+
+            return redirect()->back()->with('alert', 'EMERGENCY PROTOCOL ACTIVATED: All user sessions disconnected. Physical workstations locked.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Emergency Lockout chain sequence aborted unexpectedly: " . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to safely broadcast system lockdown command network-wide.');
+        }
+    }
+    public function logs()
+    {
+        $logFile = storage_path('logs/laravel.log');
+        $filteredLogs = [];
+
+        if (file_exists($logFile)) {
+            $fileLines = file($logFile);
+
+            // Grab the last 300 lines to parse
+            $recentLines = array_slice($fileLines, -300);
+
+            foreach ($recentLines as $line) {
+                // ONLY keep lines that are actual error definitions, warnings, or info logs
+                // Skip the noisy background stack traces (#1, #2, #3, etc.)
+                if (
+                    str_contains($line, '.ERROR:') ||
+                    str_contains($line, '.WARNING:') ||
+                    str_contains($line, '.INFO:') ||
+                    str_contains($line, '.EMERGENCY:')
+                ) {
+                    $filteredLogs[] = $line;
+                }
+            }
+
+            // Reverse so the absolute newest issue is at the top of the screen
+            $filteredLogs = array_reverse($filteredLogs);
+        }
+
+        return view('super-admin.logs', ['rawLogs' => $filteredLogs]);
+    }
+
+
+    //ANALYTICS CONTROLLER
+    public function analytics(Request $request)
+    {
+        // Determine the active date boundary based on the selected range parameter
+        $range = $request->query('range', 'all'); // Default to all-time if nothing selected
+        $startDate = null;
+
+        switch ($range) {
+            case 'today':
+                $startDate = Carbon::today();
+                $rangeLabel = 'Today';
+                break;
+            case 'week':
+                $startDate = Carbon::now()->subDays(7);
+                $rangeLabel = 'Past 7 Days';
+                break;
+            case 'month':
+                $startDate = Carbon::now()->startOfMonth();
+                $rangeLabel = 'This Month';
+                break;
+            default:
+                $startDate = null;
+                $rangeLabel = 'All Time';
+                break;
+        }
+
+        // 1. Calculate Actual System Statistics
+        $totalUsers = User::count();
+
+        // Total Alerts query with active date range filter
+        $alertsQuery = DB::table('alerts')->where('status', 'pending');
+        if ($startDate) {
+            $alertsQuery->where('created_at', '>=', $startDate);
+        }
+        $activeAlertsCount = $alertsQuery->count();
+
+        // Read actual log line count for diagnostic metrics
+        $logFile = storage_path('logs/laravel.log');
+        $totalLogLines = file_exists($logFile) ? count(file($logFile)) : 0;
+
+        $stats = [
+            [
+                'label' => 'TOTAL ACCOUNTS',
+                'value' => number_format($totalUsers),
+                'change' => 'Registered users',
+            ],
+            [
+                'label' => 'ACTIVE ALERTS (' . strtoupper($rangeLabel) . ')',
+                'value' => number_format($activeAlertsCount),
+                'change' => 'Requires attention',
+            ],
+            [
+                'label' => 'SYSTEM LOG ENTRIES',
+                'value' => number_format($totalLogLines),
+                'change' => 'Captured rows',
+            ],
+        ];
+
+        // 2. Fetch Actual Lab Usage Distribution joining with 'labs' (Filtered by Date Range)
+        $labRecordsQuery = DB::table('lab_sessions')
+            ->join('labs', 'lab_sessions.lab_id', '=', 'labs.id');
+
+        if ($startDate) {
+            // Safe check assuming lab_sessions has a standard timestamp column
+            $labRecordsQuery->where('lab_sessions.created_at', '>=', $startDate);
+        }
+
+        $labRecords = $labRecordsQuery
+            ->select('labs.name as lab_name', DB::raw('count(*) as total'))
+            ->groupBy('labs.id', 'labs.name')
+            ->get();
+
+        $totalSessions = $labRecords->sum('total') ?: 1;
+
+        $colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500'];
+        $labUsage = [];
+
+        foreach ($labRecords as $index => $record) {
+            $labUsage[] = [
+                'name' => $record->lab_name,
+                'percent' => round(($record->total / $totalSessions) * 100),
+                'color' => $colors[$index % count($colors)],
+            ];
+        }
+
+        // 3. Fetch Top Reported Issue Types from 'alerts' table within selected period
+        $topIssuesQuery = DB::table('alerts')
+            ->select('issue_type', DB::raw('count(*) as count'));
+
+        if ($startDate) {
+            $topIssuesQuery->where('created_at', '>=', $startDate);
+        } else {
+            // Fall back to current month if 'All Time' is selected to keep the card descriptive
+            $topIssuesQuery->where('created_at', '>=', now()->startOfMonth());
+        }
+
+        $topIssues = $topIssuesQuery->groupBy('issue_type')
+            ->orderByDesc('count')
+            ->take(5)
+            ->get();
+
+        return view('super-admin.analytics', compact('stats', 'labUsage', 'topIssues', 'range', 'rangeLabel'));
+    }
+
+    public function exportReport(Request $request): StreamedResponse
+    {
+        $range = $request->query('range', 'all');
+        $startDate = null;
+
+        if ($range === 'today') {
+            $startDate = Carbon::today();
+        } elseif ($range === 'week') {
+            $startDate = Carbon::now()->subDays(7);
+        } elseif ($range === 'month') {
+            $startDate = Carbon::now()->startOfMonth();
+        }
+
+        $fileName = 'labguard_alerts_' . $range . '_report_' . date('Y-m-d') . '.csv';
+
+        $alertsQuery = DB::table('alerts')
+            ->leftJoin('labs', 'alerts.lab_id', '=', 'labs.id')
+            ->select([
+                'alerts.id',
+                'labs.name as laboratory_name',
+                'alerts.computer_id',
+                'alerts.issue_type',
+                'alerts.remarks',
+                'alerts.status',
+                'alerts.reported_by',
+                'alerts.created_at'
+            ]);
+
+        if ($startDate) {
+            $alertsQuery->where('alerts.created_at', '>=', $startDate);
+        }
+
+        $alerts = $alertsQuery->orderBy('alerts.created_at', 'desc')->get();
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=$fileName",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $callback = function () use ($alerts) {
+            $file = fopen('php://output', 'w');
+
+            // CSV Structural Headers
+            fputcsv($file, ['Alert ID', 'Laboratory Name', 'Computer ID', 'Issue Type', 'Remarks/Details', 'Status', 'Reported By', 'Timestamp']);
+
+            foreach ($alerts as $alert) {
+                fputcsv($file, [
+                    $alert->id,
+                    $alert->laboratory_name ?? 'N/A',
+                    $alert->computer_id ?? 'N/A',
+                    $alert->issue_type,
+                    $alert->remarks ?? 'No remarks provided',
+                    ucfirst($alert->status),
+                    $alert->reported_by ?? 'System',
+                    $alert->created_at,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 }

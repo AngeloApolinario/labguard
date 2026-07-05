@@ -39,10 +39,9 @@ class TerminalController extends Controller
 
         /**
          * DYNAMIC TEACHER ASSIGNMENT
-         * Find the schedule for THIS lab, TODAY, at THIS current time.
          */
         $currentTime = now()->format('H:i:s');
-        $currentDay = now()->format('l'); // e.g., "Monday"
+        $currentDay = now()->format('l');
 
         $activeSchedule = \App\Models\Schedule::where('lab_id', $pc->lab_id)
             ->where('day', $currentDay)
@@ -50,7 +49,6 @@ class TerminalController extends Controller
             ->whereTime('end_time', '>=', $currentTime)
             ->first();
 
-        // Assign teacher_id from schedule, or default to NULL (or a specific "No Teacher" ID)
         $assignedTeacherId = $activeSchedule ? $activeSchedule->user_id : null;
 
         // 3. Race Condition Fix (Close stuck sessions)
@@ -60,7 +58,6 @@ class TerminalController extends Controller
 
         // 4. Update PC Status
         $pc->update(['status' => 'active']);
-
 
         // 5. Create Lab Session
         LabSession::create([
@@ -83,7 +80,6 @@ class TerminalController extends Controller
 
     /**
      * Heartbeat check for Python background thread
-     * Used to detect if the Admin has remotely locked the PC.
      */
     public function checkStatus($pc_number)
     {
@@ -93,31 +89,37 @@ class TerminalController extends Controller
             return response()->json(['status' => 'available']);
         }
 
-        /**
-         * If the status is 'available' (set by Admin in Dashboard), 
-         * the Python script will see this and trigger its lock screen.
-         */
         return response()->json([
             'status' => $pc->status
         ]);
     }
 
     /**
-     * Handle PC Reporting/Alerts from the Cinematic UI
+     * Handle PC Reporting/Alerts with Mandatory Accountability Verification
      */
     public function reportIssue(Request $request)
     {
         $request->validate([
             'pc_number'  => 'required|exists:computers,pc_number',
+            'student_id' => 'required',
+            'password'   => 'required',
             'issue_type' => 'required|string',
             'remarks'    => 'required|string',
         ]);
 
+        // 1. Authenticate user identity for the security audit log
+        $user = User::where('student_number', trim($request->student_id))->first();
+
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Account verification failed. Invalid credentials.'], 401);
+        }
+
         $pc = Computer::where('pc_number', $request->pc_number)->first();
 
-        // Create the maintenance/alert record
+        // 2. Create the maintenance record securely bound to reported_by
         Alert::create([
             'computer_id' => $pc->id,
+            'reported_by' => $user->id, // Populates your newly updated column
             'issue_type'  => $request->issue_type,
             'remarks'     => $request->remarks,
             'status'      => 'pending',
@@ -127,23 +129,19 @@ class TerminalController extends Controller
     }
 
     /**
-     * Handle PC Logout (Triggered by atexit in Python)
+     * Handle PC Logout (Triggered by atexit or manual escape)
      */
     public function handleLogout(Request $request)
     {
-        // 1. Find the Computer
         $computer = Computer::where('pc_number', $request->pc_number)->first();
 
         if ($computer) {
-            // 2. Find ONLY the active session for this specific computer
-            // We order by ID descending to ensure we get the very last one created
             $session = LabSession::where('computer_id', $computer->id)
                 ->whereNull('time_out')
                 ->orderBy('id', 'desc')
                 ->first();
 
             if ($session) {
-                // 3. Perform the update
                 $session->update([
                     'time_out' => now()
                 ]);
@@ -151,7 +149,6 @@ class TerminalController extends Controller
                 Log::info("Session ID {$session->id} closed for PC {$request->pc_number}");
             }
 
-            // 4. Reset PC Status
             $computer->update(['status' => 'available']);
 
             return response()->json(['status' => 'available']);

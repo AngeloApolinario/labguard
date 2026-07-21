@@ -13,6 +13,7 @@ class Alert extends Model
     protected $fillable = [
         'computer_id',
         'issue_type',
+        'lab_id',
         'remarks',
         'status',
         'resolved_at',
@@ -40,6 +41,10 @@ class Alert extends Model
         return $this->belongsTo(User::class, 'reported_by');
     }
     public function laboratory()
+    {
+        return $this->belongsTo(Lab::class);
+    }
+    public function lab()
     {
         return $this->belongsTo(Lab::class);
     }

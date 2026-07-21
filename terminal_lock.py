@@ -15,6 +15,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- CONFIGURATION ---
 API_URL = "https://labguard.test/api/pc"
+LAB_ID = "1"        # Lab ID, Code, or Name matching your database records
 PC_NUMBER = "PC-01" 
 HEADERS = {"Host": "labguard.test", "Accept": "application/json"}
 # ---------------------
@@ -84,6 +85,9 @@ class CinematicNotify(tk.Toplevel):
 class LabGuardClient:
     def __init__(self, root):
         self.root = root
+        self.is_session_active = False
+        self.is_maintenance_mode = False
+
         self.root.title("LabGuard Terminal")
         self.root.attributes("-fullscreen", True)
         self.root.attributes("-topmost", True)
@@ -105,25 +109,38 @@ class LabGuardClient:
         self.net_indicator.pack(side="right", padx=30)
         self.net_indicator.bind("<Button-1>", lambda e: self.open_wifi_modal())
 
-        # Main Login Frame
+        # Main Center Container (Holds Login Form & Maintenance Screen)
         self.frame = tk.Frame(self.root, bg='#0f172a')
         self.frame.place(relx=0.5, rely=0.5, anchor='center')
 
+        # Header Section
         tk.Label(self.frame, text="LABGUARD", fg='#D4AF37', bg='#0f172a', font=("Arial Black", 50)).pack()
         tk.Label(self.frame, text=f"STATION: {PC_NUMBER}", fg='#64748b', bg='#0f172a', font=("Arial", 12, "bold")).pack(pady=5)
 
-        tk.Label(self.frame, text="STUDENT NUMBER", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(30, 0))
-        self.entry_id = tk.Entry(self.frame, font=("Arial", 18), justify='center', width=25, bg='#1e293b', fg='white', insertbackground='white', border=0)
+        # Standard Login Widgets Frame
+        self.login_form_frame = tk.Frame(self.frame, bg='#0f172a')
+        self.login_form_frame.pack(pady=10)
+
+        tk.Label(self.login_form_frame, text="STUDENT NUMBER", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(20, 0))
+        self.entry_id = tk.Entry(self.login_form_frame, font=("Arial", 18), justify='center', width=25, bg='#1e293b', fg='white', insertbackground='white', border=0)
         self.entry_id.pack(pady=5, ipady=10)
 
-        tk.Label(self.frame, text="ACCOUNT PASSWORD", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(15, 0))
-        self.entry_password = tk.Entry(self.frame, font=("Arial", 18), justify='center', width=25, show="*", bg='#1e293b', fg='white', insertbackground='white', border=0)
+        tk.Label(self.login_form_frame, text="ACCOUNT PASSWORD", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(15, 0))
+        self.entry_password = tk.Entry(self.login_form_frame, font=("Arial", 18), justify='center', width=25, show="*", bg='#1e293b', fg='white', insertbackground='white', border=0)
         self.entry_password.pack(pady=5, ipady=10)
         
         self.entry_id.focus_set()
 
-        self.btn_unlock = tk.Button(self.frame, text="UNLOCK STATION", command=self.attempt_login, bg='#D4AF37', fg='white', font=("Arial", 12, "bold"), width=30, height=2, cursor="hand2", relief="flat")
-        self.btn_unlock.pack(pady=30)
+        self.btn_unlock = tk.Button(self.login_form_frame, text="UNLOCK STATION", command=self.attempt_login, bg='#D4AF37', fg='white', font=("Arial", 12, "bold"), width=30, height=2, cursor="hand2", relief="flat")
+        self.btn_unlock.pack(pady=25)
+
+        # Maintenance Frame (Hidden by default)
+        self.maintenance_frame = tk.Frame(self.frame, bg='#0f172a')
+
+        tk.Label(self.maintenance_frame, text="🔧", fg='#f59e0b', bg='#0f172a', font=("Arial", 50)).pack(pady=(20, 5))
+        tk.Label(self.maintenance_frame, text="STATION UNDER MAINTENANCE", fg='#f59e0b', bg='#0f172a', font=("Arial Black", 18)).pack(pady=5)
+        tk.Label(self.maintenance_frame, text="This computer is currently offline for system updates or hardware repair.\nPlease use another available terminal.", 
+                 fg='#94a3b8', bg='#0f172a', font=("Arial", 11), justify="center", wraplength=450).pack(pady=10)
 
         # Bottom Trigger Options
         self.bottom_bar = tk.Frame(self.root, bg='#0f172a')
@@ -139,15 +156,45 @@ class LabGuardClient:
         # Start Async Network Monitoring Daemon Thread
         threading.Thread(target=self.network_monitor_loop, daemon=True).start()
 
+    # --- UI STATE TOGGLES ---
+
+    def show_maintenance_ui(self):
+        """Displays the maintenance message and hides login inputs."""
+        if not self.is_maintenance_mode:
+            self.is_maintenance_mode = True
+            self.login_form_frame.pack_forget()
+            self.maintenance_frame.pack(pady=10)
+
+    def restore_login_ui(self):
+        """Hides maintenance message and restores standard login inputs."""
+        if self.is_maintenance_mode:
+            self.is_maintenance_mode = False
+            self.maintenance_frame.pack_forget()
+            self.login_form_frame.pack(pady=10)
+            self.entry_id.focus_set()
+
     # --- NETWORK & WI-FI MANAGEMENT SERVICES ---
 
     def network_monitor_loop(self):
-        """Background thread checking server reachability continuously."""
+        """Background thread checking server reachability & PC status continuously."""
         while True:
             try:
-                res = requests.get(f"{API_URL}/status/{PC_NUMBER}", headers=HEADERS, timeout=3, verify=False)
-                if res.status_code in [200, 404]:
+                res = requests.get(f"{API_URL}/status/{LAB_ID}/{PC_NUMBER}", headers=HEADERS, timeout=3, verify=False)
+                if res.status_code == 200:
+                    data = res.json()
+                    pc_status = data.get('status') or data.get('data', {}).get('status')
+                    
                     self.root.after(0, self.update_net_status, True)
+
+                    # Check if backend set the PC to maintenance mode
+                    if pc_status and str(pc_status).lower() == 'maintenance':
+                        self.root.after(0, self.show_maintenance_ui)
+                    else:
+                        self.root.after(0, self.restore_login_ui)
+
+                elif res.status_code == 404:
+                    self.root.after(0, self.update_net_status, True)
+                    self.root.after(0, self.restore_login_ui)
                 else:
                     self.root.after(0, self.update_net_status, False)
             except Exception:
@@ -185,10 +232,8 @@ class LabGuardClient:
                 del self.wifi_modal
             self.root.attributes("-topmost", True)
 
-        # Bind ESC key to close modal
         self.wifi_modal.bind("<Escape>", close_wifi)
 
-        # Top Header Bar with 'X' Close Button
         header_frame = tk.Frame(self.wifi_modal, bg='#1e293b')
         header_frame.pack(fill="x", padx=15, pady=(15, 0))
 
@@ -203,7 +248,6 @@ class LabGuardClient:
         tk.Label(self.wifi_modal, text="Select an available Wi-Fi access point to connect.", 
                  fg='#94a3b8', bg='#1e293b', font=("Arial", 9)).pack(anchor="w", padx=15, pady=(2, 10))
 
-        # Listbox for Available SSIDs
         list_frame = tk.Frame(self.wifi_modal, bg='#0f172a')
         list_frame.pack(fill="both", expand=True, padx=20, pady=5)
 
@@ -211,14 +255,12 @@ class LabGuardClient:
                                        selectbackground='#D4AF37', borderwidth=0, highlightthickness=0)
         self.wifi_listbox.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
-        # Password Entry field
         tk.Label(self.wifi_modal, text="Security Key / Password", fg='white', bg='#1e293b', 
                  font=("Arial", 9, "bold")).pack(anchor="w", padx=20, pady=(10, 2))
         self.wifi_pass = tk.Entry(self.wifi_modal, font=("Arial", 12), show="*", bg='#0f172a', 
                                   fg='white', border=0, insertbackground='white')
-        self.wifi_pass.pack(fill="x", padx=20, py=5, ipady=6)
+        self.wifi_pass.pack(fill="x", padx=20, pady=5, ipady=6)
 
-        # Action Buttons Container
         btn_frame = tk.Frame(self.wifi_modal, bg='#1e293b')
         btn_frame.pack(pady=20)
 
@@ -231,7 +273,6 @@ class LabGuardClient:
         tk.Button(btn_frame, text="CLOSE", command=close_wifi, bg='#475569', fg='white', 
                   font=("Arial", 9, "bold"), width=10, height=2, relief="flat", cursor="hand2").pack(side="left", padx=5)
 
-        # Trigger an initial scan upon launch
         self.scan_wifi_networks()
 
     def scan_wifi_networks(self):
@@ -241,11 +282,9 @@ class LabGuardClient:
 
         def execute_scan():
             try:
-                # 1. Force enable the Wi-Fi adapter if it was turned off
                 subprocess.run('netsh interface set interface "Wi-Fi" admin=enabled', shell=True, capture_output=True)
-                time.sleep(1) # Brief pause to allow hardware radio to wake up
+                time.sleep(1)
 
-                # 2. Query available networks
                 output = subprocess.check_output("netsh wlan show networks", shell=True, stderr=subprocess.STDOUT).decode('utf-8', errors='ignore')
                 ssids = re.findall(r"SSID\s+\d+\s+:\s+(.*)", output)
                 
@@ -302,7 +341,6 @@ class LabGuardClient:
                 with open(filename, "w") as f:
                     f.write(profile_xml)
 
-                # Add profile and trigger connection via netsh
                 subprocess.run(f'netsh wlan add profile filename="{filename}"', shell=True, check=True)
                 subprocess.run(f'netsh wlan connect name="{selected_ssid}"', shell=True, check=True)
 
@@ -440,22 +478,32 @@ class LabGuardClient:
         threading.Thread(target=self.heartbeat_loop, daemon=True).start()
 
     def heartbeat_loop(self):
-        """Checks if a teacher or admin remotely locked the PC."""
         while True:
             try:
-                response = requests.get(f"{API_URL}/status/{PC_NUMBER}", headers=HEADERS, timeout=5, verify=False)
-                if response.status_code == 200 and response.json().get('status') == 'available':
-                    self.root.after(0, self.lock_ui_again)
-                    break
-            except Exception: pass 
-            time.sleep(15) 
+                url = f"{API_URL}/status/{LAB_ID}/{PC_NUMBER}"
+                response = requests.get(url, headers=HEADERS, timeout=5, verify=False)
+                    
+                if response.status_code == 200:
+                    data = response.json()
+                    pc_status = data.get('status') or data.get('data', {}).get('status')
+                    
+                    if pc_status and str(pc_status).lower() in ['available', 'unoccupied', 'released', 'offline', 'maintenance']:
+                        self.root.after(0, self.lock_ui_again)
+                        break
+            except Exception as e:
+                print(f"[DEBUG] Heartbeat Error: {e}")
+                
+            time.sleep(5)
 
     def lock_ui_again(self):
+        """Restores the UI and resets entry inputs on thread-safe main thread."""
         self.entry_id.delete(0, tk.END)
         self.entry_password.delete(0, tk.END)
         self.btn_unlock.config(state="normal", text="UNLOCK STATION")
+        
         self.root.deiconify()
-        self.entry_id.focus_set()
+        self.root.lift()
+        self.root.attributes("-topmost", True)
 
 
 if __name__ == "__main__":

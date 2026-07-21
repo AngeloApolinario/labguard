@@ -641,5 +641,13 @@ class SuperAdminController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    //UPDATE LABORATORY INFORMATION 
+    //REVERSE THE LOCKOUT
+    public function releaseLockout(Request $request)
+    {
+        // Restore all maintenance workstations back to available
+        DB::table('computers')->update([
+            'status' => 'available'
+        ]);
+        return redirect()->back()->with('status', 'Global system lockdown released. All stations restored to available state.');
+    }
 }

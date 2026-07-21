@@ -81,17 +81,30 @@ class TerminalController extends Controller
     /**
      * Heartbeat check for Python background thread
      */
-    public function checkStatus($pc_number)
+    public function checkStatus($lab_id, $pc_number)
     {
-        $pc = Computer::where('pc_number', $pc_number)->first();
+        // 1. Resolve PC by Lab (Name or ID) and PC Number
+        $pc = Computer::whereHas('lab', function ($query) use ($lab_id) {
+            $query->where('id', $lab_id)
+                ->orWhere('name', $lab_id); // Removed 'code' to prevent SQL 1054 error
+        })
+            ->where('pc_number', $pc_number)
+            ->first();
 
+        // 2. Fallback: Look up directly by pc_number if lab match wasn't found
         if (!$pc) {
-            return response()->json(['status' => 'available']);
+            $pc = Computer::where('pc_number', $pc_number)->first();
         }
 
+        // 3. If PC still doesn't exist, tell terminal to stay locked ('available')
+        if (!$pc) {
+            return response()->json(['status' => 'available'], 200);
+        }
+
+        // 4. Return actual PC status (normalized to lowercase)
         return response()->json([
-            'status' => $pc->status
-        ]);
+            'status' => strtolower($pc->status)
+        ], 200);
     }
 
     /**
@@ -116,10 +129,11 @@ class TerminalController extends Controller
 
         $pc = Computer::where('pc_number', $request->pc_number)->first();
 
-        // 2. Create the maintenance record securely bound to reported_by
+        // 2. Create the maintenance record securely bound to reported_by and lab_id
         Alert::create([
             'computer_id' => $pc->id,
-            'reported_by' => $user->id, // Populates your newly updated column
+            'lab_id'      => $pc->lab_id, // <--- ADDED: Fixes the missing lab_id default value error
+            'reported_by' => $user->id,
             'issue_type'  => $request->issue_type,
             'remarks'     => $request->remarks,
             'status'      => 'pending',

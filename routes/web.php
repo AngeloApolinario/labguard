@@ -173,5 +173,7 @@ Route::middleware([
     // Super Admin System Utilities
     Route::post('/reports/generate', [SuperAdminController::class, 'generateReport'])->name('reports.generate');
     Route::post('/system/backup', [SuperAdminController::class, 'triggerBackup'])->name('system.backup');
+    // Super Admin Emergency Lockout
     Route::post('/system/lockout', [SuperAdminController::class, 'emergencyLockout'])->name('system.lockout');
+    Route::post('/system/release-lockout', [SuperAdminController::class, 'releaseLockout'])->name('system.release-lockout');
 });

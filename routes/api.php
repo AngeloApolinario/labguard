@@ -17,7 +17,7 @@ Route::prefix('pc')->group(function () {
     Route::post('/login', [TerminalController::class, 'login']);
 
     // Heartbeat: Checks if the PC should stay unlocked
-    Route::get('/status/{pc_number}', [TerminalController::class, 'checkStatus']);
+    Route::get('/status/{lab_id}/{pc_number}', [TerminalController::class, 'checkStatus']);
 
     // Session End: Updates PC status to 'available'
     Route::post('/logout', [TerminalController::class, 'handleLogout']);

@@ -127,11 +127,13 @@ class DashboardController extends Controller
     //ADD NEW LAB FUNCTION 
 
 
+
+
     public function storeNewLaboratory(Request $request)
     {
         // 1. Validation
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:labs,name',
+            'name'     => 'required|string|max:255|unique:labs,name',
             'location' => 'required|string|max:255',
             'pc_count' => 'required|integer|min:1|max:100',
         ]);
@@ -139,30 +141,41 @@ class DashboardController extends Controller
         try {
             DB::beginTransaction();
 
-            // 2. Create the Lab Node
+            // 2. Create the Lab Record
             $lab = Lab::create([
-                'name' => $validated['name'],
+                'name'     => $validated['name'],
                 'location' => $validated['location'],
             ]);
 
-            // 3. Automated PC Node Generation Loop
+            // Generate a clean prefix for asset tags (e.g., "AST-LAB1-PC01")
+            $labPrefix = 'LAB' . $lab->id;
+
+            // 3. Automated Computer Generation Loop
             for ($i = 1; $i <= $validated['pc_count']; $i++) {
-                // Formats: PC-01, PC-02, PC-10...
-                $pcNumber = "PC-" . str_pad($i, 2, '0', STR_PAD_LEFT);
+                $paddedIndex = str_pad($i, 2, '0', STR_PAD_LEFT);
+
+                // Format example: PC-01, PC-02...
+                $pcNumber = "PC-" . $paddedIndex;
+
+                // Format example: AST-LAB1-PC01
+                $assetTag = "AST-{$labPrefix}-PC{$paddedIndex}";
 
                 $lab->computers()->create([
-                    'pc_number' => $pcNumber,
-                    'status' => 'available',
-                    // 'ip_address' => null, // Optional: if your system tracks IPs
+                    'pc_number'       => $pcNumber,
+                    'asset_tag'       => $assetTag,
+                    'serial_number'   => null,          // Left as null for manual entry/scanning later
+                    'status'          => 'available',   // Explicitly set default status to available
+                    'current_student' => null,
                 ]);
             }
 
             DB::commit();
 
-            return back()->with('success', "Facility {$lab->name} initialized with {$validated['pc_count']} active nodes.");
+            return back()->with('success', "Facility {$lab->name} initialized with {$validated['pc_count']} active computers.");
         } catch (\Exception $e) {
-            DB::rollback();
-            return back()->with('error', 'Critical System Error: Could not initialize facility nodes.');
+            DB::rollBack();
+
+            return back()->with('error', 'Critical System Error: Could not initialize facility nodes. ' . $e->getMessage());
         }
     }
 }

@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Carbon\Carbon;
 use App\Models\Alert;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Activitylog\Models\Activity;
 
 class SuperAdminController extends Controller
 {
@@ -438,35 +439,26 @@ class SuperAdminController extends Controller
             return redirect()->back()->with('error', 'Failed to safely broadcast system lockdown command network-wide.');
         }
     }
-    public function logs()
+    public function logs(Request $request)
     {
-        $logFile = storage_path('logs/laravel.log');
-        $filteredLogs = [];
+        $query = Activity::with(['causer', 'subject'])->latest();
 
-        if (file_exists($logFile)) {
-            $fileLines = file($logFile);
-
-            // Grab the last 300 lines to parse
-            $recentLines = array_slice($fileLines, -300);
-
-            foreach ($recentLines as $line) {
-                // ONLY keep lines that are actual error definitions, warnings, or info logs
-                // Skip the noisy background stack traces (#1, #2, #3, etc.)
-                if (
-                    str_contains($line, '.ERROR:') ||
-                    str_contains($line, '.WARNING:') ||
-                    str_contains($line, '.INFO:') ||
-                    str_contains($line, '.EMERGENCY:')
-                ) {
-                    $filteredLogs[] = $line;
-                }
-            }
-
-            // Reverse so the absolute newest issue is at the top of the screen
-            $filteredLogs = array_reverse($filteredLogs);
+        // Optional filter support
+        if ($request->has('category') && $request->category !== 'all') {
+            $query->where('log_name', $request->category);
         }
 
-        return view('super-admin.logs', ['rawLogs' => $filteredLogs]);
+        $logs = $query->paginate(12)->withQueryString();
+
+        // High-level counters for the hero stats bar
+        $stats = [
+            'total'     => Activity::count(),
+            'incidents' => Activity::where('log_name', 'incident_response')->count(),
+            'users'     => Activity::where('log_name', 'user_management')->count(),
+            'labs'      => Activity::where('log_name', 'lab_management')->count(),
+        ];
+
+        return view('super-admin.logs', compact('logs', 'stats'));
     }
 
 

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Alert;
 use App\Models\Computer;
 
+
 class AlertController extends Controller
 {
     /**
@@ -64,12 +65,22 @@ class AlertController extends Controller
     /**
      * Mark an alert as resolved.
      */
-    public function resolve(Alert $alert)
+    public function resolve(Request $request, Alert $alert)
     {
         $alert->update([
             'status' => 'resolved',
             'resolved_at' => now(),
         ]);
+        activity()
+            ->useLogName('incident_response')
+            ->performedOn($alert)
+            ->causedBy(auth()->user())
+            ->withProperties([
+                'alert_title' => $alert->title ?? $alert->issue_type,
+                'lab_room'    => $alert->lab->room_name ?? 'N/A',
+                'notes'       => $request->resolution_notes,
+            ])
+            ->log("Resolved security alert: '{$alert->issue_type}'");
 
         return back()->with('success', 'Issue marked as resolved.');
     }

@@ -9,7 +9,8 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
-
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -20,6 +21,7 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasProfilePhoto;
     use Notifiable;
     use TwoFactorAuthenticatable;
+    use LogsActivity;
 
     /**
      * The attributes that are mass assignable.
@@ -87,5 +89,14 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isSuperAdmin()
     {
         return $this->role === 'super-admin';
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['name', 'email', 'role', 'status'])
+            ->logOnlyDirty() // Only logs when fields actually change
+            ->useLogName('user_management')
+            ->setDescriptionForEvent(fn(string $eventName) => "User has been {$eventName}");
     }
 }

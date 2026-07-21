@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 import requests
 import threading
 import time
@@ -7,6 +7,8 @@ import atexit
 import urllib3
 import signal
 import sys
+import subprocess
+import re
 
 # Disable SSL warnings for local development (.test domains)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -39,6 +41,7 @@ def handle_exit_signal(sig, frame):
 atexit.register(send_logout_signal)
 signal.signal(signal.SIGINT, handle_exit_signal)
 signal.signal(signal.SIGTERM, handle_exit_signal)
+
 
 class CinematicNotify(tk.Toplevel):
     """Custom glassmorphic notification overlay with Fade-Out."""
@@ -77,6 +80,7 @@ class CinematicNotify(tk.Toplevel):
         else:
             self.destroy()
 
+
 class LabGuardClient:
     def __init__(self, root):
         self.root = root
@@ -86,6 +90,22 @@ class LabGuardClient:
         self.root.configure(bg='#0f172a') 
         self.root.protocol("WM_DELETE_WINDOW", lambda: None) 
 
+        # Top Bar for Network Status
+        self.top_bar = tk.Frame(self.root, bg='#0f172a')
+        self.top_bar.pack(side="top", fill="x", padx=20, pady=20)
+
+        self.net_indicator = tk.Label(
+            self.top_bar, 
+            text="● CONNECTING...", 
+            fg='#eab308', 
+            bg='#0f172a', 
+            font=("Arial", 10, "bold"),
+            cursor="hand2"
+        )
+        self.net_indicator.pack(side="right", padx=30)
+        self.net_indicator.bind("<Button-1>", lambda e: self.open_wifi_modal())
+
+        # Main Login Frame
         self.frame = tk.Frame(self.root, bg='#0f172a')
         self.frame.place(relx=0.5, rely=0.5, anchor='center')
 
@@ -105,12 +125,194 @@ class LabGuardClient:
         self.btn_unlock = tk.Button(self.frame, text="UNLOCK STATION", command=self.attempt_login, bg='#D4AF37', fg='white', font=("Arial", 12, "bold"), width=30, height=2, cursor="hand2", relief="flat")
         self.btn_unlock.pack(pady=30)
 
-        self.report_trigger = tk.Label(self.root, text="⚠ HAVE A PROBLEM WITH THIS PC? CLICK HERE TO REPORT", 
+        # Bottom Trigger Options
+        self.bottom_bar = tk.Frame(self.root, bg='#0f172a')
+        self.bottom_bar.pack(side="bottom", pady=30)
+
+        self.report_trigger = tk.Label(self.bottom_bar, text="⚠ HAVE A PROBLEM WITH THIS PC? CLICK HERE TO REPORT", 
                                        fg='#ef4444', bg='#0f172a', font=("Arial", 8, "bold"), cursor="hand2")
-        self.report_trigger.pack(side="bottom", pady=40)
+        self.report_trigger.pack()
         self.report_trigger.bind("<Button-1>", lambda e: self.open_report_overlay())
 
         self.force_on_top()
+
+        # Start Async Network Monitoring Daemon Thread
+        threading.Thread(target=self.network_monitor_loop, daemon=True).start()
+
+    # --- NETWORK & WI-FI MANAGEMENT SERVICES ---
+
+    def network_monitor_loop(self):
+        """Background thread checking server reachability continuously."""
+        while True:
+            try:
+                res = requests.get(f"{API_URL}/status/{PC_NUMBER}", headers=HEADERS, timeout=3, verify=False)
+                if res.status_code in [200, 404]:
+                    self.root.after(0, self.update_net_status, True)
+                else:
+                    self.root.after(0, self.update_net_status, False)
+            except Exception:
+                self.root.after(0, self.update_net_status, False)
+            time.sleep(5)
+
+    def update_net_status(self, is_online):
+        """Updates the status text and color on top bar."""
+        if is_online:
+            self.net_indicator.config(text="● ONLINE", fg='#10b981')
+        else:
+            self.net_indicator.config(text="▲ OFFLINE (CLICK TO FIX WI-FI)", fg='#ef4444')
+
+    def open_wifi_modal(self):
+        """Glassmorphic UI overlay for scanning and connecting to Wi-Fi networks via netsh."""
+        self.root.attributes("-topmost", False)
+        self.wifi_modal = tk.Toplevel(self.root)
+        self.wifi_modal.configure(bg='#1e293b')
+        self.wifi_modal.overrideredirect(True)
+
+        width, height = 480, 550
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        x = (screen_w // 2) - (width // 2)
+        y = (screen_h // 2) - (height // 2)
+        self.wifi_modal.geometry(f"{width}x{height}+{x}+{y}")
+        self.wifi_modal.attributes("-topmost", True)
+        self.wifi_modal.grab_set()
+
+        def close_wifi(event=None):
+            """Safely closes the modal and restores topmost lock on main screen."""
+            self.wifi_modal.grab_release()
+            self.wifi_modal.destroy()
+            if hasattr(self, 'wifi_modal'):
+                del self.wifi_modal
+            self.root.attributes("-topmost", True)
+
+        # Bind ESC key to close modal
+        self.wifi_modal.bind("<Escape>", close_wifi)
+
+        # Top Header Bar with 'X' Close Button
+        header_frame = tk.Frame(self.wifi_modal, bg='#1e293b')
+        header_frame.pack(fill="x", padx=15, pady=(15, 0))
+
+        tk.Label(header_frame, text="NETWORK SETTINGS", fg='#D4AF37', bg='#1e293b', 
+                 font=("Arial Black", 14)).pack(side="left")
+
+        btn_x = tk.Button(header_frame, text=" ✕ ", command=close_wifi, bg='#1e293b', fg='#94a3b8', 
+                          activebackground='#ef4444', activeforeground='white',
+                          font=("Arial", 12, "bold"), border=0, cursor="hand2")
+        btn_x.pack(side="right")
+
+        tk.Label(self.wifi_modal, text="Select an available Wi-Fi access point to connect.", 
+                 fg='#94a3b8', bg='#1e293b', font=("Arial", 9)).pack(anchor="w", padx=15, pady=(2, 10))
+
+        # Listbox for Available SSIDs
+        list_frame = tk.Frame(self.wifi_modal, bg='#0f172a')
+        list_frame.pack(fill="both", expand=True, padx=20, pady=5)
+
+        self.wifi_listbox = tk.Listbox(list_frame, bg='#0f172a', fg='white', font=("Arial", 11), 
+                                       selectbackground='#D4AF37', borderwidth=0, highlightthickness=0)
+        self.wifi_listbox.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+
+        # Password Entry field
+        tk.Label(self.wifi_modal, text="Security Key / Password", fg='white', bg='#1e293b', 
+                 font=("Arial", 9, "bold")).pack(anchor="w", padx=20, pady=(10, 2))
+        self.wifi_pass = tk.Entry(self.wifi_modal, font=("Arial", 12), show="*", bg='#0f172a', 
+                                  fg='white', border=0, insertbackground='white')
+        self.wifi_pass.pack(fill="x", padx=20, py=5, ipady=6)
+
+        # Action Buttons Container
+        btn_frame = tk.Frame(self.wifi_modal, bg='#1e293b')
+        btn_frame.pack(pady=20)
+
+        tk.Button(btn_frame, text="SCAN WI-FI", command=self.scan_wifi_networks, bg='#3b82f6', fg='white', 
+                  font=("Arial", 9, "bold"), width=12, height=2, relief="flat", cursor="hand2").pack(side="left", padx=5)
+        
+        tk.Button(btn_frame, text="CONNECT", command=self.connect_to_wifi, bg='#10b981', fg='white', 
+                  font=("Arial", 9, "bold"), width=12, height=2, relief="flat", cursor="hand2").pack(side="left", padx=5)
+
+        tk.Button(btn_frame, text="CLOSE", command=close_wifi, bg='#475569', fg='white', 
+                  font=("Arial", 9, "bold"), width=10, height=2, relief="flat", cursor="hand2").pack(side="left", padx=5)
+
+        # Trigger an initial scan upon launch
+        self.scan_wifi_networks()
+
+    def scan_wifi_networks(self):
+        """Forces Wi-Fi interface ON, then scans nearby SSIDs using Windows netsh."""
+        self.wifi_listbox.delete(0, tk.END)
+        self.wifi_listbox.insert(tk.END, "Turning on Wi-Fi adapter & scanning...")
+
+        def execute_scan():
+            try:
+                # 1. Force enable the Wi-Fi adapter if it was turned off
+                subprocess.run('netsh interface set interface "Wi-Fi" admin=enabled', shell=True, capture_output=True)
+                time.sleep(1) # Brief pause to allow hardware radio to wake up
+
+                # 2. Query available networks
+                output = subprocess.check_output("netsh wlan show networks", shell=True, stderr=subprocess.STDOUT).decode('utf-8', errors='ignore')
+                ssids = re.findall(r"SSID\s+\d+\s+:\s+(.*)", output)
+                
+                self.wifi_listbox.delete(0, tk.END)
+                clean_ssids = [s.strip() for s in ssids if s.strip()]
+                
+                if clean_ssids:
+                    for ssid in set(clean_ssids):
+                        self.wifi_listbox.insert(tk.END, ssid)
+                else:
+                    self.wifi_listbox.delete(0, tk.END)
+                    self.wifi_listbox.insert(tk.END, "No networks found.")
+            except Exception:
+                self.wifi_listbox.delete(0, tk.END)
+                self.wifi_listbox.insert(tk.END, "Error scanning Wi-Fi interfaces.")
+
+        threading.Thread(target=execute_scan, daemon=True).start()
+
+    def connect_to_wifi(self):
+        """Generates an automated XML profile and connects Windows to chosen SSID."""
+        try:
+            selected_ssid = self.wifi_listbox.get(self.wifi_listbox.curselection())
+        except Exception:
+            CinematicNotify(self.wifi_modal, "Selection Required", "Please click an SSID from the list.", color="#ef4444")
+            return
+
+        password = self.wifi_pass.get().strip()
+
+        def execute_connection():
+            profile_xml = f"""<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+    <name>{selected_ssid}</name>
+    <SSIDConfig><SSID><name>{selected_ssid}</name></SSID></SSIDConfig>
+    <connectionType>ESS</connectionType>
+    <connectionMode>auto</connectionMode>
+    <MSM>
+        <security>
+            <authEncryption>
+                <authentication>WPA2PSK</authentication>
+                <encryption>AES</encryption>
+                <useOneX>false</useOneX>
+            </authEncryption>
+            <sharedKey>
+                <keyType>passPhrase</keyType>
+                <protected>false</protected>
+                <keyMaterial>{password}</keyMaterial>
+            </sharedKey>
+        </security>
+    </MSM>
+</WLANProfile>"""
+            
+            try:
+                filename = f"wifi_{selected_ssid}.xml"
+                with open(filename, "w") as f:
+                    f.write(profile_xml)
+
+                # Add profile and trigger connection via netsh
+                subprocess.run(f'netsh wlan add profile filename="{filename}"', shell=True, check=True)
+                subprocess.run(f'netsh wlan connect name="{selected_ssid}"', shell=True, check=True)
+
+                CinematicNotify(self.wifi_modal, "Connecting", f"Connecting to {selected_ssid}...", color="#3b82f6")
+            except Exception:
+                CinematicNotify(self.wifi_modal, "Wi-Fi Error", "Could not establish connection profile.", color="#ef4444")
+
+        threading.Thread(target=execute_connection, daemon=True).start()
+
+    # --- REPORTING OVERLAY & LOGIN HANDLERS ---
 
     def open_report_overlay(self):
         self.root.attributes("-topmost", False)
@@ -118,7 +320,6 @@ class LabGuardClient:
         self.overlay.configure(bg='#1e293b')
         self.overlay.overrideredirect(True) 
 
-        # Extended layout dimensions to fit credentials elegantly
         width, height = 500, 640
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
@@ -131,7 +332,6 @@ class LabGuardClient:
 
         tk.Label(self.overlay, text="REPORT AN ISSUE", fg='#D4AF37', bg='#1e293b', font=("Arial Black", 16)).pack(pady=(25, 5))
         
-        # Accountability Identity Sub-form
         tk.Label(self.overlay, text="Confirm Student Number", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
         self.report_student_id = tk.Entry(self.overlay, font=("Arial", 12), bg='#0f172a', fg='white', border=0, insertbackground='white')
         self.report_student_id.pack(fill="x", padx=60, ipady=6)
@@ -140,7 +340,6 @@ class LabGuardClient:
         self.report_password = tk.Entry(self.overlay, font=("Arial", 12), show="*", bg='#0f172a', fg='white', border=0, insertbackground='white')
         self.report_password.pack(fill="x", padx=60, ipady=6)
 
-        # Issue Metadata fields
         tk.Label(self.overlay, text="Select Category", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
         self.issue_var = tk.StringVar(value="Hardware Issue")
         
@@ -157,6 +356,8 @@ class LabGuardClient:
         def close_overlay():
             self.overlay.grab_release()
             self.overlay.destroy()
+            if hasattr(self, 'overlay'):
+                del self.overlay
             self.root.attributes("-topmost", True)
 
         def handle_submit():
@@ -173,7 +374,6 @@ class LabGuardClient:
 
             self.btn_send.config(state="disabled", text="VERIFYING & SENDING...")
             
-            # Pack payload exactly with attributes requested by API validate schema
             payload = {
                 "pc_number": PC_NUMBER, 
                 "student_id": student_id,
@@ -205,7 +405,7 @@ class LabGuardClient:
         tk.Button(btn_container, text="CANCEL", command=close_overlay, bg='#475569', fg='white', font=("Arial", 9, "bold"), width=15, height=2, relief="flat").pack(side="left", padx=10)
 
     def force_on_top(self):
-        if not hasattr(self, 'overlay') or not self.overlay.winfo_exists():
+        if not hasattr(self, 'overlay') and not hasattr(self, 'wifi_modal'):
             self.root.lift()
             self.root.attributes("-topmost", True)
         self.root.after(2000, self.force_on_top)
@@ -232,7 +432,7 @@ class LabGuardClient:
                 CinematicNotify(self.root, "Auth Failed", msg, color="#ef4444")
                 self.btn_unlock.config(state="normal", text="UNLOCK STATION")
         except Exception:
-            CinematicNotify(self.root, "Error", "Server is offline.", color="#ef4444")
+            CinematicNotify(self.root, "Error", "Server is offline. Check Wi-Fi connection.", color="#ef4444")
             self.btn_unlock.config(state="normal", text="UNLOCK STATION")
 
     def hide_terminal(self):
@@ -256,6 +456,7 @@ class LabGuardClient:
         self.btn_unlock.config(state="normal", text="UNLOCK STATION")
         self.root.deiconify()
         self.entry_id.focus_set()
+
 
 if __name__ == "__main__":
     app_root = tk.Tk()

@@ -36,7 +36,6 @@
                     </div>
 
                     <div class="overflow-x-auto custom-scrollbar">
-                        {{-- GRID UPDATED TO 7 COLUMNS FOR FULL WEEK --}}
                         <div class="min-w-[1200px] grid grid-cols-7 border-b border-slate-50">
 
                             {{-- Day Headers --}}
@@ -54,10 +53,19 @@
 
                             {{-- Schedule Slots --}}
                             @foreach($days as $day)
+                            @php
+                            // Calculate the calendar date for the specific column day
+                            $targetDate = now()->startOfWeek(\Carbon\CarbonInterface::MONDAY)->modify("next $day")->toDateString();
+
+                            if ($day === 'Monday' && now()->format('l') === 'Monday') {
+                            $targetDate = now()->toDateString();
+                            } elseif ($day === now()->format('l')) {
+                            $targetDate = now()->toDateString();
+                            }
+                            @endphp
                             <div class="p-4 border-r border-slate-50 last:border-0 {{ now()->format('l') == $day ? 'bg-[#D4AF37]/[0.02]' : '' }}">
                                 <div class="space-y-4">
                                     @php
-                                    // Filter by day and sort by time
                                     $daySchedules = $lab->schedules->where('day', $day)->sortBy('start_time');
                                     @endphp
 
@@ -65,10 +73,10 @@
                                     @php
                                     $isNow = (now()->format('l') == $day && now()->between($sched->start_time, $sched->end_time));
 
-                                    // Count logs specifically for this lab, teacher, and time block today
+                                    // FIXED: Restrict log count to the exact session time frame (start_time to end_time)
                                     $logCount = \App\Models\LabSession::where('lab_id', $lab->id)
                                     ->where('teacher_id', $sched->user_id)
-                                    ->whereDate('time_in', now()->toDateString())
+                                    ->whereDate('time_in', $targetDate)
                                     ->whereTime('time_in', '>=', $sched->start_time)
                                     ->whereTime('time_in', '<=', $sched->end_time)
                                         ->count();
@@ -81,7 +89,7 @@
 
                                             <div class="flex justify-between items-start mb-3">
                                                 <span class="text-[9px] font-black text-slate-400 uppercase font-mono group-hover:text-[#D4AF37]">
-                                                    {{ \Carbon\Carbon::parse($sched->start_time)->format('h:i A') }}
+                                                    {{ \Carbon\Carbon::parse($sched->start_time)->format('h:i A') }} - {{ \Carbon\Carbon::parse($sched->end_time)->format('h:i A') }}
                                                 </span>
                                                 @if($isNow)
                                                 <div class="flex gap-1 items-center">
@@ -98,18 +106,19 @@
                                                 {{ $sched->user->name }}
                                             </p>
 
-                                            {{-- Export Action Guard --}}
-                                            @if(auth()->id() == $sched->user_id || auth()->user()->role == 'super-admin')
+                                            {{-- Export Authorization --}}
+                                            @if(auth()->id() == $sched->user_id || auth()->user()->role == 'admin')
                                             <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                                                 <div class="flex flex-col">
-                                                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Logs Today</span>
-                                                    <span class="text-[10px] font-black {{ $logCount > 0 ? 'text-slate-900' : 'text-rose-500 animate-pulse' }}">
+                                                    {{-- Visual wording fixed to match true session reality --}}
+                                                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Session Logs</span>
+                                                    <span class="text-[10px] font-black {{ $logCount > 0 ? 'text-slate-900' : 'text-rose-500' }}">
                                                         {{ $logCount }}
                                                     </span>
                                                 </div>
 
                                                 @if($logCount > 0)
-                                                <a href="{{ route('personnel.export', $sched->id) }}"
+                                                <a href="{{ route('personnel.export', ['schedule' => $sched->id, 'date' => $targetDate]) }}"
                                                     class="p-2 bg-slate-900 text-[#D4AF37] rounded-xl hover:bg-[#D4AF37] hover:text-white transition-all shadow-sm active:scale-95"
                                                     title="Download Attendance CSV">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -118,7 +127,7 @@
                                                 </a>
                                                 @else
                                                 <button type="button"
-                                                    onclick="alert('No attendance data recorded for this slot yet.')"
+                                                    onclick="alert('No attendance logs have been recorded during this specific class session timeframe.')"
                                                     class="p-2 bg-slate-100 text-slate-300 rounded-xl cursor-not-allowed group-hover:bg-rose-50 group-hover:text-rose-300 transition-colors">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />

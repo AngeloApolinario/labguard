@@ -71,6 +71,7 @@ Route::middleware([
 
     // --- Laboratory & Hardware Management ---
     Route::get('/labs', [LabController::class, 'index'])->name('labs');
+    Route::put('/labs/{lab}', [LabController::class, 'update'])->name('labs.update');
 
     // --- Laboratory Scheduling ---
     Route::get('/labs/{lab}/schedule', [LabController::class, 'viewSchedule'])->name('labs.schedule');

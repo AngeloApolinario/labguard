@@ -1,26 +1,57 @@
 <x-app-layout>
+    <!-- Page Header Slot -->
+    <x-slot name="header">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
+                    Super Admin <span class="text-[#D4AF37]">Management</span>
+                </h2>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                    System-wide user accounts, elevated access, and global permissions
+                </p>
+            </div>
+        </div>
+    </x-slot>
+
     <div class="py-12 bg-slate-50 min-h-screen" x-data="{ 
         addModal: false, 
         editModal: false, 
         currentUser: {},
-        search: '' 
+        search: '',
+        selectedRole: ''
     }">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
-            <div class="flex justify-between items-center mb-8">
-                <div class="relative w-1/3">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3">
-                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </span>
-                    <input type="text"
-                        x-model="search"
-                        placeholder="Search name, email, or ID Number..."
-                        class="block w-full pl-10 pr-3 py-2 border-none rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm transition-all">
+            <!-- Stats Overview Cards -->
+
+
+            <!-- Controls Header: Search, Role Filter, Add Button -->
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+                <div class="flex flex-1 items-center gap-3 w-full sm:w-auto">
+                    <!-- Search Input -->
+                    <div class="relative w-full sm:w-80">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </span>
+                        <input type="text"
+                            x-model="search"
+                            placeholder="Search name, email, or ID..."
+                            class="block w-full pl-10 pr-3 py-2.5 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm transition-all">
+                    </div>
+
+                    <!-- Role Filter Dropdown -->
+                    <select x-model="selectedRole" class="py-2.5 px-4 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm font-semibold text-slate-600 transition-all cursor-pointer">
+                        <option value="">All Roles</option>
+                        <option value="super-admin">Super Admin</option>
+                        <option value="admin">Admin</option>
+                        <option value="personnel">Personnel</option>
+                        <option value="student">Student</option>
+                    </select>
                 </div>
 
-                <button @click="addModal = true" class="bg-[#D4AF37] hover:bg-[#b8962d] text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-md active:scale-95">
+                <button @click="addModal = true" class="w-full sm:w-auto bg-[#D4AF37] hover:bg-[#b8962d] text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                     </svg>
@@ -28,27 +59,16 @@
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 text-slate-800">
-                <div class="bg-blue-50 border border-blue-100 p-6 rounded-2xl shadow-sm">
-                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Users</p>
-                    <h3 class="text-4xl font-black text-blue-600 mt-2">{{ $users->count() }}</h3>
-                </div>
-                <div class="bg-green-50 border border-green-100 p-6 rounded-2xl shadow-sm">
-                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active</p>
-                    <h3 class="text-4xl font-black text-green-600 mt-2"></h3>
-                </div>
-                <div class="bg-slate-50 border border-slate-200 p-6 rounded-2xl shadow-sm">
-                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Inactive</p>
-                    <h3 class="text-4xl font-black text-slate-400 mt-2"></h3>
-                </div>
-                <div class="bg-red-50 border border-red-100 p-6 rounded-2xl shadow-sm">
-                    <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Locked</p>
-                    <h3 class="text-4xl font-black text-red-600 mt-2"></h3>
-                </div>
-            </div>
-
+            <!-- Main Data Table Container -->
             <div class="bg-white rounded-[2.5rem] p-10 shadow-sm border border-slate-100">
-                <h2 class="text-xl font-black text-slate-800 mb-8 tracking-tight">All Users</h2>
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-3">
+                        <h3 class="text-xl font-black text-slate-800 tracking-tight">All System Accounts</h3>
+                        <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-black">
+                            {{ $users->count() }} Total
+                        </span>
+                    </div>
+                </div>
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-separate border-spacing-y-2">
@@ -63,7 +83,7 @@
                         <tbody>
                             @foreach($users as $user)
                             <tr class="group bg-white hover:bg-slate-50 transition-all"
-                                x-show="(search === '' || $el.innerText.toLowerCase().includes(search.toLowerCase()))"
+                                x-show="(search === '' || $el.innerText.toLowerCase().includes(search.toLowerCase())) && (selectedRole === '' || '{{ $user->role }}' === selectedRole)"
                                 x-transition:enter="transition ease-out duration-200"
                                 x-transition:enter-start="opacity-0 transform scale-[0.98]"
                                 x-transition:enter-end="opacity-100 transform scale-100">
@@ -84,9 +104,10 @@
 
                                 <td class="py-5 px-4">
                                     <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider
-            {{ $user->role == 'admin' ? 'bg-rose-500 text-white' : '' }}
-            {{ $user->role == 'student' ? 'bg-[#D4AF37] text-white' : '' }}
-            {{ $user->role == 'personnel' ? 'bg-slate-200 text-slate-600' : '' }}">
+                                        {{ $user->role == 'super-admin' ? 'bg-purple-600 text-white' : '' }}
+                                        {{ $user->role == 'admin' ? 'bg-rose-500 text-white' : '' }}
+                                        {{ $user->role == 'student' ? 'bg-[#D4AF37] text-white' : '' }}
+                                        {{ $user->role == 'personnel' ? 'bg-slate-200 text-slate-600' : '' }}">
                                         {{ $user->role }}
                                     </span>
                                 </td>
@@ -125,11 +146,12 @@
             </div>
         </div>
 
+        <!-- Add User Modal -->
         <div x-show="addModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak>
             <div class="bg-white rounded-[2rem] p-10 max-w-xl w-full shadow-2xl border border-white" @click.away="addModal = false">
                 <div class="mb-8">
-                    <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tight">System Enrollment</h3>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Add Personnel or Student</p>
+                    <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tight">Super Admin Enrollment</h3>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Create Account with Defined Privileges</p>
                 </div>
 
                 <form action="{{ route('super-admin.users.store') }}" method="POST" class="space-y-5">
@@ -203,11 +225,12 @@
             </div>
         </div>
 
+        <!-- Edit User Modal -->
         <div x-show="editModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak>
             <div class="bg-white rounded-[2.5rem] p-10 max-w-2xl w-full shadow-2xl border border-white" @click.away="editModal = false">
 
                 <div class="mb-8">
-                    <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tight">Edit Personal Information</h3>
+                    <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tight">Edit Account & Permissions</h3>
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Updating Account: <span x-text="currentUser.name" class="text-[#D4AF37]"></span></p>
                 </div>
 

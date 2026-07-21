@@ -47,10 +47,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Network Health</p>
-                    <div class="px-5 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-500 font-black text-sm uppercase">Optimal</div>
-                </div>
+
             </div>
 
             {{-- Lab Filter (Using ID for 100% Reliability) --}}

@@ -81,4 +81,47 @@ class LabController extends Controller
         $schedule->delete();
         return back()->with('success', 'Schedule entry removed.');
     }
+
+    public function update(Request $request, Lab $lab)
+    {
+        $validated = $request->validate([
+            'name'     => 'required|string|max:255',
+            'location' => 'required|string|max:255',
+            'pc_count' => 'required|integer|min:1|max:60',
+        ]);
+
+        // 1. Update Lab Info
+        $lab->update([
+            'name'     => $validated['name'],
+            'location' => $validated['location'],
+        ]);
+
+        // 2. Sync Computers Count
+        $currentCount = $lab->computers()->count();
+        $targetCount  = (int) $validated['pc_count'];
+
+        if ($targetCount > $currentCount) {
+            // CAPACITY INCREASED: Add new units
+            $unitsToAdd = $targetCount - $currentCount;
+
+            for ($i = 1; $i <= $unitsToAdd; $i++) {
+                $nextPcNumber = $currentCount + $i;
+
+                $lab->computers()->create([
+                    'pc_number' => 'PC-' . str_pad($nextPcNumber, 2, '0', STR_PAD_LEFT),
+                    'status'    => 'active', // Default status
+                ]);
+            }
+        } elseif ($targetCount < $currentCount) {
+            // CAPACITY DECREASED: Remove excess units starting from the highest numbers
+            $unitsToRemove = $currentCount - $targetCount;
+
+            $lab->computers()
+                ->latest('id') // Removes highest ID / newest PCs first
+                ->take($unitsToRemove)
+                ->delete();
+        }
+
+        return redirect()->back()->with('success', 'Laboratory details and unit capacity updated successfully.');
+    }
 }

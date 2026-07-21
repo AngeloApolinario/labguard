@@ -49,19 +49,9 @@
             {{ __('Alert History') }}
         </x-sidebar-link>
 
-        <x-sidebar-link href="{{ route('super-admin.security') }}" :active="request()->routeIs('super-admin.security')" icon="heroicon-o-lock-closed">
-            {{ __('System Security') }}
-        </x-sidebar-link>
-
         <x-sidebar-link href="{{ route('super-admin.analytics') }}" :active="request()->routeIs('super-admin.analytics')" icon="heroicon-o-chart-bar">
             {{ __('Analytics') }}
         </x-sidebar-link>
-
-        <x-sidebar-link href="{{ route('super-admin.settings') }}" :active="request()->routeIs('super-admin.settings')" icon="heroicon-o-adjustments-horizontal">
-            {{ __('Settings') }}
-        </x-sidebar-link>
-
-
         @endif
 
         {{-- ADMIN ONLY SECTION --}}
@@ -82,8 +72,6 @@
         <x-sidebar-link href="{{ route('dashboard.users') }}" :active="request()->routeIs('dashboard.users')" icon="heroicon-o-users">
             {{ __('User Management') }}
         </x-sidebar-link>
-
-
         @endif
 
         {{-- PERSONNEL ONLY SECTION --}}
@@ -94,7 +82,8 @@
         </x-sidebar-link>
         <x-sidebar-link href="{{ route('personnel.labs') }}" :active="request()->routeIs('personnel.labs')" icon="heroicon-o-beaker">
             {{ __('Lab Overview') }}
-        </x-sidebar-link><x-sidebar-link href="{{ route('personnel.alerts') }}" :active="request()->routeIs('personnel.alerts')" icon="heroicon-o-bell">
+        </x-sidebar-link>
+        <x-sidebar-link href="{{ route('personnel.alerts') }}" :active="request()->routeIs('personnel.alerts')" icon="heroicon-o-bell">
             {{ __('Alerts History') }}
         </x-sidebar-link>
         <x-sidebar-link href="{{ route('personnel.sessions') }}" :active="request()->routeIs('personnel.sessions')" icon="heroicon-o-clock">

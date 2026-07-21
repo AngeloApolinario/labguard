@@ -72,7 +72,7 @@ class AlertController extends Controller
             'resolved_at' => now(),
         ]);
         activity()
-            ->useLogName('incident_response')
+            ->useLog('incident_response')
             ->performedOn($alert)
             ->causedBy(auth()->user())
             ->withProperties([

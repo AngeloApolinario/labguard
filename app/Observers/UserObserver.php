@@ -14,6 +14,11 @@ class UserObserver
         'created_at',
         'remember_token',
         'password', // Prevents saving hashes in the logs
+        'last_login_at',
+        'two_factor_recovery_codes',
+        'two_factor_secret',
+        'two_factor_confirmed_at',
+        'email_verified_at',
     ];
 
     /**
@@ -39,22 +44,20 @@ class UserObserver
      */
     public function updated(User $user): void
     {
-        // Get the fields that changed during this save
+        // Get changed attributes
         $changes = $user->getChanges();
 
-        // Remove ignored fields
-        foreach ($this->ignoredFields as $field) {
-            unset($changes[$field]);
-        }
+        // Filter out ignored fields using array_diff_key
+        $filteredChanges = array_diff_key($changes, array_flip($this->ignoredFields));
 
         // Stop if no meaningful fields changed
-        if (empty($changes)) {
+        if (empty($filteredChanges)) {
             return;
         }
 
-        // Get original values before the update
+        // Get original values for only the filtered changes
         $original = [];
-        foreach (array_keys($changes) as $key) {
+        foreach (array_keys($filteredChanges) as $key) {
             $original[$key] = $user->getOriginal($key);
         }
 
@@ -65,7 +68,7 @@ class UserObserver
             ->withProperties([
                 'target_id'  => $user->id,
                 'before'     => $original,
-                'after'      => $changes,
+                'after'      => $filteredChanges,
                 'ip_address' => request()->ip(),
             ])
             ->log("Edited profile details for {$user->name}");

@@ -8,65 +8,84 @@ use App\Http\Controllers\Dashboard\SettingsController;
 use App\Http\Controllers\PersonnelController;
 use App\Http\Controllers\Session;
 use App\Http\Controllers\SuperAdminController;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
-// 1. PUBLIC ROUTES
+
+/*
+|--------------------------------------------------------------------------
+| 1. PUBLIC & AUTHENTICATION ROUTES
+|--------------------------------------------------------------------------
+| Accessible by any visitor (unauthenticated guests).
+*/
+
 Route::get('/', function () {
     return view('auth.login');
 });
 
-// 2. SHARED AUTH ROUTES (Requires Login, but NOT necessarily Verified)
+
+/*
+|--------------------------------------------------------------------------
+| 2. SHARED AUTHENTICATED ROUTES
+|--------------------------------------------------------------------------
+| Requires user to be logged in, but DOES NOT require email verification yet.
+| Handles profile updates, email verification notices, and resend requests.
+*/
 Route::middleware(['auth'])->group(function () {
 
-    // Profile Landing Page (Allows students to fix settings/email)
+    // PROFILE LANDING PAGE (ALOWS STUDENTS TO UPDATE SETTINGS OR FIX EMAIL)
     Route::get('/user/profile', function () {
         return view('profile.show');
     })->name('profile.show');
 
-    // Success page after clicking the email link
+    // SUCCESS PAGE DISPLAYED AFTER CLICKING THE EMAIL VERIFICATION LINK
     Route::get('/registration-confirmed', function () {
         return view('auth.confirmed');
     })->name('registration.verified');
 
-    // Email verification notice & resend logic
+    // EMAIL VERIFICATION NOTICE VIEW
     Route::get('/email/verify', function () {
         return view('auth.verify-email');
     })->name('verification.notice');
 
+    // RESEND VERIFICATION EMAIL NOTIFICATION (THROTTLED TO PREVENT SPAM)
     Route::post('/email/verification-notification', function (Request $request) {
         $request->user()->sendEmailVerificationNotification();
         return back()->with('status', 'verification-link-sent');
     })->middleware(['throttle:6,1'])->name('verification.send');
 });
 
-// 3. THE EMAIL LINK HANDLER
+
+/*
+|--------------------------------------------------------------------------
+| 3. EMAIL VERIFICATION & REAL-TIME POLLING
+|--------------------------------------------------------------------------
+| Handles incoming email verification link callbacks and live status checks.
+*/
+
+// DIRECT LINK HANDLER FROM VERIFICATION EMAIL
 Route::get('/email/verify/{id}/{hash}', function ($id, $hash, Request $request) {
-    // 1. Find the user by ID
     $user = User::findOrFail($id);
 
-    // 2. Validate the hash (ensures email hasn't changed)
+    // VALIDATE HASH SECURITY
     if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
         abort(403, 'Invalid verification link.');
     }
 
-    // 3. Mark as verified if not already verified
+    // MARK EMAIL AS VERIFIED IF NOT YET MARKED
     if (! $user->hasVerifiedEmail()) {
         $user->markEmailAsVerified();
         event(new Verified($user));
     }
 
-    // 4. Log them in automatically or show the confirmed view
     auth()->login($user);
 
     return redirect()->route('registration.verified');
 })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
-//AUTO POLLING FOR THE EMAIL SO IT CAN REFRESH INSTANTLY
+// AUTO-POLLING ENDPOINT FOR CROSS-DEVICE REAL-TIME VERIFICATION REFRESH
 Route::get('/api/check-verification-status', function () {
     if (auth()->check() && auth()->user()->hasVerifiedEmail()) {
-        // Flash message to session so profile page displays the popup on load
         session()->flash('verified_toast', 'Your email is now verified and can be used to log in to the computer.');
         return response()->json(['verified' => true]);
     }
@@ -75,133 +94,126 @@ Route::get('/api/check-verification-status', function () {
 })->middleware(['auth']);
 
 
-// 4. ADMIN DASHBOARD (Requires Verified Status)
+/*
+|--------------------------------------------------------------------------
+| 4. ADMIN DASHBOARD ROUTES
+|--------------------------------------------------------------------------
+| Requires Authentication, Verified Email, and Admin Role Clearance.
+*/
 Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
     'verified',
     'clearance:admin',
-    'student.lock',
 ])->prefix('dashboard')->name('dashboard.')->group(function () {
 
-    // Core Dashboard & Analytics
+    // DASHBOARD OVERVIEW & SYSTEM SETTINGS
     Route::get('/', [DashboardController::class, 'index'])->name('index');
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
 
-    // --- User Management ---
+    // USER MANAGEMENT
     Route::get('/users', [DashboardController::class, 'userManagement'])->name('users');
     Route::post('/users', [DashboardController::class, 'storeUser'])->name('users.store');
     Route::patch('/users/{user}', [DashboardController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [DashboardController::class, 'destroyUser'])->name('users.destroy');
 
-    // --- Session Control ---
+    // WORKSTATION SESSION CONTROL
     Route::patch('/sessions/{session}/terminate', [DashboardController::class, 'terminateSession'])->name('sessions.terminate');
 
-    // --- Laboratory & Hardware Management ---
+    // LABORATORY & HARDWARE MANAGEMENT
     Route::get('/labs', [LabController::class, 'index'])->name('labs');
+    Route::post('/labs/store', [DashboardController::class, 'storeNewLaboratory'])->name('labs.store');
     Route::put('/labs/{lab}', [LabController::class, 'update'])->name('labs.update');
 
-    // --- Laboratory Scheduling ---
+    // LABORATORY SCHEDULING
     Route::get('/labs/{lab}/schedule', [LabController::class, 'viewSchedule'])->name('labs.schedule');
     Route::post('/labs/{lab}/schedule', [LabController::class, 'storeSchedule'])->name('labs.schedule.store');
     Route::delete('/schedule/{schedule}', [LabController::class, 'destroySchedule'])->name('labs.schedule.destroy');
 
-    // --- Terminal Incident Alerts (Fixed Duplicates) ---
+    // INCIDENT ALERTS & NOTIFICATIONS
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
 
-    // SESSION HISTORY 
+    // HISTORICAL SESSIONS & AUDITING
     Route::get('/sessions', [Session::class, 'index'])->name('sessions.index');
     Route::get('/sessions/student/{student}', [Session::class, 'show'])->name('sessions.student');
-
-    // NEW LABORATORY CREATION ROUTES
-    Route::post('/labs/store', [DashboardController::class, 'storeNewLaboratory'])->name('labs.store');
 });
 
 
-
-// 5. PERSONNEL TERMINAL (Requires Verified Status)
+/*
+|--------------------------------------------------------------------------
+| 5. PERSONNEL TERMINAL ROUTES
+|--------------------------------------------------------------------------
+| Requires Authentication, Verified Email, and Personnel Role Clearance.
+*/
 Route::middleware([
     'auth',
     'verified',
     'clearance:personnel',
-    'student.lock',
 ])->prefix('terminal')->name('personnel.')->group(function () {
 
-    // Main Dashboard / Overview
+    // MAIN TERMINAL OVERVIEW & LAB GRID
     Route::get('/', [PersonnelController::class, 'index'])->name('index');
     Route::get('/labs', [PersonnelController::class, 'labs'])->name('labs');
-
-    /**
-     * Lab Monitoring & PC Grid
-     * URL: /terminal/lab/{lab} | Route: personnel.lab.show
-     */
     Route::get('/lab/{lab}', [PersonnelController::class, 'showLab'])->name('lab.show');
 
-    /**
-     * Session Management
-     * Using POST for Assign and Release actions
-     */
+    // WORKSTATION ASSIGNMENT & RELEASE CONTROLS
     Route::post('/assign/{computer}', [PersonnelController::class, 'assign'])->name('assign');
     Route::post('/release/{computer}', [PersonnelController::class, 'release'])->name('release');
 
+    // SCHEDULES & REPORT EXPORTS
     Route::get('/schedule-overview', [PersonnelController::class, 'fullSchedule'])->name('full-schedule');
+    Route::get('/export/{schedule}', [PersonnelController::class, 'exportScheduleAttendance'])->name('export');
 
-
+    // LOGS & ALERTS
     Route::get('/sessions', [PersonnelController::class, 'sessionHistory'])->name('sessions');
     Route::get('/alerts', [PersonnelController::class, 'alertHistory'])->name('alerts');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
-
-    //EXPORT ROUTES
-    Route::get('/export/{schedule}', [PersonnelController::class, 'exportScheduleAttendance'])
-        ->name('export');
 });
 
-// 6. SUPER ADMIN (Requires Verified Status)
+
+/*
+|--------------------------------------------------------------------------
+| 6. SUPER ADMIN ROUTES
+|--------------------------------------------------------------------------
+| Requires Authentication, Verified Email, and Super Admin Clearance.
+*/
 Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
     'verified',
     'clearance:super-admin',
-    'student.lock',
 ])->prefix('super-admin')->name('super-admin.')->group(function () {
+
+    // HIGH-LEVEL SYSTEM OVERVIEW & ANALYTICS
     Route::get('/overview', [SuperAdminController::class, 'index'])->name('index');
     Route::get('/security', [SuperAdminController::class, 'security'])->name('security');
     Route::get('/analytics', [SuperAdminController::class, 'analytics'])->name('analytics');
+    Route::get('/analytics/export', [SuperAdminController::class, 'exportReport'])->name('analytics.export');
     Route::get('/settings', [SuperAdminController::class, 'settings'])->name('settings');
-    Route::get('/system-logs', [SuperAdminController::class, 'logs'])->name('logs');
+    Route::get('/logs', [SuperAdminController::class, 'logs'])->name('logs');
 
-    //USER MANAGEMENT ROUTES FOR SUPER ADMIN
+    // SYSTEM-WIDE USER MANAGEMENT
     Route::get('/users', [SuperAdminController::class, 'userManagement'])->name('users');
     Route::post('/users', [SuperAdminController::class, 'storeUser'])->name('users.store');
     Route::patch('/users/{user}', [SuperAdminController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [SuperAdminController::class, 'destroyUser'])->name('users.destroy');
 
-    // Labs Inventory
+    // GLOBAL LAB INVENTORY & SCHEDULING
     Route::get('/labs', [SuperAdminController::class, 'labs'])->name('labs');
-
-    // Scheduling (Full Management)
+    Route::get('/labs/{lab}', [SuperAdminController::class, 'show'])->name('labs.show');
     Route::get('/labs/{lab}/schedule', [SuperAdminController::class, 'viewSchedule'])->name('labs.schedule');
     Route::post('/labs/{lab}/schedule', [SuperAdminController::class, 'storeSchedule'])->name('labs.schedule.store');
     Route::delete('/schedule/{schedule}', [SuperAdminController::class, 'destroySchedule'])->name('labs.schedule.destroy');
-    Route::get('/labs/{lab}', [SuperAdminController::class, 'show'])->name('labs.show');
 
-    // Other Global Monitoring
+    // GLOBAL SESSIONS & SYSTEM ALERTS
     Route::get('/sessions', [SuperAdminController::class, 'sessions'])->name('sessions');
-    Route::get('/alerts', [SuperAdminController::class, 'alerts'])->name('alerts');
-
-    //ALERTS FOR SUPER ADMIN
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
-    Route::get('/analytics/export', [SuperAdminController::class, 'exportReport'])->name('analytics.export');
 
-    //ROUTES FOR THE SUPER ADMIN OVERVIEW 
-    Route::get('/logs', [SuperAdminController::class, 'logs'])->name('logs');
-
-    // Super Admin System Utilities
+    // EMERGENCY CONTROLS & SYSTEM MAINTENANCE
     Route::post('/reports/generate', [SuperAdminController::class, 'generateReport'])->name('reports.generate');
     Route::post('/system/backup', [SuperAdminController::class, 'triggerBackup'])->name('system.backup');
-    // Super Admin Emergency Lockout
     Route::post('/system/lockout', [SuperAdminController::class, 'emergencyLockout'])->name('system.lockout');
     Route::post('/system/release-lockout', [SuperAdminController::class, 'releaseLockout'])->name('system.release-lockout');
 });

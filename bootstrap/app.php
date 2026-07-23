@@ -15,14 +15,18 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // [Put ALL your aliases in this one single list]
+        // Automatically run RestrictStudents on every web request
+        $middleware->web(append: [
+            RestrictStudents::class,
+        ]);
+
+        // Route aliases for specific manual protection
         $middleware->alias([
-            'clearance'    => CheckClearance::class,
-            'student.lock' => RestrictStudents::class,
-            'super-admin'  => EnsureSuperAdmin::class,
+            'clearance'   => CheckClearance::class,
+            'super-admin' => EnsureSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })
-    ->create(); // This MUST be at the very end
+    ->create();

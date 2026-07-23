@@ -15,20 +15,31 @@ class RestrictStudents
             // Only apply these rules to the Student role
             if (strcasecmp($user->role, 'student') === 0) {
 
-                // 1. ALLOWED ROUTES: Always allow these regardless of verification status
-                // This breaks the "Too Many Redirects" loop
-                if ($request->routeIs('profile.show', 'registration.verified', 'verification.*', 'logout')) {
-                    return $next($request);
-                }
-
-                // 2. VERIFICATION CHECK: 
-                // If they aren't verified, they can ONLY see the profile or the "Please Verify" notice
+                // 1. Unverified Check
                 if (!$user->hasVerifiedEmail()) {
+
+                    // Always allow verification routes & logout
+                    if ($request->routeIs('verification.*', 'logout', 'registration.verified')) {
+                        // Mark that they have visited/seen the verification page
+                        session(['has_seen_verification_notice' => true]);
+                        return $next($request);
+                    }
+
+                    // If they haven't seen the verification screen yet this session, FORCE THEM THERE FIRST
+                    if (!session('has_seen_verification_notice')) {
+                        return redirect()->route('verification.notice');
+                    }
+
+                    // Once they've seen it, allow them to view profile.show
+                    if ($request->routeIs('profile.show')) {
+                        return $next($request);
+                    }
+
+                    // Any other page attempt (dashboard, etc.) redirects back to verification notice
                     return redirect()->route('verification.notice');
                 }
 
-                // 3. ROLE ACCESS:
-                // If they ARE verified but try to enter Admin/Personnel areas, bounce them to profile
+                // 2. Verified Students attempting Admin/Personnel areas -> send to profile
                 if ($request->is('terminal*') || $request->is('dashboard*') || $request->is('super-admin*')) {
                     return redirect()->route('profile.show');
                 }

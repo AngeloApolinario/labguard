@@ -10,7 +10,8 @@ use App\Http\Controllers\Session;
 use App\Http\Controllers\SuperAdminController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
-
+use App\Models\User;
+use Illuminate\Auth\Events\Verified;
 // 1. PUBLIC ROUTES
 Route::get('/', function () {
     return view('auth.login');
@@ -41,10 +42,37 @@ Route::middleware(['auth'])->group(function () {
 });
 
 // 3. THE EMAIL LINK HANDLER
-Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-    $request->fulfill();
+Route::get('/email/verify/{id}/{hash}', function ($id, $hash, Request $request) {
+    // 1. Find the user by ID
+    $user = User::findOrFail($id);
+
+    // 2. Validate the hash (ensures email hasn't changed)
+    if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
+        abort(403, 'Invalid verification link.');
+    }
+
+    // 3. Mark as verified if not already verified
+    if (! $user->hasVerifiedEmail()) {
+        $user->markEmailAsVerified();
+        event(new Verified($user));
+    }
+
+    // 4. Log them in automatically or show the confirmed view
+    auth()->login($user);
+
     return redirect()->route('registration.verified');
-})->middleware(['auth', 'signed', 'throttle:6,1'])->name('verification.verify');
+})->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
+
+//AUTO POLLING FOR THE EMAIL SO IT CAN REFRESH INSTANTLY
+Route::get('/api/check-verification-status', function () {
+    if (auth()->check() && auth()->user()->hasVerifiedEmail()) {
+        // Flash message to session so profile page displays the popup on load
+        session()->flash('verified_toast', 'Your email is now verified and can be used to log in to the computer.');
+        return response()->json(['verified' => true]);
+    }
+
+    return response()->json(['verified' => false]);
+})->middleware(['auth']);
 
 
 // 4. ADMIN DASHBOARD (Requires Verified Status)

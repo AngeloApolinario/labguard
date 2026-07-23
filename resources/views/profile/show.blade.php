@@ -88,4 +88,31 @@
             </div>
         </div>
     </div>
+
+    @if(session('verified_toast'))
+    <div id="verified-toast" class="fixed top-6 right-6 z-50 max-w-md bg-slate-900 border border-[#D4AF37] text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 transition-all duration-500 ease-out translate-y-0 opacity-100">
+        <div class="size-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
+            <svg class="size-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+        </div>
+        <div>
+            <h4 class="text-xs font-black uppercase tracking-widest text-[#D4AF37]">Identity Confirmed</h4>
+            <p class="text-xs font-semibold text-slate-300 mt-0.5 leading-relaxed">
+                {{ session('verified_toast') }}
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Auto-dismiss the popup smoothly after 5 seconds
+        setTimeout(() => {
+            const toast = document.getElementById('verified-toast');
+            if (toast) {
+                toast.classList.add('opacity-0', '-translate-y-4');
+                setTimeout(() => toast.remove(), 500); // Remove from DOM after fade out
+            }
+        }, 5000);
+    </script>
+    @endif
 </x-app-layout>

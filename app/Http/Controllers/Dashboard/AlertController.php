@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use App\Models\Alert;
 use App\Models\Computer;
 
-
 class AlertController extends Controller
 {
     /**
@@ -15,7 +14,8 @@ class AlertController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Alert::with('computer')->latest();
+        // Eager load relationships so Laboratory and Reporter data are accessible
+        $query = Alert::with(['computer.laboratory', 'reporter'])->latest();
 
         // Filter by PC Number
         if ($request->filled('pc_number')) {
@@ -34,7 +34,8 @@ class AlertController extends Controller
             $query->where('status', $request->status);
         }
 
-        $alerts = $query->get();
+        // Paginate results while preserving filter query parameters in links
+        $alerts = $query->paginate(15)->appends($request->query());
 
         return view('dashboard.alerts.index', compact('alerts'));
     }
@@ -45,18 +46,19 @@ class AlertController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'pc_number' => 'required|exists:computers,pc_number',
+            'pc_number'  => 'required|exists:computers,pc_number',
             'issue_type' => 'required|string',
-            'remarks' => 'required|string',
+            'remarks'    => 'required|string',
         ]);
 
         $computer = Computer::where('pc_number', $request->pc_number)->first();
 
         $alert = Alert::create([
             'computer_id' => $computer->id,
-            'issue_type' => $request->issue_type,
-            'remarks' => $request->remarks,
-            'status' => 'pending',
+            'reporter_id' => auth()->id(), // Keeps track of who reported if logged in
+            'issue_type'  => $request->issue_type,
+            'remarks'     => $request->remarks,
+            'status'      => 'pending',
         ]);
 
         return response()->json(['message' => 'Alert received', 'id' => $alert->id], 201);
@@ -68,16 +70,17 @@ class AlertController extends Controller
     public function resolve(Request $request, Alert $alert)
     {
         $alert->update([
-            'status' => 'resolved',
+            'status'      => 'resolved',
             'resolved_at' => now(),
         ]);
+
         activity()
             ->useLog('incident_response')
             ->performedOn($alert)
             ->causedBy(auth()->user())
             ->withProperties([
                 'alert_title' => $alert->title ?? $alert->issue_type,
-                'lab_room'    => $alert->lab->room_name ?? 'N/A',
+                'lab_room'    => $alert->computer->laboratory->name ?? 'N/A',
                 'notes'       => $request->resolution_notes,
             ])
             ->log("Resolved security alert: '{$alert->issue_type}'");

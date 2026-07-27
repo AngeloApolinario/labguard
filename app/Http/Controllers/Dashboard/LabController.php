@@ -76,10 +76,34 @@ class LabController extends Controller
         return back()->with('success', 'Schedule entry created successfully.');
     }
 
-    public function destroySchedule(Schedule $schedule)
+    // In LabScheduleController.php
+
+    public function destroySchedule(Request $request, $id)
     {
+        $schedule = Schedule::findOrFail($id);
+        $labId = $schedule->lab_id;
+        $day = $request->input('day', 'All');
+
         $schedule->delete();
-        return back()->with('success', 'Schedule entry removed.');
+
+        return redirect()->route('dashboard.labs.schedule', ['lab' => $labId, 'day' => $day])
+            ->with('success', 'Slot revoked successfully.');
+    }
+
+    public function destroyByDay(Request $request, $labId)
+    {
+        $day = $request->input('day', 'All');
+
+        if ($day && $day !== 'All') {
+            Schedule::where('lab_id', $labId)->where('day', $day)->delete();
+            $message = "All slots for {$day} revoked successfully.";
+        } else {
+            Schedule::where('lab_id', $labId)->delete();
+            $message = "All slots revoked successfully.";
+        }
+
+        return redirect()->route('dashboard.labs.schedule', ['lab' => $labId, 'day' => $day])
+            ->with('success', $message);
     }
 
     public function update(Request $request, Lab $lab)

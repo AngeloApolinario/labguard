@@ -129,6 +129,7 @@ Route::middleware([
     Route::get('/labs/{lab}/schedule', [LabController::class, 'viewSchedule'])->name('labs.schedule');
     Route::post('/labs/{lab}/schedule', [LabController::class, 'storeSchedule'])->name('labs.schedule.store');
     Route::delete('/schedule/{schedule}', [LabController::class, 'destroySchedule'])->name('labs.schedule.destroy');
+    Route::delete('/labs/{lab}/schedule/day', [LabController::class, 'destroyByDay'])->name('labs.schedule.destroyByDay');
 
     // INCIDENT ALERTS & NOTIFICATIONS
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');

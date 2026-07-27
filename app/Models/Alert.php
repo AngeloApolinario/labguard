@@ -48,4 +48,9 @@ class Alert extends Model
     {
         return $this->belongsTo(Lab::class);
     }
+    public function user()
+    {
+        // withTrashed() ensures past session history still shows user details in UI tables
+        return $this->belongsTo(User::class)->withTrashed();
+    }
 }

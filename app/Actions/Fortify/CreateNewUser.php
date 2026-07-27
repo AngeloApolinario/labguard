@@ -5,6 +5,7 @@ namespace App\Actions\Fortify;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 use Laravel\Jetstream\Jetstream;
 
@@ -16,13 +17,19 @@ class CreateNewUser implements CreatesNewUsers
     {
         Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('users')->whereNull('deleted_at')
+            ],
             'password' => $this->passwordRules(),
             'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'], // PH Format
             'student_number' => [
                 'required',
                 'string',
-                'unique:users',
+                Rule::unique('users')->whereNull('deleted_at'),
                 'regex:/^01-[0-9]{4}-[0-9]{6}$/' // Araullo Format: 01-XXXX-XXXXXX
             ],
             'terms' => Jetstream::hasTermsAndPrivacyPolicyFeature() ? ['accepted', 'required'] : '',

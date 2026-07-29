@@ -94,7 +94,7 @@
                         {{-- Laboratory Location --}}
                         <td class="py-8 px-4">
                             <span class="text-xs font-bold text-slate-700">
-                                {{ $alert->computer->laboratory->name ?? $alert->computer->lab_name ?? 'Unassigned Lab' }}
+                                {{ $alert->computer->lab->name ?? $alert->computer->lab_name ?? 'Unassigned Lab' }}
                             </span>
                         </td>
 

@@ -15,7 +15,7 @@ class AlertController extends Controller
     public function index(Request $request)
     {
         // Eager load relationships so Laboratory and Reporter data are accessible
-        $query = Alert::with(['computer.laboratory', 'reporter'])->latest();
+        $query = Alert::with(['computer.lab', 'reporter'])->latest();
 
         // Filter by PC Number
         if ($request->filled('pc_number')) {

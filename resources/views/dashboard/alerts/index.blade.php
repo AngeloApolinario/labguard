@@ -1,7 +1,5 @@
 <x-app-layout>
     <div class="py-12 px-6 max-w-7xl mx-auto min-h-screen bg-[#FDFCF9]">
-
-        {{-- Header --}}
         <div class="mb-12 flex justify-between items-center">
             <div class="relative">
                 <div class="absolute -left-4 top-0 bottom-0 w-1 bg-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.6)]"></div>
@@ -27,11 +25,9 @@
             </div>
         </div>
 
-        {{-- Filter Bar --}}
         <div class="mb-10 group">
             <div class="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-500/5 transition-all hover:border-slate-200">
                 <form action="{{ route('dashboard.alerts.index') }}" method="GET" class="flex flex-wrap items-end gap-8">
-
                     <div class="flex-1 min-w-[200px]">
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 block">PC Name or Number</label>
                         <input type="text" name="pc_number" value="{{ request('pc_number') }}" placeholder="Search PC..."
@@ -65,13 +61,12 @@
             </div>
         </div>
 
-        {{-- Alerts Table --}}
         <div class="bg-white border border-slate-100/60 rounded-[3rem] overflow-hidden shadow-2xl shadow-slate-500/5">
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] bg-slate-50/50">
                         <th class="py-6 px-8">PC Name</th>
-                        <th class="py-6 px-4">Laboratory</th>
+                        <th class="py-6 px-4">Reported By</th>
                         <th class="py-6 px-4">Issue Type</th>
                         <th class="py-6 px-4">Details / Remarks</th>
                         <th class="py-6 px-4">Date & Time</th>
@@ -80,8 +75,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($alerts as $alert)
-                    <tr class="group hover:bg-slate-50/50 transition-colors {{ $alert->status == 'resolved' ? 'opacity-40 grayscale-[0.8]' : '' }}">
-                        {{-- PC Name --}}
+                    <tr class="group hover:bg-slate-50/50 transition-colors {{ $alert->status == 'resolved' ? 'opacity-70 bg-slate-50/30' : '' }}">
                         <td class="py-8 px-8">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-[#D4AF37] text-xs shadow-inner">
@@ -91,14 +85,17 @@
                             </div>
                         </td>
 
-                        {{-- Laboratory Location --}}
                         <td class="py-8 px-4">
-                            <span class="text-xs font-bold text-slate-700">
-                                {{ $alert->computer->lab->name ?? $alert->computer->lab_name ?? 'Unassigned Lab' }}
-                            </span>
+                            <div class="flex flex-col">
+                                <span class="font-black text-slate-900 text-xs tracking-tight">
+                                    {{ $alert->reporter->name ?? $alert->reportedBy->name ?? 'Unknown Student' }}
+                                </span>
+                                <span class="text-[9px] text-slate-400 font-bold uppercase mt-0.5 tracking-tight">
+                                    {{ $alert->reporter->student_number ?? $alert->reportedBy->student_number ?? 'N/A' }}
+                                </span>
+                            </div>
                         </td>
 
-                        {{-- Issue Type --}}
                         <td class="py-8 px-4">
                             <div class="flex flex-col">
                                 <span class="text-[10px] font-black uppercase tracking-wider {{ $alert->issue_type == 'Hardware Issue' ? 'text-[#D4AF37]' : 'text-sky-500' }}">
@@ -107,14 +104,12 @@
                             </div>
                         </td>
 
-                        {{-- Details / Remarks --}}
                         <td class="py-8 px-4 max-w-xs">
                             <p class="text-slate-600 text-xs font-medium leading-relaxed italic border-l-2 border-slate-100 pl-3">
                                 "{{ $alert->remarks }}"
                             </p>
                         </td>
 
-                        {{-- Date & Time --}}
                         <td class="py-8 px-4">
                             <div class="text-[10px] font-black uppercase">
                                 <div class="text-slate-900 mb-1">{{ $alert->created_at->format('M d, Y') }}</div>
@@ -122,7 +117,6 @@
                             </div>
                         </td>
 
-                        {{-- Action Button --}}
                         <td class="py-8 px-8 text-right">
                             @if($alert->status == 'pending')
                             <form action="{{ route('dashboard.alerts.resolve', $alert->id) }}" method="POST">
@@ -133,9 +127,21 @@
                                 </button>
                             </form>
                             @else
-                            <div class="inline-flex items-center gap-2 px-5 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
+                            <div class="flex items-center justify-end gap-3">
+                                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
+                                </div>
+
+                                <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution and mark it as pending again?');">
+                                    @csrf @method('PATCH')
+                                    <button type="submit" title="Undo resolution" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 flex items-center gap-1">
+                                        <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                        </svg>
+                                        <span>Undo</span>
+                                    </button>
+                                </form>
                             </div>
                             @endif
                         </td>

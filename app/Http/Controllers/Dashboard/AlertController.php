@@ -87,4 +87,21 @@ class AlertController extends Controller
 
         return back()->with('success', 'Issue marked as resolved.');
     }
+
+    public function undoResolution(Alert $alert)
+    {
+        // Safety check: ensure we only undo alerts that are actually resolved
+        if ($alert->status !== 'resolved') {
+            return redirect()->back()->with('error', 'Only resolved alerts can be restored to pending status.');
+        }
+
+        // Update status back to pending
+        $alert->update([
+            'status' => 'pending',
+            'resolved_at' => null, // Clear resolution timestamp if your schema tracks it
+            'resolved_by' => null, // Clear who resolved it if applicable
+        ]);
+
+        return redirect()->back()->with('success', "Alert for {$alert->computer->pc_number} restored to pending status.");
+    }
 }

@@ -122,8 +122,19 @@ class LabGuardClient:
         self.login_form_frame.pack(pady=10)
 
         tk.Label(self.login_form_frame, text="STUDENT NUMBER", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(20, 0))
-        self.entry_id = tk.Entry(self.login_form_frame, font=("Arial", 18), justify='center', width=25, bg='#1e293b', fg='white', insertbackground='white', border=0)
+        self.entry_id = tk.Entry(
+            self.login_form_frame,
+            font=("Arial", 18),
+            justify='center',
+            width=25,
+            bg='#1e293b',
+            fg='white',
+            insertbackground='white',
+            border=0
+        )
         self.entry_id.pack(pady=5, ipady=10)
+        self.entry_id.bind("<Key>", self._filter_student_id_key)
+        self.entry_id.bind("<KeyRelease>", self._format_student_id_entry)
 
         tk.Label(self.login_form_frame, text="ACCOUNT PASSWORD", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(15, 0))
         self.entry_password = tk.Entry(self.login_form_frame, font=("Arial", 18), justify='center', width=25, show="*", bg='#1e293b', fg='white', insertbackground='white', border=0)
@@ -155,6 +166,33 @@ class LabGuardClient:
 
         # Start Async Network Monitoring Daemon Thread
         threading.Thread(target=self.network_monitor_loop, daemon=True).start()
+
+    def _filter_student_id_key(self, event):
+        """Block letters and keep only digits in the student ID field."""
+        if event.keysym in {'BackSpace', 'Delete', 'Tab', 'Return', 'Left', 'Right', 'Up', 'Down', 'Home', 'End'}:
+            return
+
+        if event.char and not event.char.isdigit():
+            return 'break'
+
+    def _format_student_id_entry(self, event=None):
+        """Auto-format the student ID as xx-xxxx-xxxxxx as the user types."""
+        target = event.widget if event else self.entry_id
+        current_value = target.get().strip()
+        digits = re.sub(r"\D", "", current_value)[:12]
+        formatted = self._format_student_id_text(digits)
+
+        if formatted != current_value:
+            target.delete(0, tk.END)
+            target.insert(0, formatted)
+            target.icursor(len(formatted))
+
+    def _format_student_id_text(self, value):
+        if len(value) <= 2:
+            return value
+        if len(value) <= 6:
+            return f"{value[:2]}-{value[2:]}"
+        return f"{value[:2]}-{value[2:6]}-{value[6:]}"
 
     # --- UI STATE TOGGLES ---
 
@@ -371,8 +409,17 @@ class LabGuardClient:
         tk.Label(self.overlay, text="REPORT AN ISSUE", fg='#D4AF37', bg='#1e293b', font=("Arial Black", 16)).pack(pady=(25, 5))
         
         tk.Label(self.overlay, text="Confirm Student Number", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
-        self.report_student_id = tk.Entry(self.overlay, font=("Arial", 12), bg='#0f172a', fg='white', border=0, insertbackground='white')
+        self.report_student_id = tk.Entry(
+            self.overlay,
+            font=("Arial", 12),
+            bg='#0f172a',
+            fg='white',
+            border=0,
+            insertbackground='white'
+        )
         self.report_student_id.pack(fill="x", padx=60, ipady=6)
+        self.report_student_id.bind("<Key>", self._filter_student_id_key)
+        self.report_student_id.bind("<KeyRelease>", self._format_student_id_entry)
         
         tk.Label(self.overlay, text="Confirm Password", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(10, 2))
         self.report_password = tk.Entry(self.overlay, font=("Arial", 12), show="*", bg='#0f172a', fg='white', border=0, insertbackground='white')

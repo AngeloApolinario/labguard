@@ -134,6 +134,7 @@ Route::middleware([
     // INCIDENT ALERTS & NOTIFICATIONS
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
+    Route::patch('/alerts/{alert}/undo', [AlertController::class, 'undoResolution'])->name('alerts.undo');
 
     // HISTORICAL SESSIONS & AUDITING
     Route::get('/sessions', [Session::class, 'index'])->name('sessions.index');
@@ -170,6 +171,7 @@ Route::middleware([
     Route::get('/sessions', [PersonnelController::class, 'sessionHistory'])->name('sessions');
     Route::get('/alerts', [PersonnelController::class, 'alertHistory'])->name('alerts');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
+    Route::patch('/alerts/{alert}/undo', [AlertController::class, 'undoResolution'])->name('alerts.undo');
 });
 
 

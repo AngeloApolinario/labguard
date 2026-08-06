@@ -8,7 +8,7 @@
                 <div class="flex items-center space-x-2 mt-1">
                     <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                        Root Administrator • Secure Session
+                        Laboratory Overview
                     </p>
                 </div>
             </div>

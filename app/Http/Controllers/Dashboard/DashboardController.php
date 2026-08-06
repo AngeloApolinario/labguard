@@ -1,19 +1,29 @@
 <?php
 
+
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Computer;
+use App\Models\Lab;
 use App\Models\LabSession;
-use App\Models\Lab; // Added Lab Model
 use App\Models\User;
-use Illuminate\Validation\Rules;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules;
 
 class DashboardController extends Controller
 {
+    private function flashToast(string $type, string $title, string $message): void
+    {
+        session()->flash('toast', [
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+        ]);
+    }
+
     public function index()
     {
         // Global Stats
@@ -25,7 +35,7 @@ class DashboardController extends Controller
             'computers as total_pcs',
             'computers as active_pcs' => function ($query) {
                 $query->where('status', 'active');
-            }
+            },
         ])->get();
 
         // For the detailed PC list (if you show them all on one page)
@@ -72,6 +82,8 @@ class DashboardController extends Controller
             'email_verified_at' => now(),
         ]);
 
+        $this->flashToast('success', 'User Enrolled', 'User successfully enrolled in LabGuard.');
+
         return redirect()->back()->with('success', 'User successfully enrolled in LabGuard.');
     }
 
@@ -93,47 +105,48 @@ class DashboardController extends Controller
             'role' => $request->role,
         ]);
 
+        $this->flashToast('success', 'Profile Updated', "Profile for {$user->name} has been updated.");
+
         return redirect()->back()->with('status', "Profile for {$user->name} has been updated.");
     }
 
     public function destroyUser(User $user)
     {
         if ($user->role === 'super-admin' || $user->id === auth()->id()) {
+            $this->flashToast('danger', 'Unauthorized Deletion', 'Unauthorized deletion attempt.');
+
             return redirect()->back()->with('error', 'Unauthorized deletion attempt.');
         }
 
         $user->delete();
+
+        $this->flashToast('success', 'User Removed', 'User successfully removed.');
+
         return redirect()->back()->with('status', 'User successfully removed.');
     }
 
     public function terminateSession(Request $request, LabSession $session)
     {
         $session->update([
-            'logout_at' => now(), // Changed to logout_at to match common session naming
+            'logout_at' => now(),
         ]);
 
         $session->computer->update([
-            'status' => 'available'
+            'status' => 'available',
         ]);
 
         $userName = $session->user ? $session->user->name : 'Unknown User';
 
-
+        $this->flashToast('success', 'Session Ended', "Session for {$userName} terminated successfully.");
 
         return redirect()->back()->with('status', "Session for {$userName} terminated successfully.");
     }
-
-
-    //ADD NEW LAB FUNCTION 
-
-
-
 
     public function storeNewLaboratory(Request $request)
     {
         // 1. Validation
         $validated = $request->validate([
-            'name'     => 'required|string|max:255|unique:labs,name',
+            'name' => 'required|string|max:255|unique:labs,name',
             'location' => 'required|string|max:255',
             'pc_count' => 'required|integer|min:1|max:100',
         ]);
@@ -143,7 +156,7 @@ class DashboardController extends Controller
 
             // 2. Create the Lab Record
             $lab = Lab::create([
-                'name'     => $validated['name'],
+                'name' => $validated['name'],
                 'location' => $validated['location'],
             ]);
 
@@ -155,25 +168,29 @@ class DashboardController extends Controller
                 $paddedIndex = str_pad($i, 2, '0', STR_PAD_LEFT);
 
                 // Format example: PC-01, PC-02...
-                $pcNumber = "PC-" . $paddedIndex;
+                $pcNumber = 'PC-' . $paddedIndex;
 
                 // Format example: AST-LAB1-PC01
                 $assetTag = "AST-{$labPrefix}-PC{$paddedIndex}";
 
                 $lab->computers()->create([
-                    'pc_number'       => $pcNumber,
-                    'asset_tag'       => $assetTag,
-                    'serial_number'   => null,          // Left as null for manual entry/scanning later
-                    'status'          => 'available',   // Explicitly set default status to available
+                    'pc_number' => $pcNumber,
+                    'asset_tag' => $assetTag,
+                    'serial_number' => null,
+                    'status' => 'available',
                     'current_student' => null,
                 ]);
             }
 
             DB::commit();
 
+            $this->flashToast('success', 'Lab Created', "Facility {$lab->name} initialized with {$validated['pc_count']} active computers.");
+
             return back()->with('success', "Facility {$lab->name} initialized with {$validated['pc_count']} active computers.");
         } catch (\Exception $e) {
             DB::rollBack();
+
+            $this->flashToast('danger', 'Lab Creation Failed', 'Critical System Error: Could not initialize facility nodes.');
 
             return back()->with('error', 'Critical System Error: Could not initialize facility nodes. ' . $e->getMessage());
         }

@@ -14,7 +14,7 @@
                 <h1 class="text-3xl font-black text-white tracking-tighter uppercase">
                     Lab<span class="text-[#D4AF37]">Guard</span>
                 </h1>
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mt-2">Secure Terminal Access</p>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mt-2">Secure Laboratory Access</p>
             </div>
 
             <div class="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] p-8 overflow-hidden relative">

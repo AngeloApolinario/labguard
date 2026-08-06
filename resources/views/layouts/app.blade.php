@@ -37,6 +37,7 @@
             </main>
         </div>
     </div>
+    <x-toast />
 
     @stack('modals')
     @livewireScripts

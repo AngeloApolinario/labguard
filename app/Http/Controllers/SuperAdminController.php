@@ -2,23 +2,32 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Alert;
 use App\Models\Lab;
 use App\Models\LabSession;
 use App\Models\Schedule;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rules;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\StreamedResponse;
-use Carbon\Carbon;
-use App\Models\Alert;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules;
 use Spatie\Activitylog\Models\Activity;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SuperAdminController extends Controller
 {
+    private function flashToast(string $type, string $title, string $message): void
+    {
+        session()->flash('toast', [
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+        ]);
+    }
+
     public function index()
     {
         // 1. Fetch Summary Card Metrics
@@ -49,7 +58,7 @@ class SuperAdminController extends Controller
 
             $labUtilization[$lab->id] = [
                 'name' => $lab->room_name,
-                'percent' => min(100, round($percentage))
+                'percent' => min(100, round($percentage)),
             ];
         }
 
@@ -65,7 +74,7 @@ class SuperAdminController extends Controller
             'alerts' => $pendingAlertsCount,
             'totalLabs' => $totalLabs,
             'labUtilization' => $labUtilization,
-            'recentAlerts' => $recentAlerts
+            'recentAlerts' => $recentAlerts,
         ]);
     }
 
@@ -75,7 +84,7 @@ class SuperAdminController extends Controller
         $securityStats = [
             'score' => '92/100',
             'threats' => 3,
-            'vulnerabilities' => 5
+            'vulnerabilities' => 5,
         ];
 
         // Hardcoded alerts to match your UI image
@@ -89,7 +98,7 @@ class SuperAdminController extends Controller
                 'action' => 'Block IP',
                 'icon' => 'heroicon-o-exclamation-triangle',
                 'iconColor' => 'text-rose-500',
-                'bgColor' => 'bg-rose-50'
+                'bgColor' => 'bg-rose-50',
             ],
             [
                 'type' => 'warning',
@@ -100,7 +109,7 @@ class SuperAdminController extends Controller
                 'action' => 'Review',
                 'icon' => 'heroicon-o-exclamation-circle',
                 'iconColor' => 'text-amber-500',
-                'bgColor' => 'bg-amber-50'
+                'bgColor' => 'bg-amber-50',
             ],
             [
                 'type' => 'info',
@@ -111,13 +120,12 @@ class SuperAdminController extends Controller
                 'action' => 'Update',
                 'icon' => 'heroicon-o-information-circle',
                 'iconColor' => 'text-blue-500',
-                'bgColor' => 'bg-blue-50'
-            ]
+                'bgColor' => 'bg-blue-50',
+            ],
         ];
 
         return view('super-admin.security', compact('securityStats', 'alerts'));
     }
-
 
     public function settings()
     {
@@ -126,13 +134,13 @@ class SuperAdminController extends Controller
             'institution' => 'Au University',
             'backup_time' => '02:00',
             'session_timeout' => '30',
-            'system_email' => 'admin@labguard.edu'
+            'system_email' => 'admin@labguard.edu',
         ];
 
         return view('super-admin.settings', compact('settings'));
     }
 
-    //USER MANAGEMENT CONTROLLER CODE 
+    // USER MANAGEMENT CONTROLLER CODE
     public function userManagement()
     {
         // Super Admin sees EVERYONE
@@ -149,7 +157,7 @@ class SuperAdminController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', Rules\Password::defaults()],
-            'role' => ['required', 'in:student,personnel,admin,super-admin'], // Expanded roles
+            'role' => ['required', 'in:student,personnel,admin,super-admin'],
             'student_number' => ['required', 'string', 'unique:users', 'regex:/^01-[0-9]{4}-[0-9]{6}$/'],
             'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
         ]);
@@ -161,8 +169,10 @@ class SuperAdminController extends Controller
             'role' => $request->role,
             'student_number' => $request->student_number,
             'phone' => $request->phone,
-            'email_verified_at' => now(), // Auto-verify
+            'email_verified_at' => now(),
         ]);
+
+        $this->flashToast('success', 'User Created', "{$user->role} account created successfully.");
 
         return redirect()->back()->with('success', "{$user->role} account created successfully.");
     }
@@ -179,6 +189,8 @@ class SuperAdminController extends Controller
 
         $user->update($request->all());
 
+        $this->flashToast('success', 'Account Updated', 'Account updated successfully.');
+
         return redirect()->back()->with('status', 'Account updated.');
     }
 
@@ -186,22 +198,26 @@ class SuperAdminController extends Controller
     {
         // Prevent accidental self-deletion
         if ($user->id === auth()->id()) {
+            $this->flashToast('danger', 'Action Blocked', 'You cannot delete your own account.');
+
             return redirect()->back()->with('error', 'You cannot delete your own account.');
         }
 
         $user->delete();
+
+        $this->flashToast('success', 'User Removed', 'User removed from system.');
+
         return redirect()->back()->with('status', 'User removed from system.');
     }
 
-
-    //LAB AND SCHEDULE ROUTES 
+    // LAB AND SCHEDULE ROUTES
     public function labs()
     {
         $labs = Lab::withCount([
             'computers as total_pcs',
             'computers as active_pcs' => function ($query) {
                 $query->where('status', 'active');
-            }
+            },
         ])->get();
 
         return view('super-admin.labs', compact('labs'));
@@ -233,7 +249,7 @@ class SuperAdminController extends Controller
             'end_time' => 'required|after:start_time',
         ]);
 
-        // Check for Overlaps
+        // Check for overlaps
         $overlap = Schedule::where('lab_id', $lab->id)
             ->where('day', $validated['day'])
             ->where(function ($query) use ($validated) {
@@ -242,6 +258,8 @@ class SuperAdminController extends Controller
             })->exists();
 
         if ($overlap) {
+            $this->flashToast('danger', 'Schedule Conflict', 'This time slot is already taken.');
+
             return back()->withInput()->with('error', 'Schedule Conflict: This time slot is already taken.');
         }
 
@@ -254,6 +272,8 @@ class SuperAdminController extends Controller
             'end_time' => $validated['end_time'],
         ]);
 
+        $this->flashToast('success', 'Schedule Updated', 'Master schedule updated successfully.');
+
         return back()->with('success', 'Master Schedule updated successfully.');
     }
 
@@ -261,10 +281,13 @@ class SuperAdminController extends Controller
     public function destroySchedule(Schedule $schedule)
     {
         $schedule->delete();
+
+        $this->flashToast('success', 'Schedule Removed', 'Schedule entry removed from master control.');
+
         return back()->with('success', 'Schedule entry removed from Master Control.');
     }
 
-    //SESSION HISTORY FOR THE SUPER ADMIN DASHBOARD
+    // SESSION HISTORY FOR THE SUPER ADMIN DASHBOARD
     public function sessions(Request $request)
     {
         // 1. Same logic: Only finished sessions
@@ -293,7 +316,6 @@ class SuperAdminController extends Controller
         return view('super-admin.sessions', compact('sessions'));
     }
 
-
     // ==========================================
     // SUPERADMIN OVERVIEW FUNCTIONS (FIXED)
     // ==========================================
@@ -313,12 +335,10 @@ class SuperAdminController extends Controller
 
         // Query the data depending on selected report type
         if ($request->type === 'utilization') {
-            // MATCHED: 'lab' instead of 'laboratory', 'time_in' instead of 'created_at'
             $data = LabSession::with(['user', 'lab'])
                 ->where('time_in', '>=', $timeframe)
                 ->get();
         } else {
-            // MATCHED: 'lab' instead of 'laboratory'
             $data = Alert::with(['lab', 'computer'])
                 ->where('created_at', '>=', $timeframe)
                 ->get();
@@ -331,11 +351,11 @@ class SuperAdminController extends Controller
         $fileName = "labguard_{$request->type}_report_" . now()->format('Y-m-d') . ".csv";
 
         $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=$fileName",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=$fileName",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
         ];
 
         $callback = function () use ($data, $request) {
@@ -344,29 +364,28 @@ class SuperAdminController extends Controller
             if ($request->type === 'utilization') {
                 fputcsv($file, ['Session ID', 'Student', 'Laboratory Room', 'Logged In At', 'Logged Out At']);
                 foreach ($data as $row) {
-                    // MATCHED: utilizing 'lab' and your 'time_in' / 'time_out' schema columns
                     fputcsv($file, [
                         $row->id,
                         $row->user->name ?? $row->student_name ?? 'N/A',
                         $row->lab->room_name ?? 'N/A',
                         $row->time_in,
-                        $row->time_out ?? 'Active'
+                        $row->time_out ?? 'Active',
                     ]);
                 }
             } else {
                 fputcsv($file, ['Alert ID', 'Room', 'Station PC', 'Issue Category', 'Status', 'Logged At']);
                 foreach ($data as $row) {
-                    // MATCHED: utilizing 'lab' relation structure
                     fputcsv($file, [
                         $row->id,
                         $row->lab->room_name ?? 'N/A',
                         $row->computer->pc_number ?? 'N/A',
                         $row->issue_type ?? 'Technical',
                         $row->status,
-                        $row->created_at
+                        $row->created_at,
                     ]);
                 }
             }
+
             fclose($file);
         };
 
@@ -381,8 +400,8 @@ class SuperAdminController extends Controller
         $filename = "backup_" . env('DB_DATABASE') . "_" . now()->format('Y_m_dH_i_s') . ".sql";
 
         // Build path context for secure internal app directory
-        $storagePath = storage_path("app/backups/");
-        if (!file_exists($storagePath)) {
+        $storagePath = storage_path('app/backups/');
+        if (! file_exists($storagePath)) {
             mkdir($storagePath, 0755, true);
         }
 
@@ -390,7 +409,7 @@ class SuperAdminController extends Controller
 
         // Construct standard mysqldump command layout safely
         $command = sprintf(
-            "mysqldump --user=%s --password=%s --host=%s %s > %s 2>&1",
+            'mysqldump --user=%s --password=%s --host=%s %s > %s 2>&1',
             escapeshellarg(env('DB_USERNAME')),
             escapeshellarg(env('DB_PASSWORD')),
             escapeshellarg(env('DB_HOST', '127.0.0.1')),
@@ -404,10 +423,16 @@ class SuperAdminController extends Controller
 
         if ($returnVar === 0) {
             Log::info("Super Admin successfully initialized database snapshot dump file: {$filename}");
+
+            $this->flashToast('success', 'Backup Created', 'Database snapshot generated and archived successfully.');
+
             return redirect()->back()->with('status', 'Database architectural snapshot generated and archived to secure local path successfully.');
         }
 
-        Log::error("Database dump routine failed execution. Output details: " . implode("\n", $output));
+        Log::error('Database dump routine failed execution. Output details: ' . implode("\n", $output));
+
+        $this->flashToast('danger', 'Backup Failed', 'Database backup generation failed. Check server permissions.');
+
         return redirect()->back()->with('error', 'Database utility structural engine execution failed. Check server permissions.');
     }
 
@@ -417,28 +442,35 @@ class SuperAdminController extends Controller
     public function emergencyLockout()
     {
         DB::beginTransaction();
+
         try {
-            // MATCHED: Update 'time_out' instead of 'ended_at' where 'time_out' is null
+            // Update time_out where it is null
             LabSession::whereNull('time_out')->update([
-                'time_out' => now()
+                'time_out' => now(),
             ]);
 
             // Set all computers to maintenance status to block new student log-ins immediately
             DB::table('computers')->update([
-                'status' => 'maintenance'
+                'status' => 'maintenance',
             ]);
 
             DB::commit();
 
-            Log::emergency("CRITICAL CRITERIA: Super Admin invoked physical Emergency Lockout protocol. All campus terminal stations forced offline.");
+            Log::emergency('CRITICAL CRITERIA: Super Admin invoked physical Emergency Lockout protocol. All campus terminal stations forced offline.');
+
+            $this->flashToast('danger', 'Emergency Lockout', 'All user sessions disconnected and workstations locked.');
 
             return redirect()->back()->with('alert', 'EMERGENCY PROTOCOL ACTIVATED: All user sessions disconnected. Physical workstations locked.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Emergency Lockout chain sequence aborted unexpectedly: " . $e->getMessage());
+            Log::error('Emergency Lockout chain sequence aborted unexpectedly: ' . $e->getMessage());
+
+            $this->flashToast('danger', 'Lockout Failed', 'Failed to safely broadcast system lockdown command.');
+
             return redirect()->back()->with('error', 'Failed to safely broadcast system lockdown command network-wide.');
         }
     }
+
     public function logs(Request $request)
     {
         $query = Activity::with(['causer', 'subject'])->latest();
@@ -452,17 +484,16 @@ class SuperAdminController extends Controller
 
         // High-level counters for the hero stats bar
         $stats = [
-            'total'     => Activity::count(),
+            'total' => Activity::count(),
             'incidents' => Activity::where('log_name', 'incident_response')->count(),
-            'users'     => Activity::where('log_name', 'user_management')->count(),
-            'labs'      => Activity::where('log_name', 'lab_management')->count(),
+            'users' => Activity::where('log_name', 'user_management')->count(),
+            'labs' => Activity::where('log_name', 'lab_management')->count(),
         ];
 
         return view('super-admin.logs', compact('logs', 'stats'));
     }
 
-
-    //ANALYTICS CONTROLLER
+    // ANALYTICS CONTROLLER
     public function analytics(Request $request)
     {
         // Determine the active date boundary based on the selected range parameter
@@ -474,14 +505,17 @@ class SuperAdminController extends Controller
                 $startDate = Carbon::today();
                 $rangeLabel = 'Today';
                 break;
+
             case 'week':
                 $startDate = Carbon::now()->subDays(7);
                 $rangeLabel = 'Past 7 Days';
                 break;
+
             case 'month':
                 $startDate = Carbon::now()->startOfMonth();
                 $rangeLabel = 'This Month';
                 break;
+
             default:
                 $startDate = null;
                 $rangeLabel = 'All Time';
@@ -525,7 +559,6 @@ class SuperAdminController extends Controller
             ->join('labs', 'lab_sessions.lab_id', '=', 'labs.id');
 
         if ($startDate) {
-            // Safe check assuming lab_sessions has a standard timestamp column
             $labRecordsQuery->where('lab_sessions.created_at', '>=', $startDate);
         }
 
@@ -554,7 +587,6 @@ class SuperAdminController extends Controller
         if ($startDate) {
             $topIssuesQuery->where('created_at', '>=', $startDate);
         } else {
-            // Fall back to current month if 'All Time' is selected to keep the card descriptive
             $topIssuesQuery->where('created_at', '>=', now()->startOfMonth());
         }
 
@@ -591,7 +623,7 @@ class SuperAdminController extends Controller
                 'alerts.remarks',
                 'alerts.status',
                 'alerts.reported_by',
-                'alerts.created_at'
+                'alerts.created_at',
             ]);
 
         if ($startDate) {
@@ -601,11 +633,11 @@ class SuperAdminController extends Controller
         $alerts = $alertsQuery->orderBy('alerts.created_at', 'desc')->get();
 
         $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=$fileName",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
+            'Content-type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=$fileName",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
         ];
 
         $callback = function () use ($alerts) {
@@ -633,13 +665,16 @@ class SuperAdminController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    //REVERSE THE LOCKOUT
+    // REVERSE THE LOCKOUT
     public function releaseLockout(Request $request)
     {
         // Restore all maintenance workstations back to available
         DB::table('computers')->update([
-            'status' => 'available'
+            'status' => 'available',
         ]);
+
+        $this->flashToast('success', 'Lockout Released', 'Global system lockdown released. All stations restored to available state.');
+
         return redirect()->back()->with('status', 'Global system lockdown released. All stations restored to available state.');
     }
 }

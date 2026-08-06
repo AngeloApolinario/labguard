@@ -1,19 +1,29 @@
 <?php
 
+
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Computer;
-use App\Models\LabSession;
 use App\Models\Lab;
+use App\Models\LabSession;
 use App\Models\Schedule;
 use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use Carbon\Carbon;
 
 class PersonnelController extends Controller
 {
+    private function flashToast(string $type, string $title, string $message): void
+    {
+        session()->flash('toast', [
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+        ]);
+    }
+
     /**
      * Staff Dashboard: Overview of all Labs
      */
@@ -23,7 +33,7 @@ class PersonnelController extends Controller
             'computers as total',
             'computers as occupied' => function ($query) {
                 $query->where('status', 'active');
-            }
+            },
         ])->get();
 
         return view('personnel.index', compact('labs'));
@@ -37,29 +47,22 @@ class PersonnelController extends Controller
         $currentTime = now()->format('H:i:s');
         $currentDay = now()->format('l');
 
-        // Find if there is a schedule RIGHT NOW
         $currentSchedule = $lab->schedules()
             ->where('day', $currentDay)
             ->where('start_time', '<=', $currentTime)
             ->where('end_time', '>=', $currentTime)
             ->first();
 
-        /**
-         * ACCESS CONTROL LOGIC:
-         * 1. If user is Admin, allow access.
-         * 2. If there is NO schedule, allow Personnel/Teachers to access (General use).
-         * 3. If there IS a schedule, ONLY the scheduled teacher can enter.
-         */
         if ($currentSchedule) {
             if (auth()->id() !== $currentSchedule->user_id && auth()->user()->role !== 'admin') {
+                $this->flashToast('danger', 'Access Denied', "This lab is currently reserved for {$currentSchedule->user->name}.");
+
                 return redirect()->route('personnel.index')
                     ->with('error', "Access Denied: This lab is currently reserved for {$currentSchedule->user->name}.");
             }
         }
 
         $computers = $lab->computers()->with(['activeSession'])->orderBy('pc_number')->get();
-
-        // Fetch today's schedules for the sidebar
         $schedules = $lab->schedules()->with('user')->where('day', $currentDay)->orderBy('start_time')->get();
 
         return view('personnel.lab-view', compact('lab', 'computers', 'schedules', 'currentSchedule'));
@@ -75,18 +78,18 @@ class PersonnelController extends Controller
             'student_number' => 'required|string|max:50',
         ]);
 
-        // Create the LabSession record
         LabSession::create([
             'computer_id' => $computer->id,
             'student_name' => $request->student_name,
             'student_id_number' => $request->student_number,
             'time_in' => now(),
             'teacher_id' => auth()->id(),
-            'lab_id' => $computer->lab_id, // Explicitly linking the lab footprint context here
+            'lab_id' => $computer->lab_id,
         ]);
 
-        // Mark PC as occupied
         $computer->update(['status' => 'active']);
+
+        $this->flashToast('success', 'PC Assigned', "{$computer->pc_number} is now assigned to {$request->student_name}.");
 
         return back()->with('success', "{$computer->pc_number} is now assigned to {$request->student_name}.");
     }
@@ -103,22 +106,36 @@ class PersonnelController extends Controller
 
         if ($session) {
             $session->update([
-                'time_out' => now()
+                'time_out' => now(),
             ]);
 
             $computer->update(['status' => 'available']);
 
+            $this->flashToast('success', 'PC Released', "PC {$computer->pc_number} released successfully.");
+
             return response()->json([
                 'status' => 'success',
-                'message' => "PC {$computer->pc_number} released successfully."
+                'message' => "PC {$computer->pc_number} released successfully.",
+                'toast' => [
+                    'type' => 'success',
+                    'title' => 'PC Released',
+                    'message' => "PC {$computer->pc_number} released successfully.",
+                ],
             ]);
         }
 
         $computer->update(['status' => 'available']);
 
+        $this->flashToast('warning', 'No Active Session', 'PC status reset, but no active session record was found.');
+
         return response()->json([
             'status' => 'warning',
-            'message' => "PC status reset, but no active session record was found."
+            'message' => 'PC status reset, but no active session record was found.',
+            'toast' => [
+                'type' => 'warning',
+                'title' => 'No Active Session',
+                'message' => 'PC status reset, but no active session record was found.',
+            ],
         ]);
     }
 
@@ -131,7 +148,7 @@ class PersonnelController extends Controller
             'computers as total',
             'computers as occupied' => function ($query) {
                 $query->where('status', 'active');
-            }
+            },
         ])->get();
 
         return view('personnel.labs-overview', compact('labs'));
@@ -173,13 +190,10 @@ class PersonnelController extends Controller
     public function alertHistory()
     {
         $alerts = \App\Models\Alert::with(['computer.lab'])->latest()->paginate(15);
+
         return view('personnel.alerts', compact('alerts'));
     }
 
-    /**
-     * EXPORTING THE ATTENDANCE REPORT AS CSV
-     * Fixed table schema logic mapping to look at 'teacher_id' column
-     */
     /**
      * EXPORTING THE ATTENDANCE REPORT AS CSV
      * Reads a custom date if passed by the Master Schedule grid view layout
@@ -192,7 +206,6 @@ class PersonnelController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        // FIXED: Fallback to today only if the request doesn't pass a specialized contextual date parameter
         $targetDate = $request->query('date', now()->toDateString());
 
         $sessions = LabSession::where('lab_id', $schedule->lab_id)
@@ -203,6 +216,8 @@ class PersonnelController extends Controller
             ->get();
 
         if ($sessions->isEmpty()) {
+            $this->flashToast('danger', 'No Attendance Found', 'No attendance records found for this session date.');
+
             return back()->with('error', 'No attendance records found for this session date.');
         }
 
@@ -235,9 +250,10 @@ class PersonnelController extends Controller
                     $s->student_id_number,
                     $timeIn->format('h:i A'),
                     $timeOutFormat,
-                    $duration
+                    $duration,
                 ]);
             }
+
             fclose($file);
         }, $fileName);
     }

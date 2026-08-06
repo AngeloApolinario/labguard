@@ -22,7 +22,7 @@ class CreateNewUser implements CreatesNewUsers
                 'string',
                 'email',
                 'max:255',
-                Rule::unique('users')->whereNull('deleted_at')
+                Rule::unique('users')->whereNull('deleted_at'),
             ],
             'password' => $this->passwordRules(),
             'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'], // PH Format
@@ -30,7 +30,7 @@ class CreateNewUser implements CreatesNewUsers
                 'required',
                 'string',
                 Rule::unique('users')->whereNull('deleted_at'),
-                'regex:/^01-[0-9]{4}-[0-9]{6}$/' // Araullo Format: 01-XXXX-XXXXXX
+                'regex:/^01-[0-9]{4}-[0-9]{6}$/', // AU Format: 01-XXXX-XXXXXX
             ],
             'terms' => Jetstream::hasTermsAndPrivacyPolicyFeature() ? ['accepted', 'required'] : '',
         ], [

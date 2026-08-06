@@ -1,0 +1,37 @@
+@if (session('toast'))
+@php
+$toast = session('toast');
+// Supports array format: ['type' => 'danger', 'title' => 'Title', 'message' => 'Details']
+$type = is_array($toast) ? ($toast['type'] ?? 'success') : 'success';
+$title = is_array($toast) ? ($toast['title'] ?? 'System Notice') : 'Success';
+$message = is_array($toast) ? ($toast['message'] ?? '') : $toast;
+
+$styles = [
+'success' => ['border' => 'border-emerald-500', 'bg_icon' => 'bg-emerald-500/20 text-emerald-400', 'title' => 'text-emerald-400'],
+'danger' => ['border' => 'border-rose-500', 'bg_icon' => 'bg-rose-500/20 text-rose-400', 'title' => 'text-rose-400'],
+'warning' => ['border' => 'border-[#D4AF37]', 'bg_icon' => 'bg-[#D4AF37]/20 text-[#D4AF37]', 'title' => 'text-[#D4AF37]'],
+][$type] ?? ['border' => 'border-blue-500', 'bg_icon' => 'bg-blue-500/20 text-blue-400', 'title' => 'text-blue-400'];
+@endphp
+
+<div id="app-toast" class="fixed top-6 right-6 z-50 max-w-md bg-slate-900 border {{ $styles['border'] }} text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 transition-all duration-500 ease-out translate-y-0 opacity-100">
+    <div class="size-8 rounded-xl {{ $styles['bg_icon'] }} border border-current/30 flex items-center justify-center shrink-0 mt-0.5">
+        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+    </div>
+    <div>
+        <h4 class="text-xs font-black uppercase tracking-widest {{ $styles['title'] }}">{{ $title }}</h4>
+        <p class="text-xs font-semibold text-slate-300 mt-0.5 leading-relaxed">{{ $message }}</p>
+    </div>
+</div>
+
+<script>
+    setTimeout(() => {
+        const toast = document.getElementById('app-toast');
+        if (toast) {
+            toast.classList.add('opacity-0', '-translate-y-4');
+            setTimeout(() => toast.remove(), 500);
+        }
+    }, 5000);
+</script>
+@endif

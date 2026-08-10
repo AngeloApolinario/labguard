@@ -14,10 +14,10 @@ import re
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- CONFIGURATION ---
-API_URL = "https://labguard.test/api/pc"
+API_URL = "https://labguard.it.com/api/pc"
 LAB_ID = "1"        # Lab ID, Code, or Name matching your database records
 PC_NUMBER = "PC-01" 
-HEADERS = {"Host": "labguard.test", "Accept": "application/json"}
+HEADERS = {"Host": "labguard.it.com", "Accept": "application/json"}
 # ---------------------
 
 def send_logout_signal():

@@ -10,7 +10,7 @@ class RestrictStudents
 {
     public function handle(Request $request, Closure $next): Response
     {
-        // 1. FAST EXIT: Guest users
+        // 1. FAST EXIT: Unauthenticated users
         if (!auth()->check()) {
             return $next($request);
         }
@@ -22,13 +22,13 @@ class RestrictStudents
             return $next($request);
         }
 
-        // 3. FAST EXIT: Allow Livewire, AJAX/JSON, Logout, and Verification actions
+        // 3. FAST EXIT: Livewire, AJAX/JSON, Logout, and Verification routes
         if (
             $request->expectsJson() ||
             $request->is('livewire/*') ||
             $request->routeIs('livewire.*', 'logout', 'verification.*', 'registration.verified')
         ) {
-            // Only update session if on the notice page and not previously set
+            // Write to session only when visiting the notice route for the first time
             if ($request->routeIs('verification.notice') && !session('has_seen_verification_notice')) {
                 session(['has_seen_verification_notice' => true]);
             }
@@ -49,7 +49,7 @@ class RestrictStudents
             return redirect()->route('verification.notice');
         }
 
-        // 5. VERIFIED STUDENTS: Restrict access to restricted administrative prefixes
+        // 5. VERIFIED STUDENTS: Prevent access to admin & terminal endpoints
         if ($request->is('terminal*', 'dashboard*', 'super-admin*')) {
             return redirect()->route('profile.show');
         }

@@ -16,34 +16,35 @@ class RestrictStudents
         }
 
         $user = auth()->user();
+        $userRole = trim(strtolower((string) ($user->role ?? '')));
 
-        // 2. Admins & non-student roles pass through
-        if (strcasecmp($user->role, 'student') !== 0) {
+        // 2. Non-student roles (Admins, Teachers, Staff) pass through
+        if ($userRole !== 'student') {
             return $next($request);
         }
 
-        // 3. Prevent access to super-admin & terminal management routes
+        // 3. Prevent students from accessing admin/terminal management routes
         if ($request->is('terminal*', 'super-admin*')) {
-            return redirect()->route('profile.show');
+            return redirect()->to('/dashboard');
         }
 
-        // 4. UNVERIFIED STUDENTS: Show notice first
-        if (!$user->hasVerifiedEmail()) {
+        // 4. UNVERIFIED STUDENTS: Show verification notice first for /dashboard and general routes
+        if (is_null($user->email_verified_at)) {
 
-            // Allow these routes to load without looping
+            // Allow verification notice, user profile (user.show/profile.show), logout, and Livewire
             if (
-                $request->routeIs('verification.notice', 'verification.*', 'profile.show', 'logout') ||
-                $request->is('livewire/*') ||
+                $request->routeIs('verification.notice', 'verification.verify', 'verification.send', 'user.show', 'profile.show', 'logout') ||
+                $request->is('email/verify*', 'user/*', 'profile/*', 'livewire/*') ||
                 $request->expectsJson()
             ) {
                 return $next($request);
             }
 
-            // Redirect any other route (like /dashboard) to the notice page
+            // Redirect unverified students attempting to visit /dashboard or other pages to verification notice first
             return redirect()->route('verification.notice');
         }
 
-        // 5. VERIFIED STUDENTS: Free access to normal routes
+        // 5. VERIFIED STUDENTS: Allow full access
         return $next($request);
     }
 }

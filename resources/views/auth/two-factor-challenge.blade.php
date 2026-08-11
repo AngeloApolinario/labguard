@@ -1,107 +1,119 @@
 <x-guest-layout>
-    <div class="min-h-screen bg-slate-900 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
-        {{-- Background Glow Accent Effects --}}
-        <div class="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
-        <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 relative overflow-hidden font-sans">
 
-        <x-authentication-card class="w-full max-w-md bg-slate-800/80 backdrop-blur-xl border border-slate-700/60 shadow-2xl rounded-3xl p-8 relative z-10">
-            <x-slot name="logo">
-                <div class="flex flex-col items-center justify-center space-y-3 mb-2">
-                    <div class="size-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30 border border-white/20">
-                        <x-heroicon-o-shield-check class="size-8 text-white" />
-                    </div>
-                    <div class="text-center">
-                        <h2 class="text-2xl font-black tracking-tight text-white">LabGuard <span class="text-blue-500">2FA</span></h2>
-                        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 mt-0.5">Security Verification</p>
-                    </div>
+        {{-- Background Gold & Indigo Glow Accents --}}
+        <div class="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
+            <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#D4AF37] rounded-full blur-[120px]"></div>
+            <div class="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-indigo-600 rounded-full blur-[100px]"></div>
+        </div>
+
+        <div class="relative w-full max-w-[450px]">
+            {{-- Header & Branding --}}
+            <div class="text-center mb-10">
+                <div class="inline-block p-3 rounded-2xl bg-white/5 border border-white/10 mb-4 shadow-2xl">
+                    <x-authentication-card-logo class="w-16 h-16 shadow-[0_0_20px_rgba(212,175,55,0.4)]" />
                 </div>
-            </x-slot>
+                <h1 class="text-3xl font-black text-white tracking-tighter uppercase">
+                    Lab<span class="text-[#D4AF37]">Guard</span>
+                </h1>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-[0.4em] mt-2">Security Verification</p>
+            </div>
 
-            <div x-data="{ recovery: false }" class="mt-4">
-                {{-- Helper Text --}}
-                <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-700/50 mb-6">
+            {{-- Main Glassmorphic Form Card --}}
+            <div class="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] p-8 overflow-hidden relative" x-data="{ recovery: false }">
+
+                {{-- Top Gold Gradient Border Line --}}
+                <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent"></div>
+
+                {{-- Helper Text Callout Box --}}
+                <div class="p-4 rounded-2xl bg-black/40 border border-white/10 mb-6 shadow-inner">
                     <div class="flex items-start space-x-3">
-                        <x-heroicon-o-key class="size-5 text-blue-400 shrink-0 mt-0.5" />
+                        <svg class="size-5 text-[#D4AF37] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
                         <div>
                             <p class="text-xs font-medium text-slate-300 leading-relaxed" x-show="! recovery">
-                                {{ __('Confirm system access by entering the code from your authenticator app.') }}
+                                {{ __('Please confirm access to your account by entering the authentication code provided by your authenticator application.') }}
                             </p>
                             <p class="text-xs font-medium text-slate-300 leading-relaxed" x-cloak x-show="recovery">
-                                {{ __('Confirm system access by entering one of your emergency recovery codes.') }}
+                                {{ __('Please confirm access to your account by entering one of your emergency recovery codes.') }}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <x-validation-errors class="mb-4" />
+                <x-validation-errors class="mb-4 text-rose-400 text-xs font-bold uppercase tracking-wide" />
 
-                <form method="POST" action="{{ route('two-factor.login') }}" class="space-y-5">
+                <form method="POST" action="{{ route('two-factor.login') }}" class="space-y-6">
                     @csrf
 
                     {{-- Authenticator Code Input --}}
-                    <div x-show="! recovery" class="space-y-2">
-                        <x-label for="code" value="{{ __('Authentication Code') }}" class="text-xs font-bold uppercase tracking-wider text-slate-300" />
-                        <div class="relative">
-                            <x-input id="code"
-                                class="block w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white font-mono text-center tracking-[0.5em] text-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-600"
-                                type="text"
-                                inputmode="numeric"
-                                name="code"
-                                autofocus
-                                x-ref="code"
-                                autocomplete="one-time-code"
-                                placeholder="••••••" />
-                        </div>
+                    <div class="space-y-2" x-show="! recovery">
+                        <label for="code" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">{{ __('Authentication Code') }}</label>
+                        <input id="code"
+                            class="block w-full bg-black/40 border-white/10 rounded-xl text-white font-mono text-center tracking-[0.5em] text-xl py-4 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600 shadow-inner"
+                            type="text"
+                            inputmode="numeric"
+                            name="code"
+                            autofocus
+                            x-ref="code"
+                            autocomplete="one-time-code"
+                            placeholder="••••••" />
                     </div>
 
-                    {{-- Recovery Code Input --}}
-                    <div x-cloak x-show="recovery" class="space-y-2">
-                        <x-label for="recovery_code" value="{{ __('Emergency Recovery Code') }}" class="text-xs font-bold uppercase tracking-wider text-slate-300" />
-                        <div class="relative">
-                            <x-input id="recovery_code"
-                                class="block w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white font-mono text-center tracking-widest text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition placeholder-slate-600"
-                                type="text"
-                                name="recovery_code"
-                                x-ref="recovery_code"
-                                autocomplete="one-time-code"
-                                placeholder="xxxx-xxxx-xxxx" />
-                        </div>
+                    {{-- Emergency Recovery Code Input --}}
+                    <div class="space-y-2" x-cloak x-show="recovery">
+                        <label for="recovery_code" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">{{ __('Recovery Code') }}</label>
+                        <input id="recovery_code"
+                            class="block w-full bg-black/40 border-white/10 rounded-xl text-white font-mono text-center tracking-widest text-sm py-4 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600 shadow-inner"
+                            type="text"
+                            name="recovery_code"
+                            x-ref="recovery_code"
+                            autocomplete="one-time-code"
+                            placeholder="xxxx-xxxx-xxxx" />
                     </div>
 
-                    {{-- Action Controls --}}
-                    <div class="pt-2 space-y-4">
-                        <button type="submit" class="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/30 hover:shadow-blue-500/50 transition-all duration-200 active:scale-[0.98] flex items-center justify-center space-x-2">
-                            <span>{{ __('Authorize & Log In') }}</span>
-                            <x-heroicon-o-arrow-right class="size-4" />
-                        </button>
-
-                        <div class="text-center">
-                            <button type="button"
-                                class="text-xs font-semibold text-slate-400 hover:text-blue-400 transition cursor-pointer inline-flex items-center space-x-1"
-                                x-show="! recovery"
-                                x-on:click="
-                                    recovery = true;
-                                    $nextTick(() => { $refs.recovery_code.focus() })
-                                ">
-                                <x-heroicon-o-arrow-path class="size-3.5 mr-1" />
-                                <span>{{ __('Use an emergency recovery code instead') }}</span>
-                            </button>
-
-                            <button type="button"
-                                class="text-xs font-semibold text-slate-400 hover:text-blue-400 transition cursor-pointer inline-flex items-center space-x-1"
-                                x-cloak
-                                x-show="recovery"
-                                x-on:click="
-                                    recovery = false;
-                                    $nextTick(() => { $refs.code.focus() })
-                                ">
-                                <x-heroicon-o-device-phone-mobile class="size-3.5 mr-1" />
-                                <span>{{ __('Use an authenticator app code instead') }}</span>
-                            </button>
-                        </div>
-                    </div>
+                    {{-- Primary Authorize Button --}}
+                    <button class="relative w-full group overflow-hidden rounded-xl bg-[#D4AF37] p-4 transition-all hover:bg-[#e6c152] active:scale-95 shadow-[0_10px_20px_-5px_rgba(212,175,55,0.4)]">
+                        <span class="relative z-10 text-xs font-black text-[#0f172a] uppercase tracking-[0.3em]">{{ __('Authorize & Log In') }}</span>
+                    </button>
                 </form>
+
+                {{-- Alternative Option Toggle Button --}}
+                <div class="mt-8 pt-6 border-t border-white/10 text-center">
+                    <button type="button"
+                        class="inline-flex items-center justify-center w-full p-3 rounded-xl border border-[#D4AF37]/30 text-[#D4AF37] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#D4AF37]/10 transition-all group"
+                        x-show="! recovery"
+                        x-on:click="
+                            recovery = true;
+                            $nextTick(() => { $refs.recovery_code.focus() })
+                        ">
+                        <span>{{ __('Use Emergency Recovery Code') }}</span>
+                        <svg class="ms-2 size-3 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </button>
+
+                    <button type="button"
+                        class="inline-flex items-center justify-center w-full p-3 rounded-xl border border-[#D4AF37]/30 text-[#D4AF37] text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#D4AF37]/10 transition-all group"
+                        x-cloak
+                        x-show="recovery"
+                        x-on:click="
+                            recovery = false;
+                            $nextTick(() => { $refs.code.focus() })
+                        ">
+                        <span>{{ __('Use Authenticator Code') }}</span>
+                        <svg class="ms-2 size-3 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </button>
+                </div>
             </div>
-        </x-authentication-card>
+
+            {{-- Footer Branding --}}
+            <p class="mt-8 text-center text-[9px] text-slate-600 uppercase tracking-[0.5em] font-medium">
+                Araullo University &bull; Computer Laboratory Management System
+            </p>
+        </div>
     </div>
 </x-guest-layout>

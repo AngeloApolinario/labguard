@@ -44,11 +44,44 @@
                     $labName = is_array($lab) ? ($lab['name'] ?? $lab['room_name'] ?? "Laboratory #{$key}") : ($lab->name ?? $lab->room_name ?? "Laboratory #{$key}");
                     $percent = is_array($lab) ? ($lab['percent'] ?? 0) : ($lab->percent ?? 0);
 
+                    // Extract associated PCs collection or count
+                    $pcs = is_array($lab)
+                    ? ($lab['pcs'] ?? $lab['computers'] ?? $lab['stations'] ?? [])
+                    : ($lab->pcs ?? $lab->computers ?? $lab->stations ?? collect());
+
+                    $pcsCollection = collect($pcs);
+
+                    $totalPcs = is_array($lab) ? ($lab['total_pcs'] ?? null) : ($lab->total_pcs ?? null);
+                    $maintPcs = is_array($lab) ? ($lab['maintenance_pcs'] ?? null) : ($lab->maintenance_pcs ?? null);
+
+                    // Check if ALL PCs in this lab are under maintenance
+                    if ($totalPcs !== null && $maintPcs !== null) {
+                    $isMaintenance = ($totalPcs > 0) && ($totalPcs == $maintPcs);
+                    } else {
+                    $isMaintenance = $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
+                    $pcStatus = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
+                    return in_array(strtolower($pcStatus), ['maintenance', 'lockdown', 'disabled', 'offline']);
+                    });
+                    }
+
+                    // Determine status color
                     $color = 'bg-blue-600';
-                    if($percent >= 85) { $color = 'bg-rose-500'; }
+                    if($isMaintenance) { $color = 'bg-amber-500'; }
+                    elseif($percent >= 85) { $color = 'bg-rose-500'; }
                     elseif($percent >= 50) { $color = 'bg-indigo-500'; }
                     @endphp
-                    <x-health-progress :label="$labName" :percent="$percent" :color="$color" />
+
+                    <div class="relative">
+                        @if($isMaintenance)
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200/80">
+                                <span class="size-1.5 bg-amber-500 rounded-full mr-1.5 animate-pulse"></span>
+                                All PCs Under Maintenance
+                            </span>
+                        </div>
+                        @endif
+                        <x-health-progress :label="$labName" :percent="$percent" :color="$color" />
+                    </div>
                     @empty
                     <div class="text-center py-6 text-sm text-slate-400">
                         No laboratory rooms have been registered in the database yet.
@@ -98,6 +131,42 @@
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Emergency Override</span>
                         <span class="size-2 rounded-full bg-slate-300"></span>
                     </div>
+
+                    @php
+                    // Determine if ANY lab currently has all of its PCs under maintenance
+                    $hasActiveMaintenance = collect($labUtilization)->contains(function($lab) {
+                    $pcs = is_array($lab)
+                    ? ($lab['pcs'] ?? $lab['computers'] ?? $lab['stations'] ?? [])
+                    : ($lab->pcs ?? $lab->computers ?? $lab->stations ?? collect());
+
+                    $pcsCollection = collect($pcs);
+
+                    $totalPcs = is_array($lab) ? ($lab['total_pcs'] ?? null) : ($lab->total_pcs ?? null);
+                    $maintPcs = is_array($lab) ? ($lab['maintenance_pcs'] ?? null) : ($lab->maintenance_pcs ?? null);
+
+                    if ($totalPcs !== null && $maintPcs !== null) {
+                    return ($totalPcs > 0) && ($totalPcs == $maintPcs);
+                    }
+
+                    return $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
+                    $status = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
+                    return in_array(strtolower($status), ['maintenance', 'lockdown', 'disabled', 'offline']);
+                    });
+                    });
+                    @endphp
+
+                    @if($hasActiveMaintenance)
+                    <div class="mb-3 p-3 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <x-heroicon-o-exclamation-triangle class="size-4 text-amber-600" />
+                            <span class="text-xs font-bold text-amber-900">Lab Maintenance Active</span>
+                        </div>
+                        <button @click="restoreModal = true" type="button" class="text-[10px] font-extrabold uppercase bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-lg transition">
+                            Restore
+                        </button>
+                    </div>
+                    @endif
+
                     <div class="grid grid-cols-2 gap-2.5">
                         <button @click="lockoutModal = true" type="button" class="group relative overflow-hidden p-3.5 bg-rose-50 hover:bg-rose-100/80 border border-rose-200/70 text-rose-700 rounded-2xl transition-all duration-200 text-left flex flex-col justify-between">
                             <div class="p-2 bg-rose-500 text-white rounded-xl w-max mb-3 shadow-sm group-hover:scale-105 transition-transform">
@@ -304,7 +373,7 @@
                                 <span class="size-1.5 rounded-full bg-emerald-500 mr-2"></span> System Restoration:
                             </div>
                             <p class="text-emerald-700 leading-relaxed">
-                                Releases stations in the selected lab currently marked as <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">maintenance</code> back to <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">available</code> status.
+                                Releases PC stations in the selected lab marked as <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">maintenance</code> back to <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">available</code> status.
                             </p>
                         </div>
 

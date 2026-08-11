@@ -139,7 +139,7 @@ class LabController extends Controller
 
                 $lab->computers()->create([
                     'pc_number' => 'PC-' . str_pad($nextPcNumber, 2, '0', STR_PAD_LEFT),
-                    'status' => 'active',
+                    'status' => 'available',
                 ]);
             }
         } elseif ($targetCount < $currentCount) {

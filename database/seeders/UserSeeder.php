@@ -23,7 +23,7 @@ class UserSeeder extends Seeder
             'email' => 'superadmin@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'super-admin',
-            'student_number' => 'SA-01',
+            'student_number' => '01-2324-047090',
             'phone' => '09000000001',
             'email_verified_at' => $now,
         ]);
@@ -34,7 +34,7 @@ class UserSeeder extends Seeder
             'email' => 'admin@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'admin',
-            'student_number' => 'AD-01',
+            'student_number' => '01-2324-047091',
             'phone' => '09000000002',
             'email_verified_at' => $now,
         ]);
@@ -45,7 +45,7 @@ class UserSeeder extends Seeder
             'email' => 'teacher@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'personnel',
-            'student_number' => 'PR-01',
+            'student_number' => '01-2324-047092',
             'phone' => '09000000003',
             'email_verified_at' => $now,
         ]);
@@ -56,7 +56,7 @@ class UserSeeder extends Seeder
             'email' => 'msantos@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'personnel',
-            'student_number' => 'PR-02',
+            'student_number' => '01-2324-047093',
             'phone' => '09000000004',
             'email_verified_at' => $now,
         ]);
@@ -67,7 +67,7 @@ class UserSeeder extends Seeder
             'email' => 'rdalisay@labguard.com',
             'password' => Hash::make('password'),
             'role' => 'personnel',
-            'student_number' => 'PR-03',
+            'student_number' => '01-2324-047094',
             'phone' => '09000000005',
             'email_verified_at' => $now,
         ]);
@@ -78,7 +78,7 @@ class UserSeeder extends Seeder
             'email' => 'juan.student@phinmaed.com',
             'password' => Hash::make('password'),
             'role' => 'student',
-            'student_number' => '01-2324-048389',
+            'student_number' => '01-2324-047095',
             'phone' => '09123456789',
             'email_verified_at' => $now,
         ]);

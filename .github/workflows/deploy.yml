@@ -52,6 +52,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/html/labguard
+            chmod -R 777 storage bootstrap/cache
             php artisan migrate --force
             php artisan config:cache
             php artisan route:cache

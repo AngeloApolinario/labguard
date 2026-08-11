@@ -67,6 +67,7 @@ class SuperAdminController extends Controller
             ->latest()
             ->take(5)
             ->get();
+        $labUtilization = Lab::with('computers')->get();
 
         return view('super-admin.index', [
             'totalUsers' => $totalUsers,

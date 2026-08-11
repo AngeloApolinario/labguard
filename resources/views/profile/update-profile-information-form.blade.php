@@ -83,8 +83,21 @@
         </div>
 
 
+        <!-- Dynamic Identification Number (Student / Teacher / Admin ID) -->
         <div class="col-span-6 sm:col-span-4">
-            <x-label for="student_number" value="{{ __('Student ID') }}" />
+            @php
+            // Determine the label based on the user's role
+            $role = strtolower($this->user->role ?? $this->user->usertype ?? '');
+
+            $idLabel = match ($role) {
+            'student' => __('Student ID'),
+            'teacher', 'faculty', 'instructor' => __('Teacher ID'),
+            'admin', 'super_admin' => __('ID Number'),
+            default => __('ID Number'),
+            };
+            @endphp
+
+            <x-label for="student_number" value="{{ $idLabel }}" />
             <x-input id="student_number" type="text" class="mt-1 block w-full" wire:model="state.student_number" required />
             <x-input-error for="student_number" class="mt-2" />
         </div>

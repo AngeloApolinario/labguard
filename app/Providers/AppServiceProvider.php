@@ -30,7 +30,7 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(Registered::class, function ($event) {
             // This sends the standard Laravel verification email with the button
-            $event->user->sendEmailVerificationNotification();
+            // $event->user->sendEmailVerificationNotification();
         });
     }
 }

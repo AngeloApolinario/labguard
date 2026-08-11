@@ -11,7 +11,7 @@ use App\Http\Controllers\SuperAdminController;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
-
+use Illuminate\Support\Facades\File;
 /*
 |--------------------------------------------------------------------------
 | 1. PUBLIC & AUTHENTICATION ROUTES
@@ -220,3 +220,24 @@ Route::middleware([
     Route::post('/system/lockout', [SuperAdminController::class, 'emergencyLockout'])->name('system.lockout');
     Route::post('/system/release-lockout', [SuperAdminController::class, 'releaseLockout'])->name('system.release-lockout');
 });
+
+
+/*
+|--------------------------------------------------------------------------
+| 7. INSTALLER DOWNLOAD ROUTES
+|--------------------------------------------------------------------------
+| 
+*/
+
+
+Route::get('/download/client-setup', function () {
+    $filePath = base_path('LabGuard_Installer/Output/LabGuard_Client_Setup.exe');
+
+    if (!file_exists($filePath)) {
+        return back()->with('error', 'LabGuard Client Setup file not found on server.');
+    }
+
+    return response()->download($filePath, 'LabGuard_Client_Setup.exe', [
+        'Content-Type' => 'application/octet-stream',
+    ]);
+})->middleware(['auth'])->name('downloads.setup');

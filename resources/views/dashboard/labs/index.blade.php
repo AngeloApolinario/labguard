@@ -8,13 +8,23 @@
                 <p class="text-xs font-bold text-slate-400 uppercase tracking-[0.3em] mt-1">Database-Synced Lab</p>
             </div>
 
-            {{-- TRIGGER: Native JavaScript --}}
-            <button onclick="openLabModal()" type="button" class="flex items-center space-x-2 bg-slate-800 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] transition-all shadow-xl shadow-slate-200 active:scale-95">
-                <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4" />
-                </svg>
-                <span>New Lab</span>
-            </button>
+            <div class="flex items-center gap-3">
+                {{-- DOWNLOAD CLIENT SETUP BUTTON --}}
+                <a href="{{ route('downloads.setup') }}" class="flex items-center space-x-2 bg-slate-100 text-slate-700 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] hover:text-white transition-all shadow-md active:scale-95">
+                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span>Download Setup</span>
+                </a>
+
+                {{-- TRIGGER: Native JavaScript --}}
+                <button onclick="openLabModal()" type="button" class="flex items-center space-x-2 bg-slate-800 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] transition-all shadow-xl shadow-slate-200 active:scale-95">
+                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>New Lab</span>
+                </button>
+            </div>
         </div>
     </x-slot>
 
@@ -28,7 +38,22 @@
                     <div class="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
                     <p class="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{{ session('success') }}</p>
                 </div>
-                <button onclick="document.getElementById('flash-message').remove()" class="text-emerald-400">
+                <button onclick="document.getElementById('flash-message').remove()" class="text-emerald-400 hover:text-emerald-600">
+                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M6 18L18 6M6 6l12 12" stroke-width="2" />
+                    </svg>
+                </button>
+            </div>
+            @endif
+
+            {{-- Flash Error Message --}}
+            @if(session('error'))
+            <div id="flash-error" class="mb-8 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="size-2 bg-rose-500 rounded-full animate-pulse"></div>
+                    <p class="text-[10px] font-black text-rose-700 uppercase tracking-widest">{{ session('error') }}</p>
+                </div>
+                <button onclick="document.getElementById('flash-error').remove()" class="text-rose-400 hover:text-rose-600">
                     <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path d="M6 18L18 6M6 6l12 12" stroke-width="2" />
                     </svg>

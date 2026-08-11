@@ -28,19 +28,35 @@ class RestrictStudents
             return redirect()->to('/dashboard');
         }
 
-        // 4. UNVERIFIED STUDENTS: Show verification notice first for /dashboard and general routes
+        // 4. UNVERIFIED STUDENTS HANDLING
         if (is_null($user->email_verified_at)) {
 
-            // Allow verification notice, user profile (user.show/profile.show), logout, and Livewire
+            // Always allow essential background actions (resending verification email, verification links, logout, Livewire)
             if (
-                $request->routeIs('verification.notice', 'verification.verify', 'verification.send', 'user.show', 'profile.show', 'logout') ||
-                $request->is('email/verify*', 'user/*', 'profile/*', 'livewire/*') ||
+                $request->routeIs('verification.verify', 'verification.send', 'logout') ||
+                $request->is('logout', 'livewire/*') ||
                 $request->expectsJson()
             ) {
                 return $next($request);
             }
 
-            // Redirect unverified students attempting to visit /dashboard or other pages to verification notice first
+            // Force notice FIRST: When viewing the notice page, set the session flag and allow access
+            if ($request->routeIs('verification.notice') || $request->is('email/verify*')) {
+                session(['has_seen_verification_notice' => true]);
+                return $next($request);
+            }
+
+            // ONLY AFTER seeing the notice: Allow access to user profile routes
+            if (session('has_seen_verification_notice') === true) {
+                if (
+                    $request->routeIs('user.show', 'profile.show') ||
+                    $request->is('user/*', 'profile/*')
+                ) {
+                    return $next($request);
+                }
+            }
+
+            // Otherwise (first login/registration redirect or trying to visit /dashboard), force redirect to notice page first
             return redirect()->route('verification.notice');
         }
 

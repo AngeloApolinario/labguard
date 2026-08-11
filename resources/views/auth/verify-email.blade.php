@@ -90,7 +90,7 @@
 
                     <div class="flex items-center justify-between pt-6 border-t border-white/10">
                         <a href="{{ route('profile.show') }}" class="text-[10px] font-bold text-slate-400 hover:text-[#D4AF37] uppercase tracking-wider transition-colors">
-                            {{ __('Update Email Details') }}
+                            {{ __('Update User Information') }}
                         </a>
 
                         <form method="POST" action="{{ route('logout') }}" class="inline">

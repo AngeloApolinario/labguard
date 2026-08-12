@@ -64,4 +64,13 @@ class Computer extends Model
     {
         return $this->alerts()->where('status', '!=', 'resolved')->exists();
     }
+
+     public function getEffectiveStatusAttribute(): string
+    {
+        if ($this->lab && $this->lab->isUnderMaintenance()) {
+            return 'maintenance';
+        }
+
+        return $this->status ?? 'available';
+    }
 }

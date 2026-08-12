@@ -25,13 +25,16 @@ WH_KEYBOARD_LL = 13
 VK_TAB = 0x09
 VK_ESCAPE = 0x1B
 VK_CONTROL = 0x11
-VK_MENU = 0x12   # Alt key
-VK_LWIN = 0x5B   # Left Win key
-VK_RWIN = 0x5C   # Right Win key
-VK_F4 = 0x73     # F4 key
+VK_MENU = 0x12  # Alt key
+VK_LWIN = 0x5B  # Left Win key
+VK_RWIN = 0x5C  # Right Win key
+VK_F4 = 0x73  # F4 key
 
-ULONG_PTR = ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
+ULONG_PTR = (
+    ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
+)
 LRESULT = ctypes.c_ssize_t
+
 
 class KBDLLHOOKSTRUCT(ctypes.Structure):
     _fields_ = [
@@ -42,6 +45,7 @@ class KBDLLHOOKSTRUCT(ctypes.Structure):
         ("dwExtraInfo", ULONG_PTR),
     ]
 
+
 _hook_id = None
 _hook_proc_ref = None  # Prevents Python's garbage collector from dropping the callback
 
@@ -51,10 +55,20 @@ kernel32 = ctypes.windll.kernel32
 
 HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
 
-user32.CallNextHookEx.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
+user32.CallNextHookEx.argtypes = [
+    wintypes.HANDLE,
+    ctypes.c_int,
+    wintypes.WPARAM,
+    wintypes.LPARAM,
+]
 user32.CallNextHookEx.restype = LRESULT
 
-user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
+user32.SetWindowsHookExW.argtypes = [
+    ctypes.c_int,
+    HOOKPROC,
+    wintypes.HINSTANCE,
+    wintypes.DWORD,
+]
 user32.SetWindowsHookExW.restype = wintypes.HANDLE
 
 user32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
@@ -79,6 +93,7 @@ def hide_taskbar():
         print("[DEBUG] Taskbar hidden.")
     except Exception as e:
         print(f"[DEBUG] Error hiding taskbar: {e}")
+
 
 def show_taskbar():
     """Restores primary and secondary display taskbars."""
@@ -113,7 +128,9 @@ def _low_level_keyboard_proc(nCode, wParam, lParam):
 
             # SLOW PATH: Only run system key modifier checks if a system key was pressed
             flags = kb_struct.flags
-            is_alt_pressed = bool(flags & 0x20) or (user32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
+            is_alt_pressed = (
+                bool(flags & 0x20) or (user32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
+            )
 
             # 1. Block Left & Right Windows Keys
             if vk_code in (VK_LWIN, VK_RWIN):
@@ -153,12 +170,7 @@ def start_keyboard_hook():
         _hook_proc_ref = HOOKPROC(_low_level_keyboard_proc)
 
         # Passing 0 for hMod fixes Error 126 in Python
-        _hook_id = user32.SetWindowsHookExW(
-            WH_KEYBOARD_LL,
-            _hook_proc_ref,
-            None,
-            0
-        )
+        _hook_id = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _hook_proc_ref, None, 0)
         if not _hook_id or _hook_id == 0:
             err = kernel32.GetLastError()
             print(f"[DEBUG] SetWindowsHookExW FAILED with error code: {err}")
@@ -167,6 +179,7 @@ def start_keyboard_hook():
             print(f"[DEBUG] Keyboard Hook successfully installed! Hook ID: {_hook_id}")
     except Exception as e:
         print(f"[DEBUG] Keyboard Hook installation exception: {e}")
+
 
 def stop_keyboard_hook():
     """Unhooks the low-level keyboard listener."""
@@ -185,22 +198,22 @@ def stop_keyboard_hook():
 # =====================================================================
 def load_config():
     """Loads configuration dynamically from config.json beside the script/exe."""
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         base_dir = os.path.dirname(sys.executable)
     else:
         base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    config_path = os.path.join(base_dir, 'config.json')
+    config_path = os.path.join(base_dir, "config.json")
 
     config_data = {
         "server_url": "https://labguard.it.com/api/pc",
         "lab": "LAB 1",
-        "pc": "PC-01"
+        "pc": "PC-01",
     }
 
     if os.path.exists(config_path):
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
         except Exception as e:
             print(f"Error loading config.json: {e}")
@@ -253,6 +266,7 @@ atexit.register(cleanup_security)
 
 def register_shutdown_hooks():
     """Registers Windows kernel shutdown handlers (safe for background execution)."""
+
     def windows_shutdown_handler(ctrl_type):
         if ctrl_type in (2, 5, 6):
             print("[SHUTDOWN] Windows OS Shutdown/Logoff detected! Releasing PC...")
@@ -282,34 +296,39 @@ def turn_on_wifi_radio_native():
                 ("Data1", wintypes.DWORD),
                 ("Data2", wintypes.WORD),
                 ("Data3", wintypes.WORD),
-                ("Data4", wintypes.BYTE * 8)
+                ("Data4", wintypes.BYTE * 8),
             ]
 
         class WLAN_INTERFACE_INFO(ctypes.Structure):
             _fields_ = [
                 ("InterfaceGuid", GUID),
                 ("strInterfaceDescription", wintypes.WCHAR * 256),
-                ("isState", ctypes.c_uint)
+                ("isState", ctypes.c_uint),
             ]
 
         class WLAN_INTERFACE_INFO_LIST(ctypes.Structure):
             _fields_ = [
                 ("dwNumberOfItems", wintypes.DWORD),
                 ("dwIndex", wintypes.DWORD),
-                ("InterfaceInfo", WLAN_INTERFACE_INFO * 1)
+                ("InterfaceInfo", WLAN_INTERFACE_INFO * 1),
             ]
 
         class WLAN_PHY_RADIO_STATE(ctypes.Structure):
             _fields_ = [
                 ("dwPhyIndex", wintypes.DWORD),
                 ("dot11SoftwareRadioState", ctypes.c_uint),
-                ("dot11HardwareRadioState", ctypes.c_uint)
+                ("dot11HardwareRadioState", ctypes.c_uint),
             ]
 
         hClient = wintypes.HANDLE()
         pVersion = wintypes.DWORD()
 
-        if wlanapi.WlanOpenHandle(2, None, ctypes.byref(pVersion), ctypes.byref(hClient)) == 0:
+        if (
+            wlanapi.WlanOpenHandle(
+                2, None, ctypes.byref(pVersion), ctypes.byref(hClient)
+            )
+            == 0
+        ):
             pList = ctypes.POINTER(WLAN_INTERFACE_INFO_LIST)()
 
             if wlanapi.WlanEnumInterfaces(hClient, None, ctypes.byref(pList)) == 0:
@@ -324,7 +343,7 @@ def turn_on_wifi_radio_native():
                         4,
                         ctypes.sizeof(WLAN_PHY_RADIO_STATE),
                         ctypes.byref(radio_state),
-                        None
+                        None,
                     )
 
                     wlanapi.WlanScan(hClient, ctypes.byref(guid), None, None, None)
@@ -348,28 +367,25 @@ def get_native_wifi_networks():
                 ("Data1", wintypes.DWORD),
                 ("Data2", wintypes.WORD),
                 ("Data3", wintypes.WORD),
-                ("Data4", wintypes.BYTE * 8)
+                ("Data4", wintypes.BYTE * 8),
             ]
 
         class WLAN_INTERFACE_INFO(ctypes.Structure):
             _fields_ = [
                 ("InterfaceGuid", GUID),
                 ("strInterfaceDescription", wintypes.WCHAR * 256),
-                ("isState", ctypes.c_uint)
+                ("isState", ctypes.c_uint),
             ]
 
         class WLAN_INTERFACE_INFO_LIST(ctypes.Structure):
             _fields_ = [
                 ("dwNumberOfItems", wintypes.DWORD),
                 ("dwIndex", wintypes.DWORD),
-                ("InterfaceInfo", WLAN_INTERFACE_INFO * 1)
+                ("InterfaceInfo", WLAN_INTERFACE_INFO * 1),
             ]
 
         class DOT11_SSID(ctypes.Structure):
-            _fields_ = [
-                ("uSSIDLength", ctypes.c_ulong),
-                ("ucSSID", ctypes.c_char * 32)
-            ]
+            _fields_ = [("uSSIDLength", ctypes.c_ulong), ("ucSSID", ctypes.c_char * 32)]
 
         class WLAN_AVAILABLE_NETWORK(ctypes.Structure):
             _fields_ = [
@@ -387,20 +403,25 @@ def get_native_wifi_networks():
                 ("dot11DefaultAuthAlgorithm", ctypes.c_uint),
                 ("dot11DefaultCipherAlgorithm", ctypes.c_uint),
                 ("dwFlags", wintypes.DWORD),
-                ("dwReserved", wintypes.DWORD)
+                ("dwReserved", wintypes.DWORD),
             ]
 
         class WLAN_AVAILABLE_NETWORK_LIST(ctypes.Structure):
             _fields_ = [
                 ("dwNumberOfItems", wintypes.DWORD),
                 ("dwIndex", wintypes.DWORD),
-                ("Network", WLAN_AVAILABLE_NETWORK * 1)
+                ("Network", WLAN_AVAILABLE_NETWORK * 1),
             ]
 
         hClient = wintypes.HANDLE()
         pVersion = wintypes.DWORD()
 
-        if wlanapi.WlanOpenHandle(2, None, ctypes.byref(pVersion), ctypes.byref(hClient)) == 0:
+        if (
+            wlanapi.WlanOpenHandle(
+                2, None, ctypes.byref(pVersion), ctypes.byref(hClient)
+            )
+            == 0
+        ):
             pList = ctypes.POINTER(WLAN_INTERFACE_INFO_LIST)()
 
             if wlanapi.WlanEnumInterfaces(hClient, None, ctypes.byref(pList)) == 0:
@@ -408,17 +429,26 @@ def get_native_wifi_networks():
                     guid = pList.contents.InterfaceInfo[0].InterfaceGuid
                     pNetList = ctypes.POINTER(WLAN_AVAILABLE_NETWORK_LIST)()
 
-                    if wlanapi.WlanGetAvailableNetworkList(hClient, ctypes.byref(guid), 2, None, ctypes.byref(pNetList)) == 0:
+                    if (
+                        wlanapi.WlanGetAvailableNetworkList(
+                            hClient, ctypes.byref(guid), 2, None, ctypes.byref(pNetList)
+                        )
+                        == 0
+                    ):
                         num_items = pNetList.contents.dwNumberOfItems
                         base_ptr = ctypes.addressof(pNetList.contents.Network)
                         stride = ctypes.sizeof(WLAN_AVAILABLE_NETWORK)
 
                         for i in range(num_items):
-                            net = WLAN_AVAILABLE_NETWORK.from_address(base_ptr + i * stride)
+                            net = WLAN_AVAILABLE_NETWORK.from_address(
+                                base_ptr + i * stride
+                            )
                             ssid_len = net.dot11Ssid.uSSIDLength
                             if 0 < ssid_len <= 32:
                                 ssid_bytes = bytes(net.dot11Ssid.ucSSID[:ssid_len])
-                                ssid_str = ssid_bytes.decode('utf-8', errors='ignore').strip()
+                                ssid_str = ssid_bytes.decode(
+                                    "utf-8", errors="ignore"
+                                ).strip()
                                 if ssid_str:
                                     ssids.append(ssid_str)
 
@@ -435,7 +465,12 @@ def enable_wifi_adapter():
     """Enables network adapter and powers up software radio."""
     try:
         subprocess.run(
-            ["powershell", "-NoProfile", "-Command", "Get-NetAdapter | Where-Object { $_.Name -match 'Wi-Fi|Wireless|WiFi' } | Enable-NetAdapter -Confirm:$false"],
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-NetAdapter | Where-Object { $_.Name -match 'Wi-Fi|Wireless|WiFi' } | Enable-NetAdapter -Confirm:$false",
+            ],
             capture_output=True,
             text=True,
             check=False,
@@ -452,12 +487,13 @@ def enable_wifi_adapter():
 # =====================================================================
 class CinematicNotify(tk.Toplevel):
     """Custom glassmorphic notification overlay with Fade-Out."""
+
     def __init__(self, parent, title, message, color="#D4AF37"):
         super().__init__(parent)
         self.overrideredirect(True)
         self.attributes("-topmost", True)
         self.attributes("-alpha", 1.0)
-        self.configure(bg='#1e293b', highlightbackground=color, highlightthickness=2)
+        self.configure(bg="#1e293b", highlightbackground=color, highlightthickness=2)
 
         p_w = parent.winfo_screenwidth()
         p_h = parent.winfo_screenheight()
@@ -467,13 +503,20 @@ class CinematicNotify(tk.Toplevel):
         y = (p_h // 2) - (height // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
 
-        tk.Label(self, text=title.upper(), fg=color, bg='#1e293b',
-                 font=("Arial Black", 14)).pack(pady=(25, 5))
+        tk.Label(
+            self, text=title.upper(), fg=color, bg="#1e293b", font=("Arial Black", 14)
+        ).pack(pady=(25, 5))
 
-        tk.Label(self, text=message, fg='white', bg='#1e293b',
-                 font=("Arial", 10), wraplength=340).pack(pady=5)
+        tk.Label(
+            self,
+            text=message,
+            fg="white",
+            bg="#1e293b",
+            font=("Arial", 10),
+            wraplength=340,
+        ).pack(pady=5)
 
-        self.progress_bg = tk.Frame(self, bg='#0f172a', height=4)
+        self.progress_bg = tk.Frame(self, bg="#0f172a", height=4)
         self.progress_bg.pack(side="bottom", fill="x")
 
         self.after(4000, self.fade_out)
@@ -507,70 +550,108 @@ class LabGuardClient:
         self.root.title("LabGuard Terminal")
         self.root.attributes("-fullscreen", True)
         self.root.attributes("-topmost", True)
-        self.root.configure(bg='#0f172a')
+        self.root.configure(bg="#0f172a")
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
 
         # Re-focus student ID entry if background is clicked
         self.root.bind("<Button-1>", self._on_bg_click)
 
+        # EMERGENCY LOCK OUT, REMOVE/COMMENT BEFORE GOING INTO PRODUCTION
+        self.root.bind("<Control-Alt-Shift-Key-X>", self.emergency_admin_exit)
+        self.root.bind("<Control-Alt-Shift-Key-x>", self.emergency_admin_exit)
+
         # Smart focus reclamation
         def reclaim_focus(event=None):
             if not self.is_session_active:
                 if self.wifi_modal and self.wifi_modal.winfo_exists():
-                    self.wifi_modal.attributes('-topmost', True)
+                    self.wifi_modal.attributes("-topmost", True)
                     return
                 if self.overlay and self.overlay.winfo_exists():
-                    self.overlay.attributes('-topmost', True)
+                    self.overlay.attributes("-topmost", True)
                     return
-                self.root.attributes('-topmost', True)
+                self.root.attributes("-topmost", True)
 
         self.root.bind("<FocusOut>", reclaim_focus)
         self.root.bind("<Unmap>", reclaim_focus)
 
         # Top Bar for Network Status
-        self.top_bar = tk.Frame(self.root, bg='#0f172a')
+        self.top_bar = tk.Frame(self.root, bg="#0f172a")
         self.top_bar.pack(side="top", fill="x", padx=20, pady=20)
 
         self.net_indicator = tk.Label(
             self.top_bar,
             text="● CONNECTING...",
-            fg='#eab308',
-            bg='#0f172a',
+            fg="#eab308",
+            bg="#0f172a",
             font=("Arial", 10, "bold"),
-            cursor="hand2"
+            cursor="hand2",
         )
         self.net_indicator.pack(side="right", padx=30)
         self.net_indicator.bind("<Button-1>", lambda e: self.open_wifi_modal())
 
         # Main Center Container
-        self.frame = tk.Frame(self.root, bg='#0f172a')
-        self.frame.place(relx=0.5, rely=0.5, anchor='center')
+        self.frame = tk.Frame(self.root, bg="#0f172a")
+        self.frame.place(relx=0.5, rely=0.5, anchor="center")
 
         # Header Section
-        tk.Label(self.frame, text="LABGUARD", fg='#D4AF37', bg='#0f172a', font=("Arial Black", 50)).pack()
-        tk.Label(self.frame, text=f"STATION: {PC_NUMBER}", fg='#64748b', bg='#0f172a', font=("Arial", 12, "bold")).pack(pady=5)
+        tk.Label(
+            self.frame,
+            text="LABGUARD",
+            fg="#D4AF37",
+            bg="#0f172a",
+            font=("Arial Black", 50),
+        ).pack()
+        tk.Label(
+            self.frame,
+            text=f"STATION: {PC_NUMBER}",
+            fg="#64748b",
+            bg="#0f172a",
+            font=("Arial", 12, "bold"),
+        ).pack(pady=5)
 
         # Standard Login Widgets Frame
-        self.login_form_frame = tk.Frame(self.frame, bg='#0f172a')
+        self.login_form_frame = tk.Frame(self.frame, bg="#0f172a")
         self.login_form_frame.pack(pady=10)
 
-        tk.Label(self.login_form_frame, text="STUDENT NUMBER", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(20, 0))
+        tk.Label(
+            self.login_form_frame,
+            text="STUDENT NUMBER",
+            fg="white",
+            bg="#0f172a",
+            font=("Arial", 9, "bold"),
+        ).pack(pady=(20, 0))
         self.entry_id = tk.Entry(
             self.login_form_frame,
             font=("Arial", 18),
-            justify='center',
+            justify="center",
             width=25,
-            bg='#1e293b',
-            fg='white',
-            insertbackground='white',
-            border=0
+            bg="#1e293b",
+            fg="white",
+            insertbackground="white",
+            border=0,
         )
         self.entry_id.pack(pady=5, ipady=10)
         self.entry_id.bind("<Key>", self._filter_student_id_key)
         self.entry_id.bind("<KeyRelease>", self._format_student_id_entry)
 
-        tk.Label(self.login_form_frame, text="ACCOUNT PASSWORD", fg='white', bg='#0f172a', font=("Arial", 9, "bold")).pack(pady=(15, 0))
-        self.entry_password = tk.Entry(self.login_form_frame, font=("Arial", 18), justify='center', width=25, show="*", bg='#1e293b', fg='white', insertbackground='white', border=0)
+        tk.Label(
+            self.login_form_frame,
+            text="ACCOUNT PASSWORD",
+            fg="white",
+            bg="#0f172a",
+            font=("Arial", 9, "bold"),
+        ).pack(pady=(15, 0))
+        self.entry_password = tk.Entry(
+            self.login_form_frame,
+            font=("Arial", 18),
+            justify="center",
+            width=25,
+            show="*",
+            bg="#1e293b",
+            fg="white",
+            insertbackground="white",
+            border=0,
+        )
         self.entry_password.pack(pady=5, ipady=10)
 
         self.entry_id.focus_set()
@@ -579,42 +660,54 @@ class LabGuardClient:
             self.login_form_frame,
             text="UNLOCK STATION",
             command=self.attempt_login,
-            bg='#D4AF37',
-            fg='white',
+            bg="#D4AF37",
+            fg="white",
             font=("Arial", 12, "bold"),
             width=30,
             height=2,
             cursor="hand2",
-            relief="flat"
+            relief="flat",
         )
         self.btn_unlock.pack(pady=25)
 
         # Maintenance Frame (Hidden by default)
-        self.maintenance_frame = tk.Frame(self.frame, bg='#0f172a')
+        self.maintenance_frame = tk.Frame(self.frame, bg="#0f172a")
 
-        tk.Label(self.maintenance_frame, text="🔧", fg='#f59e0b', bg='#0f172a', font=("Arial", 50)).pack(pady=(20, 5))
-        tk.Label(self.maintenance_frame, text="STATION UNDER MAINTENANCE", fg='#f59e0b', bg='#0f172a', font=("Arial Black", 18)).pack(pady=5)
+        tk.Label(
+            self.maintenance_frame,
+            text="🔧",
+            fg="#f59e0b",
+            bg="#0f172a",
+            font=("Arial", 50),
+        ).pack(pady=(20, 5))
+        tk.Label(
+            self.maintenance_frame,
+            text="STATION UNDER MAINTENANCE",
+            fg="#f59e0b",
+            bg="#0f172a",
+            font=("Arial Black", 18),
+        ).pack(pady=5)
         tk.Label(
             self.maintenance_frame,
             text="This computer is currently offline for system updates or hardware repair.\nPlease use another available terminal.",
-            fg='#94a3b8',
-            bg='#0f172a',
+            fg="#94a3b8",
+            bg="#0f172a",
             font=("Arial", 11),
             justify="center",
-            wraplength=450
+            wraplength=450,
         ).pack(pady=10)
 
         # Bottom Trigger Options
-        self.bottom_bar = tk.Frame(self.root, bg='#0f172a')
+        self.bottom_bar = tk.Frame(self.root, bg="#0f172a")
         self.bottom_bar.pack(side="bottom", pady=30)
 
         self.report_trigger = tk.Label(
             self.bottom_bar,
             text="⚠ HAVE A PROBLEM WITH THIS PC? CLICK HERE TO REPORT",
-            fg='#ef4444',
-            bg='#0f172a',
+            fg="#ef4444",
+            bg="#0f172a",
             font=("Arial", 8, "bold"),
-            cursor="hand2"
+            cursor="hand2",
         )
         self.report_trigger.pack()
         self.report_trigger.bind("<Button-1>", lambda e: self.open_report_overlay())
@@ -626,8 +719,16 @@ class LabGuardClient:
 
     def _on_bg_click(self, event):
         """Restores typing focus to the Student ID entry if student clicks the background."""
-        if not self.is_session_active and not (self.wifi_modal and self.wifi_modal.winfo_exists()) and not (self.overlay and self.overlay.winfo_exists()):
-            if event.widget not in (self.entry_id, self.entry_password, self.btn_unlock):
+        if (
+            not self.is_session_active
+            and not (self.wifi_modal and self.wifi_modal.winfo_exists())
+            and not (self.overlay and self.overlay.winfo_exists())
+        ):
+            if event.widget not in (
+                self.entry_id,
+                self.entry_password,
+                self.btn_unlock,
+            ):
                 self.entry_id.focus_set()
 
     def deferred_background_init(self):
@@ -637,21 +738,39 @@ class LabGuardClient:
 
     def _filter_student_id_key(self, event):
         """Block letters and keep only digits in the student ID field."""
-        if event.keysym in {'BackSpace', 'Delete', 'Tab', 'Return', 'Left', 'Right', 'Up', 'Down', 'Home', 'End'}:
+        if event.keysym in {
+            "BackSpace",
+            "Delete",
+            "Tab",
+            "Return",
+            "Left",
+            "Right",
+            "Up",
+            "Down",
+            "Home",
+            "End",
+        }:
             return
 
         if event.char and not event.char.isdigit():
-            return 'break'
+            return "break"
 
     def _format_student_id_entry(self, event=None):
         """Smoothly auto-formats student ID without mixing up digits or misplacing the cursor."""
-        if event and event.keysym in {'BackSpace', 'Delete', 'Left', 'Right', 'Home', 'End'}:
+        if event and event.keysym in {
+            "BackSpace",
+            "Delete",
+            "Left",
+            "Right",
+            "Home",
+            "End",
+        }:
             return
 
         target = event.widget if event else self.entry_id
         current_value = target.get()
         cursor_pos = target.index(tk.INSERT)
-        was_at_end = (cursor_pos == len(current_value))
+        was_at_end = cursor_pos == len(current_value)
 
         # Extract digits only (max 12)
         digits = re.sub(r"\D", "", current_value)[:12]
@@ -714,11 +833,11 @@ class LabGuardClient:
                 )
                 if res.status_code == 200:
                     data = res.json()
-                    pc_status = data.get('status') or data.get('data', {}).get('status')
+                    pc_status = data.get("status") or data.get("data", {}).get("status")
 
                     self.root.after(0, self.update_net_status, True)
 
-                    if pc_status and str(pc_status).lower() == 'maintenance':
+                    if pc_status and str(pc_status).lower() == "maintenance":
                         self.root.after(0, self.show_maintenance_ui)
                     else:
                         self.root.after(0, self.restore_login_ui)
@@ -735,9 +854,11 @@ class LabGuardClient:
     def update_net_status(self, is_online):
         """Updates the status text and color on top bar."""
         if is_online:
-            self.net_indicator.config(text="● ONLINE", fg='#10b981')
+            self.net_indicator.config(text="● ONLINE", fg="#10b981")
         else:
-            self.net_indicator.config(text="▲ OFFLINE (CLICK TO FIX WI-FI)", fg='#ef4444')
+            self.net_indicator.config(
+                text="▲ OFFLINE (CLICK TO FIX WI-FI)", fg="#ef4444"
+            )
 
     def open_wifi_modal(self):
         """Glassmorphic UI overlay for scanning and connecting to Wi-Fi networks."""
@@ -747,7 +868,7 @@ class LabGuardClient:
 
         self.root.attributes("-topmost", False)
         self.wifi_modal = tk.Toplevel(self.root)
-        self.wifi_modal.configure(bg='#1e293b')
+        self.wifi_modal.configure(bg="#1e293b")
         self.wifi_modal.overrideredirect(True)
 
         width, height = 480, 550
@@ -769,107 +890,112 @@ class LabGuardClient:
 
         self.wifi_modal.bind("<Escape>", close_wifi)
 
-        header_frame = tk.Frame(self.wifi_modal, bg='#1e293b')
+        header_frame = tk.Frame(self.wifi_modal, bg="#1e293b")
         header_frame.pack(fill="x", padx=15, pady=(15, 0))
 
-        tk.Label(header_frame, text="NETWORK SETTINGS", fg='#D4AF37', bg='#1e293b',
-                 font=("Arial Black", 14)).pack(side="left")
+        tk.Label(
+            header_frame,
+            text="NETWORK SETTINGS",
+            fg="#D4AF37",
+            bg="#1e293b",
+            font=("Arial Black", 14),
+        ).pack(side="left")
 
         btn_x = tk.Button(
             header_frame,
             text=" ✕ ",
             command=close_wifi,
-            bg='#1e293b',
-            fg='#94a3b8',
-            activebackground='#ef4444',
-            activeforeground='white',
+            bg="#1e293b",
+            fg="#94a3b8",
+            activebackground="#ef4444",
+            activeforeground="white",
             font=("Arial", 12, "bold"),
             border=0,
-            cursor="hand2"
+            cursor="hand2",
         )
         btn_x.pack(side="right")
 
         tk.Label(
             self.wifi_modal,
             text="Select an available Wi-Fi access point to connect.",
-            fg='#94a3b8',
-            bg='#1e293b',
-            font=("Arial", 9)
+            fg="#94a3b8",
+            bg="#1e293b",
+            font=("Arial", 9),
         ).pack(anchor="w", padx=15, pady=(2, 10))
 
-        list_frame = tk.Frame(self.wifi_modal, bg='#0f172a')
+        list_frame = tk.Frame(self.wifi_modal, bg="#0f172a")
         list_frame.pack(fill="both", expand=True, padx=20, pady=5)
 
         self.wifi_listbox = tk.Listbox(
             list_frame,
-            bg='#0f172a',
-            fg='white',
+            bg="#0f172a",
+            fg="white",
             font=("Arial", 11),
-            selectbackground='#D4AF37',
+            selectbackground="#D4AF37",
             borderwidth=0,
-            highlightthickness=0
+            highlightthickness=0,
         )
         self.wifi_listbox.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
         tk.Label(
             self.wifi_modal,
             text="Security Key / Password",
-            fg='white',
-            bg='#1e293b',
-            font=("Arial", 9, "bold")
+            fg="white",
+            bg="#1e293b",
+            font=("Arial", 9, "bold"),
         ).pack(anchor="w", padx=20, pady=(10, 2))
 
         self.wifi_pass = tk.Entry(
             self.wifi_modal,
             font=("Arial", 12),
             show="*",
-            bg='#0f172a',
-            fg='white',
+            bg="#0f172a",
+            fg="white",
             border=0,
-            insertbackground='white'
+            insertbackground="white",
         )
         self.wifi_pass.pack(fill="x", padx=20, pady=5, ipady=6)
 
-        btn_frame = tk.Frame(self.wifi_modal, bg='#1e293b')
+        btn_frame = tk.Frame(self.wifi_modal, bg="#1e293b")
         btn_frame.pack(pady=20)
 
         tk.Button(
             btn_frame,
             text="SCAN WI-FI",
             command=self.scan_wifi_networks,
-            bg='#3b82f6',
-            fg='white',
+            bg="#3b82f6",
+            fg="white",
             font=("Arial", 9, "bold"),
             width=12,
             height=2,
             relief="flat",
-            cursor="hand2"
+            cursor="hand2",
         ).pack(side="left", padx=5)
 
         tk.Button(
             btn_frame,
             text="CONNECT",
             command=self.connect_to_wifi,
-            bg='#10b981',
-            fg='white',
+            bg="#10b981",
+            fg="white",
             font=("Arial", 9, "bold"),
             width=12,
             height=2,
             relief="flat",
-            cursor="hand2"
+            cursor="hand2",
         ).pack(side="left", padx=5)
 
         tk.Button(
             btn_frame,
             text="CLOSE",
             command=close_wifi,
-            bg='#475569',
-            fg='white',
+            bg="#475569",
+            fg="white",
             font=("Arial", 9, "bold"),
             width=10,
             height=2,
             relief="flat",
-            cursor="hand2"
+            cursor="hand2",
         ).pack(side="left", padx=5)
 
         self.wifi_pass.focus_set()
@@ -895,16 +1021,33 @@ class LabGuardClient:
 
             if not found_ssids:
                 try:
-                    output = subprocess.check_output("netsh wlan show networks", shell=True, stderr=subprocess.STDOUT).decode("utf-8", errors="ignore")
+                    output = subprocess.check_output(
+                        "netsh wlan show networks", shell=True, stderr=subprocess.STDOUT
+                    ).decode("utf-8", errors="ignore")
                     ssids = re.findall(r"SSID\s+\d+\s*:\s*(.+)", output)
-                    found_ssids = sorted(list(set([s.strip() for s in ssids if s.strip() and not s.strip().startswith("SSID")])))
+                    found_ssids = sorted(
+                        list(
+                            set(
+                                [
+                                    s.strip()
+                                    for s in ssids
+                                    if s.strip() and not s.strip().startswith("SSID")
+                                ]
+                            )
+                        )
+                    )
                 except Exception:
                     pass
 
             if found_ssids:
                 self.root.after(0, lambda: self._set_wifi_list_items(found_ssids))
             else:
-                self.root.after(0, lambda: self._set_wifi_list_items(["No networks found. Try scanning again."]))
+                self.root.after(
+                    0,
+                    lambda: self._set_wifi_list_items(
+                        ["No networks found. Try scanning again."]
+                    ),
+                )
 
         threading.Thread(target=execute_scan, daemon=True).start()
 
@@ -913,7 +1056,12 @@ class LabGuardClient:
         try:
             selected_ssid = self.wifi_listbox.get(self.wifi_listbox.curselection())
         except Exception:
-            CinematicNotify(self.wifi_modal, "Selection Required", "Please click an SSID from the list.", color="#ef4444")
+            CinematicNotify(
+                self.wifi_modal,
+                "Selection Required",
+                "Please click an SSID from the list.",
+                color="#ef4444",
+            )
             return
 
         password = self.wifi_pass.get().strip()
@@ -959,19 +1107,44 @@ class LabGuardClient:
                 with open(filename, "w", encoding="utf-8") as f:
                     f.write(profile_xml)
 
-                res_add = subprocess.run(f'netsh wlan add profile filename="{filename}"', shell=True, capture_output=True, text=True)
-                res_conn = subprocess.run(f'netsh wlan connect name="{selected_ssid}"', shell=True, capture_output=True, text=True)
+                res_add = subprocess.run(
+                    f'netsh wlan add profile filename="{filename}"',
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                )
+                res_conn = subprocess.run(
+                    f'netsh wlan connect name="{selected_ssid}"',
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                )
 
                 if os.path.exists(filename):
                     os.remove(filename)
 
                 if res_conn.returncode == 0:
-                    CinematicNotify(self.wifi_modal, "Connecting", f"Connecting to {selected_ssid}...", color="#3b82f6")
+                    CinematicNotify(
+                        self.wifi_modal,
+                        "Connecting",
+                        f"Connecting to {selected_ssid}...",
+                        color="#3b82f6",
+                    )
                 else:
-                    CinematicNotify(self.wifi_modal, "Wi-Fi Error", "Could not connect to target network.", color="#ef4444")
+                    CinematicNotify(
+                        self.wifi_modal,
+                        "Wi-Fi Error",
+                        "Could not connect to target network.",
+                        color="#ef4444",
+                    )
 
             except Exception as e:
-                CinematicNotify(self.wifi_modal, "Wi-Fi Error", f"Profile creation failed: {e}", color="#ef4444")
+                CinematicNotify(
+                    self.wifi_modal,
+                    "Wi-Fi Error",
+                    f"Profile creation failed: {e}",
+                    color="#ef4444",
+                )
 
         threading.Thread(target=execute_connection, daemon=True).start()
 
@@ -984,7 +1157,7 @@ class LabGuardClient:
 
         self.root.attributes("-topmost", False)
         self.overlay = tk.Toplevel(self.root)
-        self.overlay.configure(bg='#1e293b')
+        self.overlay.configure(bg="#1e293b")
         self.overlay.overrideredirect(True)
 
         width, height = 500, 640
@@ -997,34 +1170,96 @@ class LabGuardClient:
         self.overlay.attributes("-topmost", True)
         self.overlay.grab_set()
 
-        tk.Label(self.overlay, text="REPORT AN ISSUE", fg='#D4AF37', bg='#1e293b', font=("Arial Black", 16)).pack(pady=(25, 5))
+        tk.Label(
+            self.overlay,
+            text="REPORT AN ISSUE",
+            fg="#D4AF37",
+            bg="#1e293b",
+            font=("Arial Black", 16),
+        ).pack(pady=(25, 5))
 
-        tk.Label(self.overlay, text="Confirm Student Number", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
+        tk.Label(
+            self.overlay,
+            text="Confirm Student Number",
+            fg="white",
+            bg="#1e293b",
+            font=("Arial", 9, "bold"),
+        ).pack(anchor="w", padx=60, pady=(15, 2))
         self.report_student_id = tk.Entry(
             self.overlay,
             font=("Arial", 12),
-            bg='#0f172a',
-            fg='white',
+            bg="#0f172a",
+            fg="white",
             border=0,
-            insertbackground='white'
+            insertbackground="white",
         )
         self.report_student_id.pack(fill="x", padx=60, ipady=6)
         self.report_student_id.bind("<Key>", self._filter_student_id_key)
         self.report_student_id.bind("<KeyRelease>", self._format_student_id_entry)
 
-        tk.Label(self.overlay, text="Confirm Password", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(10, 2))
-        self.report_password = tk.Entry(self.overlay, font=("Arial", 12), show="*", bg='#0f172a', fg='white', border=0, insertbackground='white')
+        tk.Label(
+            self.overlay,
+            text="Confirm Password",
+            fg="white",
+            bg="#1e293b",
+            font=("Arial", 9, "bold"),
+        ).pack(anchor="w", padx=60, pady=(10, 2))
+        self.report_password = tk.Entry(
+            self.overlay,
+            font=("Arial", 12),
+            show="*",
+            bg="#0f172a",
+            fg="white",
+            border=0,
+            insertbackground="white",
+        )
         self.report_password.pack(fill="x", padx=60, ipady=6)
 
-        tk.Label(self.overlay, text="Select Category", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
+        tk.Label(
+            self.overlay,
+            text="Select Category",
+            fg="white",
+            bg="#1e293b",
+            font=("Arial", 9, "bold"),
+        ).pack(anchor="w", padx=60, pady=(15, 2))
         self.issue_var = tk.StringVar(value="Hardware Issue")
 
-        dropdown = tk.OptionMenu(self.overlay, self.issue_var, "Hardware Issue", "Software/App Error", "No Internet", "Peripheral (Mouse/KB)")
-        dropdown.config(bg="#0f172a", fg="white", activebackground="#D4AF37", font=("Arial", 10), relief="flat", borderwidth=0)
+        dropdown = tk.OptionMenu(
+            self.overlay,
+            self.issue_var,
+            "Hardware Issue",
+            "Software/App Error",
+            "No Internet",
+            "Peripheral (Mouse/KB)",
+        )
+        dropdown.config(
+            bg="#0f172a",
+            fg="white",
+            activebackground="#D4AF37",
+            font=("Arial", 10),
+            relief="flat",
+            borderwidth=0,
+        )
         dropdown.pack(fill="x", padx=60)
 
-        tk.Label(self.overlay, text="Describe the Problem", fg='white', bg='#1e293b', font=("Arial", 9, "bold")).pack(anchor="w", padx=60, pady=(15, 2))
-        self.remarks_box = tk.Text(self.overlay, height=4, font=("Arial", 11), bg='#0f172a', fg='white', border=0, padx=15, pady=10, insertbackground='white')
+        tk.Label(
+            self.overlay,
+            text="Describe the Problem",
+            fg="white",
+            bg="#1e293b",
+            font=("Arial", 9, "bold"),
+        ).pack(anchor="w", padx=60, pady=(15, 2))
+        self.remarks_box = tk.Text(
+            self.overlay,
+            height=4,
+            font=("Arial", 11),
+            bg="#0f172a",
+            fg="white",
+            border=0,
+            padx=15,
+            pady=10,
+            insertbackground="white",
+        )
         self.remarks_box.pack(padx=60, fill="x")
 
         self.report_student_id.focus_set()
@@ -1043,10 +1278,20 @@ class LabGuardClient:
             remarks = self.remarks_box.get("1.0", tk.END).strip()
 
             if not student_id or not password:
-                CinematicNotify(self.overlay, "Identity Required", "Credentials required to verify report authenticity.", color="#ef4444")
+                CinematicNotify(
+                    self.overlay,
+                    "Identity Required",
+                    "Credentials required to verify report authenticity.",
+                    color="#ef4444",
+                )
                 return
             if not remarks:
-                CinematicNotify(self.overlay, "Incomplete", "Please detail the issue descriptions.", color="#ef4444")
+                CinematicNotify(
+                    self.overlay,
+                    "Incomplete",
+                    "Please detail the issue descriptions.",
+                    color="#ef4444",
+                )
                 return
 
             self.btn_send.config(state="disabled", text="VERIFYING & SENDING...")
@@ -1056,7 +1301,7 @@ class LabGuardClient:
                 "student_id": student_id,
                 "password": password,
                 "issue_type": self.issue_var.get(),
-                "remarks": remarks
+                "remarks": remarks,
             }
 
             try:
@@ -1065,33 +1310,45 @@ class LabGuardClient:
                     json=payload,
                     headers=HEADERS,
                     verify=False,
-                    timeout=8
+                    timeout=8,
                 )
 
                 if response.status_code in [200, 201]:
-                    CinematicNotify(self.root, "Report Logged", "Identity verified and ticket created.", color="#10b981")
+                    CinematicNotify(
+                        self.root,
+                        "Report Logged",
+                        "Identity verified and ticket created.",
+                        color="#10b981",
+                    )
                     close_overlay()
                 else:
-                    msg = response.json().get('message', 'Identity verification failed.')
+                    msg = response.json().get(
+                        "message", "Identity verification failed."
+                    )
                     CinematicNotify(self.overlay, "Auth Failure", msg, color="#ef4444")
                     self.btn_send.config(state="normal", text="SEND REPORT")
             except Exception:
-                CinematicNotify(self.overlay, "Connection Error", "Could not connect to database server.", color="#ef4444")
+                CinematicNotify(
+                    self.overlay,
+                    "Connection Error",
+                    "Could not connect to database server.",
+                    color="#ef4444",
+                )
                 self.btn_send.config(state="normal", text="SEND REPORT")
 
-        btn_container = tk.Frame(self.overlay, bg='#1e293b')
+        btn_container = tk.Frame(self.overlay, bg="#1e293b")
         btn_container.pack(pady=25)
 
         self.btn_send = tk.Button(
             btn_container,
             text="SEND REPORT",
             command=handle_submit,
-            bg='#ef4444',
-            fg='white',
+            bg="#ef4444",
+            fg="white",
             font=("Arial", 9, "bold"),
             width=18,
             height=2,
-            relief="flat"
+            relief="flat",
         )
         self.btn_send.pack(side="left", padx=10)
 
@@ -1099,12 +1356,12 @@ class LabGuardClient:
             btn_container,
             text="CANCEL",
             command=close_overlay,
-            bg='#475569',
-            fg='white',
+            bg="#475569",
+            fg="white",
             font=("Arial", 9, "bold"),
             width=15,
             height=2,
-            relief="flat"
+            relief="flat",
         ).pack(side="left", padx=10)
 
     def force_on_top(self):
@@ -1126,11 +1383,17 @@ class LabGuardClient:
         password = self.entry_password.get()
 
         if not student_id or not password:
-            CinematicNotify(self.root, "Input Required", "Enter your credentials.", color="#D4AF37")
+            CinematicNotify(
+                self.root, "Input Required", "Enter your credentials.", color="#D4AF37"
+            )
             return
 
         self.btn_unlock.config(state="disabled", text="VERIFYING...")
-        payload = {"pc_number": PC_NUMBER, "student_id": student_id, "password": password}
+        payload = {
+            "pc_number": PC_NUMBER,
+            "student_id": student_id,
+            "password": password,
+        }
 
         try:
             response = requests.post(
@@ -1138,25 +1401,32 @@ class LabGuardClient:
                 json=payload,
                 headers=HEADERS,
                 timeout=10,
-                verify=False
+                verify=False,
             )
             if response.status_code == 200:
-                name = response.json().get('name', 'User')
-                CinematicNotify(self.root, "Authorized", f"Welcome, {name}!", color="#10b981")
+                name = response.json().get("name", "User")
+                CinematicNotify(
+                    self.root, "Authorized", f"Welcome, {name}!", color="#10b981"
+                )
                 self.root.after(1500, self.hide_terminal)
             else:
-                msg = response.json().get('message', 'Invalid Credentials.')
+                msg = response.json().get("message", "Invalid Credentials.")
                 CinematicNotify(self.root, "Auth Failed", msg, color="#ef4444")
                 self.btn_unlock.config(state="normal", text="UNLOCK STATION")
         except Exception:
-            CinematicNotify(self.root, "Error", "Server is offline. Check Wi-Fi connection.", color="#ef4444")
+            CinematicNotify(
+                self.root,
+                "Error",
+                "Server is offline. Check Wi-Fi connection.",
+                color="#ef4444",
+            )
             self.btn_unlock.config(state="normal", text="UNLOCK STATION")
 
     def hide_terminal(self):
         """Unlocks the PC session: Hides screen, restores Taskbar, and unhooks keyboard."""
         self.is_session_active = True
         self.root.attributes("-topmost", False)
-        
+
         # Restore environment for active session
         show_taskbar()
         stop_keyboard_hook()
@@ -1172,9 +1442,15 @@ class LabGuardClient:
 
                 if response.status_code == 200:
                     data = response.json()
-                    pc_status = data.get('status') or data.get('data', {}).get('status')
+                    pc_status = data.get("status") or data.get("data", {}).get("status")
 
-                    if pc_status and str(pc_status).lower() in ['available', 'unoccupied', 'released', 'offline', 'maintenance']:
+                    if pc_status and str(pc_status).lower() in [
+                        "available",
+                        "unoccupied",
+                        "released",
+                        "offline",
+                        "maintenance",
+                    ]:
                         self.root.after(0, self.lock_ui_again)
                         break
             except Exception as e:
@@ -1196,6 +1472,13 @@ class LabGuardClient:
         self.root.deiconify()
         self.root.lift()
         self.root.attributes("-topmost", True)
+
+    def emergency_admin_exit(self, event=None):
+        """Emergency exit shortcut for administrators."""
+        print("[ADMIN] Emergency exit triggered. Cleaning up system hooks...")
+        cleanup_security()  # Restores taskbar and removes low-level keyboard hook
+        self.root.destroy()
+        sys.exit(0)
 
 
 # =====================================================================

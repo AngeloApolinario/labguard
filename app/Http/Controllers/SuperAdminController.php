@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Alert;
+use App\Models\Computer;
 use App\Models\Lab;
 use App\Models\LabSession;
 use App\Models\Schedule;
@@ -440,37 +441,49 @@ class SuperAdminController extends Controller
     /**
      * Emergency Broadcast Protocol - Immediate Global System Lockout
      */
-    public function emergencyLockout()
-    {
-        DB::beginTransaction();
+    public function lockout(Request $request)
+{
+    $labId = $request->input('lab_id');
 
-        try {
-            // Update time_out where it is null
-            LabSession::whereNull('time_out')->update([
-                'time_out' => now(),
-            ]);
-
-            // Set all computers to maintenance status to block new student log-ins immediately
-            DB::table('computers')->update([
-                'status' => 'maintenance',
-            ]);
-
-            DB::commit();
-
-            Log::emergency('CRITICAL CRITERIA: Super Admin invoked physical Emergency Lockout protocol. All campus terminal stations forced offline.');
-
-            $this->flashToast('danger', 'Emergency Lockout', 'All user sessions disconnected and workstations locked.');
-
-            return redirect()->back()->with('alert', 'EMERGENCY PROTOCOL ACTIVATED: All user sessions disconnected. Physical workstations locked.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Emergency Lockout chain sequence aborted unexpectedly: ' . $e->getMessage());
-
-            $this->flashToast('danger', 'Lockout Failed', 'Failed to safely broadcast system lockdown command.');
-
-            return redirect()->back()->with('error', 'Failed to safely broadcast system lockdown command network-wide.');
-        }
+    if ($labId === 'all') {
+        // Lock down all labs
+        Lab::query()->update(['status' => 'maintenance']);
+        
+        // Mark all PCs as maintenance and terminate sessions
+        Computer::query()->update(['status' => 'maintenance']);
+    } else {
+        // Lock down target lab
+        $lab = Lab::findOrFail($labId);
+        $lab->update(['status' => 'maintenance']);
+        
+        // Mark all PCs in this lab as maintenance
+        $lab->computers()->update(['status' => 'maintenance']);
     }
+
+    // Add session termination logic here if needed...
+
+    return redirect()->back()->with('success', 'Lab maintenance lockdown initiated.');
+}
+
+public function releaseLockout(Request $request)
+{
+    $labId = $request->input('lab_id');
+
+    if ($labId === 'all') {
+        // Release all labs
+        Lab::query()->update(['status' => 'active']);
+        Computer::where('status', 'maintenance')->update(['status' => 'available']);
+    } else {
+        // Release target lab
+        $lab = Lab::findOrFail($labId);
+        $lab->update(['status' => 'active']);
+        $lab->computers()->where('status', 'maintenance')->update(['status' => 'available']);
+    }
+
+    return redirect()->back()->with('success', 'Lab maintenance lock released.');
+}
+
+
 
     public function logs(Request $request)
     {
@@ -495,7 +508,7 @@ class SuperAdminController extends Controller
     }
 
     // ANALYTICS CONTROLLER
-    public function analytics(Request $request)
+   public function analytics(Request $request)
     {
         // Determine the active date boundary based on the selected range parameter
         $range = $request->query('range', 'all'); // Default to all-time if nothing selected
@@ -503,17 +516,17 @@ class SuperAdminController extends Controller
 
         switch ($range) {
             case 'today':
-                $startDate = Carbon::today();
+                $startDate = \Carbon\Carbon::today();
                 $rangeLabel = 'Today';
                 break;
 
             case 'week':
-                $startDate = Carbon::now()->subDays(7);
+                $startDate = \Carbon\Carbon::now()->subDays(7);
                 $rangeLabel = 'Past 7 Days';
                 break;
 
             case 'month':
-                $startDate = Carbon::now()->startOfMonth();
+                $startDate = \Carbon\Carbon::now()->startOfMonth();
                 $rangeLabel = 'This Month';
                 break;
 
@@ -533,9 +546,12 @@ class SuperAdminController extends Controller
         }
         $activeAlertsCount = $alertsQuery->count();
 
-        // Read actual log line count for diagnostic metrics
-        $logFile = storage_path('logs/laravel.log');
-        $totalLogLines = file_exists($logFile) ? count(file($logFile)) : 0;
+        // Total Activity Log Count from DB filtered by time range
+        $activityLogQuery = DB::table('activity_log');
+        if ($startDate) {
+            $activityLogQuery->where('created_at', '>=', $startDate);
+        }
+        $totalLogEntries = $activityLogQuery->count();
 
         $stats = [
             [
@@ -549,9 +565,9 @@ class SuperAdminController extends Controller
                 'change' => 'Requires attention',
             ],
             [
-                'label' => 'SYSTEM LOG ENTRIES',
-                'value' => number_format($totalLogLines),
-                'change' => 'Captured rows',
+                'label' => 'SYSTEM LOG ENTRIES (' . strtoupper($rangeLabel) . ')',
+                'value' => number_format($totalLogEntries),
+                'change' => 'Captured DB rows',
             ],
         ];
 
@@ -666,16 +682,5 @@ class SuperAdminController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    // REVERSE THE LOCKOUT
-    public function releaseLockout(Request $request)
-    {
-        // Restore all maintenance workstations back to available
-        DB::table('computers')->update([
-            'status' => 'available',
-        ]);
-
-        $this->flashToast('success', 'Lockout Released', 'Global system lockdown released. All stations restored to available state.');
-
-        return redirect()->back()->with('status', 'Global system lockdown released. All stations restored to available state.');
-    }
+   
 }

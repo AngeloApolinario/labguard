@@ -195,4 +195,117 @@ class DashboardController extends Controller
             return back()->with('error', 'Critical System Error: Could not initialize facility nodes. ' . $e->getMessage());
         }
     }
+    
+    /**
+     * Import users from CSV file
+     */
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:csv,txt|max:5120', // Max 5MB
+        ]);
+
+        $file = $request->file('file');
+        
+        if (!$file || !($handle = fopen($file->getRealPath(), 'r'))) {
+            $this->flashToast('danger', 'Import Failed', 'Could not open uploaded file.');
+            return back()->withErrors(['file' => 'Could not open uploaded file.']);
+        }
+
+        // Get header row
+        $rawHeader = fgetcsv($handle, 1000, ',');
+        
+        if (!$rawHeader) {
+            fclose($handle);
+            $this->flashToast('danger', 'Import Failed', 'The uploaded file is empty.');
+            return back()->withErrors(['file' => 'The uploaded file is empty.']);
+        }
+
+        // Clean UTF-8 BOM characters (common in Excel CSV exports) & normalize headers
+        $header = array_map(function($col) {
+            $col = preg_replace('/[\x{EF}\x{BB}\x{BF}]/u', '', $col);
+            return strtolower(trim($col));
+        }, $rawHeader);
+
+        $requiredColumns = ['name', 'email', 'student_number', 'phone', 'role', 'password'];
+        $missingColumns = array_diff($requiredColumns, $header);
+
+        if (!empty($missingColumns)) {
+            fclose($handle);
+            $missingStr = implode(', ', $missingColumns);
+            
+            $this->flashToast('danger', 'Invalid CSV Format', "Missing required columns: {$missingStr}");
+
+            return back()->withErrors([
+                'file' => "Missing required columns: {$missingStr}"
+            ]);
+        }
+
+        $importedCount = 0;
+        $skippedCount = 0;
+
+        DB::beginTransaction();
+
+        try {
+            while (($row = fgetcsv($handle, 1000, ',')) !== false) {
+                // Skip empty lines
+                if (empty(array_filter($row))) {
+                    continue;
+                }
+
+                if (count($row) < count($header)) {
+                    $skippedCount++;
+                    continue; // Skip incomplete rows
+                }
+
+                $data = array_combine($header, $row);
+
+                $email = trim($data['email'] ?? '');
+                $studentNumber = trim($data['student_number'] ?? '');
+
+                if (empty($email) || User::where('email', $email)->orWhere('student_number', $studentNumber)->exists()) {
+                    $skippedCount++;
+                    continue; // Skip duplicates or empty records
+                }
+
+                User::create([
+                    'name' => trim($data['name']),
+                    'email' => $email,
+                    'student_number' => $studentNumber,
+                    'phone' => trim($data['phone']),
+                    'role' => in_array(strtolower(trim($data['role'])), ['student', 'personnel', 'admin']) ? strtolower(trim($data['role'])) : 'student',
+                    'password' => Hash::make(trim($data['password'])),
+                ]);
+
+                $importedCount++;
+            }
+
+            DB::commit();
+            fclose($handle);
+
+            if ($importedCount === 0) {
+                $message = "No new users were imported. ({$skippedCount} duplicate or invalid records skipped).";
+                $this->flashToast('warning', 'Import Completed', $message);
+
+                return back()->with('status', $message);
+            }
+
+            $message = "Successfully enrolled {$importedCount} new user(s).";
+            if ($skippedCount > 0) {
+                $message .= " ({$skippedCount} duplicate/invalid records were skipped).";
+            }
+
+            $this->flashToast('success', 'Mass Enrollment Complete', $message);
+
+            return back()->with('success', $message);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            fclose($handle);
+
+            $this->flashToast('danger', 'Import Failed', 'Critical System Error: ' . $e->getMessage());
+
+            return back()->withErrors(['file' => 'Import failed: ' . $e->getMessage()]);
+        }
+    }
 }

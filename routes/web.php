@@ -116,7 +116,8 @@ Route::middleware([
     Route::post('/users', [DashboardController::class, 'storeUser'])->name('users.store');
     Route::patch('/users/{user}', [DashboardController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [DashboardController::class, 'destroyUser'])->name('users.destroy');
-
+    Route::post('/users/import', [DashboardController::class, 'import'])->name('users.import');
+  
     // WORKSTATION SESSION CONTROL
     Route::patch('/sessions/{session}/terminate', [DashboardController::class, 'terminateSession'])->name('sessions.terminate');
 
@@ -217,7 +218,7 @@ Route::middleware([
     // EMERGENCY CONTROLS & SYSTEM MAINTENANCE
     Route::post('/reports/generate', [SuperAdminController::class, 'generateReport'])->name('reports.generate');
     Route::post('/system/backup', [SuperAdminController::class, 'triggerBackup'])->name('system.backup');
-    Route::post('/system/lockout', [SuperAdminController::class, 'emergencyLockout'])->name('system.lockout');
+    Route::post('/system/lockout', [SuperAdminController::class, 'lockout'])->name('system.lockout');
     Route::post('/system/release-lockout', [SuperAdminController::class, 'releaseLockout'])->name('system.release-lockout');
 });
 

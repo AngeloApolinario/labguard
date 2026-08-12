@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name')->unique();
             $table->string('location')->nullable();
+            $table->string('status')->default('active');
             $table->integer('capacity')->default(0);
             $table->timestamps();
         });

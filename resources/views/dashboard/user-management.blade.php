@@ -6,23 +6,21 @@
                 <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
                     User <span class="text-[#D4AF37]">Management</span>
                 </h2>
-
             </div>
-
-
         </div>
     </x-slot>
 
     <div class="py-12 bg-slate-50 min-h-screen" x-data="{ 
         addModal: false, 
         editModal: false, 
+        massEnrollModal: false,
         currentUser: {},
         search: '',
         selectedRole: ''
     }">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
-            <!-- Controls Header: Search, Role Filter, Add Button -->
+            <!-- Controls Header: Search, Role Filter, Action Buttons -->
             <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
                 <div class="flex flex-1 items-center gap-3 w-full sm:w-auto">
                     <!-- Search Input -->
@@ -47,12 +45,23 @@
                     </select>
                 </div>
 
-                <button @click="addModal = true" class="w-full sm:w-auto bg-[#D4AF37] hover:bg-[#b8962d] text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    Add New User
-                </button>
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <!-- Mass Enroll Button -->
+                    <button @click="massEnrollModal = true" class="w-full sm:w-auto bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm">
+                        <svg class="w-5 h-5 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                        </svg>
+                        Mass Enroll
+                    </button>
+
+                    <!-- Add User Button -->
+                    <button @click="addModal = true" class="w-full sm:w-auto bg-[#D4AF37] hover:bg-[#b8962d] text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Add New User
+                    </button>
+                </div>
             </div>
 
             <!-- Main Data Table Container -->
@@ -268,6 +277,83 @@
                         </button>
                         <button type="submit" class="flex-1 py-4 bg-black text-white rounded-[1.5rem] text-xs font-black uppercase tracking-[0.2em] shadow-xl hover:bg-slate-800 hover:scale-[1.02] transition-all">
                             Save Profile
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Mass Enroll Modal -->
+        <div x-show="massEnrollModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak>
+            <div class="bg-white rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl border border-white max-h-[90vh] overflow-y-auto" @click.away="massEnrollModal = false">
+                
+                <div class="mb-6">
+                    <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tight">Mass User Enrollment</h3>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Upload Excel or CSV file to enroll multiple users</p>
+                </div>
+
+                <!-- Step-by-Step Instructions & Format Guide -->
+                <div class="bg-slate-50 rounded-2xl p-5 mb-6 border border-slate-200/80">
+                    <h4 class="text-xs font-black uppercase text-[#D4AF37] tracking-wider mb-2 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Excel / CSV File Format Instructions
+                    </h4>
+                    
+                    <ol class="list-decimal list-inside text-xs text-slate-600 space-y-1 font-medium mb-4">
+                        <li>The first row of your spreadsheet <strong>must</strong> contain exact column header names.</li>
+                        <li>Valid roles are: <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">student</code>, <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">personnel</code>, or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">admin</code>.</li>
+                        <li>Format file as <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.csv</code> or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.xlsx</code>.</li>
+                    </ol>
+
+                    <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Required Columns & Sample Header:</p>
+                    
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                        <table class="w-full text-left text-[11px] font-mono text-slate-700">
+                            <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-500">
+                                <tr>
+                                    <th class="p-2 border-r border-slate-200">name</th>
+                                    <th class="p-2 border-r border-slate-200">email</th>
+                                    <th class="p-2 border-r border-slate-200">student_number</th>
+                                    <th class="p-2 border-r border-slate-200">phone</th>
+                                    <th class="p-2 border-r border-slate-200">role</th>
+                                    <th class="p-2">password</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="p-2 border-r border-slate-100">Juan Dela Cruz</td>
+                                    <td class="p-2 border-r border-slate-100">juan@phinmaed.com</td>
+                                    <td class="p-2 border-r border-slate-100">01-2324-048389</td>
+                                    <td class="p-2 border-r border-slate-100">09123456789</td>
+                                    <td class="p-2 border-r border-slate-100">student</td>
+                                    <td class="p-2">password123</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- File Upload Form -->
+                <form action="{{ route('dashboard.users.import') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+                    @csrf
+
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Upload File (.csv, .xlsx)</label>
+                        <input type="file" name="file" accept=".csv, .xlsx, .xls" required
+                            class="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-slate-800 file:text-white hover:file:bg-slate-900 file:cursor-pointer border border-slate-200 rounded-2xl bg-slate-50 p-2">
+                        @error('file') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    <div class="flex gap-4 pt-4">
+                        <button type="button" @click="massEnrollModal = false"
+                            class="flex-1 py-4 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="flex-1 py-4 bg-slate-800 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-lg hover:bg-slate-900 hover:scale-[1.02] transition-transform">
+                            Import & Enroll Users
                         </button>
                     </div>
                 </form>

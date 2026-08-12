@@ -43,6 +43,7 @@
                     @php
                     $labName = is_array($lab) ? ($lab['name'] ?? $lab['room_name'] ?? "Laboratory #{$key}") : ($lab->name ?? $lab->room_name ?? "Laboratory #{$key}");
                     $percent = is_array($lab) ? ($lab['percent'] ?? 0) : ($lab->percent ?? 0);
+                    $labStatus = is_array($lab) ? ($lab['status'] ?? 'active') : ($lab->status ?? 'active');
 
                     // Extract associated PCs collection or count
                     $pcs = is_array($lab)
@@ -54,14 +55,18 @@
                     $totalPcs = is_array($lab) ? ($lab['total_pcs'] ?? null) : ($lab->total_pcs ?? null);
                     $maintPcs = is_array($lab) ? ($lab['maintenance_pcs'] ?? null) : ($lab->maintenance_pcs ?? null);
 
-                    // Check if ALL PCs in this lab are under maintenance
-                    if ($totalPcs !== null && $maintPcs !== null) {
-                    $isMaintenance = ($totalPcs > 0) && ($totalPcs == $maintPcs);
-                    } else {
-                    $isMaintenance = $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
-                    $pcStatus = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
-                    return in_array(strtolower($pcStatus), ['maintenance', 'lockdown', 'disabled', 'offline']);
-                    });
+                    // Check lab status OR if all PCs in this lab are under maintenance
+                    $isMaintenance = in_array(strtolower($labStatus), ['maintenance', 'lockdown']);
+
+                    if (!$isMaintenance) {
+                        if ($totalPcs !== null && $maintPcs !== null) {
+                            $isMaintenance = ($totalPcs > 0) && ($totalPcs == $maintPcs);
+                        } else {
+                            $isMaintenance = $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
+                                $pcStatus = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
+                                return in_array(strtolower($pcStatus), ['maintenance', 'lockdown', 'disabled', 'offline']);
+                            });
+                        }
                     }
 
                     // Determine status color
@@ -76,7 +81,7 @@
                         <div class="flex items-center justify-between mb-1.5">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200/80">
                                 <span class="size-1.5 bg-amber-500 rounded-full mr-1.5 animate-pulse"></span>
-                                All PCs Under Maintenance
+                                Lab Under Maintenance
                             </span>
                         </div>
                         @endif
@@ -133,25 +138,30 @@
                     </div>
 
                     @php
-                    // Determine if ANY lab currently has all of its PCs under maintenance
+                    // Determine if ANY lab is currently in maintenance state
                     $hasActiveMaintenance = collect($labUtilization)->contains(function($lab) {
-                    $pcs = is_array($lab)
-                    ? ($lab['pcs'] ?? $lab['computers'] ?? $lab['stations'] ?? [])
-                    : ($lab->pcs ?? $lab->computers ?? $lab->stations ?? collect());
+                        $labStatus = is_array($lab) ? ($lab['status'] ?? 'active') : ($lab->status ?? 'active');
+                        if (in_array(strtolower($labStatus), ['maintenance', 'lockdown'])) {
+                            return true;
+                        }
 
-                    $pcsCollection = collect($pcs);
+                        $pcs = is_array($lab)
+                        ? ($lab['pcs'] ?? $lab['computers'] ?? $lab['stations'] ?? [])
+                        : ($lab->pcs ?? $lab->computers ?? $lab->stations ?? collect());
 
-                    $totalPcs = is_array($lab) ? ($lab['total_pcs'] ?? null) : ($lab->total_pcs ?? null);
-                    $maintPcs = is_array($lab) ? ($lab['maintenance_pcs'] ?? null) : ($lab->maintenance_pcs ?? null);
+                        $pcsCollection = collect($pcs);
 
-                    if ($totalPcs !== null && $maintPcs !== null) {
-                    return ($totalPcs > 0) && ($totalPcs == $maintPcs);
-                    }
+                        $totalPcs = is_array($lab) ? ($lab['total_pcs'] ?? null) : ($lab->total_pcs ?? null);
+                        $maintPcs = is_array($lab) ? ($lab['maintenance_pcs'] ?? null) : ($lab->maintenance_pcs ?? null);
 
-                    return $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
-                    $status = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
-                    return in_array(strtolower($status), ['maintenance', 'lockdown', 'disabled', 'offline']);
-                    });
+                        if ($totalPcs !== null && $maintPcs !== null) {
+                            return ($totalPcs > 0) && ($totalPcs == $maintPcs);
+                        }
+
+                        return $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
+                            $status = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
+                            return in_array(strtolower($status), ['maintenance', 'lockdown', 'disabled', 'offline']);
+                        });
                     });
                     @endphp
 
@@ -319,7 +329,7 @@
                             </div>
                             <ul class="list-disc list-inside space-y-1 text-slate-500 pl-1">
                                 <li>Terminates active student sessions in target lab.</li>
-                                <li>Forces stations into <code class="bg-slate-200/70 px-1 py-0.5 rounded text-slate-700">maintenance</code> state.</li>
+                                <li>Sets laboratory & workstation state to <code class="bg-slate-200/70 px-1 py-0.5 rounded text-slate-700">maintenance</code>.</li>
                                 <li>Blocks new login attempts until restored.</li>
                             </ul>
                         </div>
@@ -373,7 +383,7 @@
                                 <span class="size-1.5 rounded-full bg-emerald-500 mr-2"></span> System Restoration:
                             </div>
                             <p class="text-emerald-700 leading-relaxed">
-                                Releases PC stations in the selected lab marked as <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">maintenance</code> back to <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">available</code> status.
+                                Sets laboratory status back to <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">active</code> and releases PC stations from <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">maintenance</code> to <code class="bg-emerald-100 px-1 py-0.5 rounded text-emerald-800 font-mono">available</code>.
                             </p>
                         </div>
 

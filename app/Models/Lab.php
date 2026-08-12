@@ -9,7 +9,7 @@ class Lab extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'location'];
+    protected $fillable = ['name', 'location','status'];
 
     /**
      * Relationship: One Lab has many Computers
@@ -25,5 +25,11 @@ class Lab extends Model
     public function schedules()
     {
         return $this->hasMany(Schedule::class);
+    }
+
+      // Helper method to check maintenance state
+     public function isUnderMaintenance(): bool
+    {
+        return in_array(strtolower($this->status), ['maintenance', 'lockdown']);
     }
 }

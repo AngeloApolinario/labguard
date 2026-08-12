@@ -63,7 +63,7 @@
             </div>
         </div>
 
-        <!-- Live Statistics Grid Layout -->
+        <!-- Live Statistics Grid Layout (Dynamically displays total activity_log count) -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             @foreach($stats as $stat)
             <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
@@ -95,9 +95,9 @@
                 </div>
             </div>
 
-            <!-- Real-Time Top Issues Track List (Expanded Layout) -->
+            <!-- Real-Time Top Issues Track List -->
             <div class="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 class="text-lg font-bold text-[#1e2945] mb-6">Top Issues This Month</h3>
+                <h3 class="text-lg font-bold text-[#1e2945] mb-6">Top Reported Issues ({{ $rangeLabel }})</h3>
                 <div class="space-y-3">
                     @forelse($topIssues as $issue)
                     <div class="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100/50 hover:bg-slate-100/40 transition">

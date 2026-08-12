@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 
 class Computer extends Model
 {
@@ -81,7 +82,7 @@ class Computer extends Model
      */
     public static function cleanupStaleSessions()
     {
-        $staleThreshold = now()->subSeconds(60);
+        $staleThreshold = now()->subSeconds(30);
 
         $staleComputers = self::where('status', 'active')
             ->where(function ($query) use ($staleThreshold) {
@@ -91,12 +92,26 @@ class Computer extends Model
             ->get();
 
         foreach ($staleComputers as $pc) {
+            // 1. Fetch active session to get student details
+            $activeSession = LabSession::where('computer_id', $pc->id)
+                ->whereNull('time_out')
+                ->latest()
+                ->first();
+
+            $studentDetails = $activeSession
+                ? "{$activeSession->student_name} ({$activeSession->student_id_number})"
+                : "Unknown Student";
+
+            // 2. Close active session timestamp
             LabSession::where('computer_id', $pc->id)
                 ->whereNull('time_out')
                 ->update(['time_out' => now()]);
 
+            // 3. Set PC status back to available
             $pc->update(['status' => 'available']);
-            Log::info("Auto-released offline PC: {$pc->pc_number}");
+
+            // 4. Log the auto-release event with the student's name & ID
+            Log::info("Auto-released offline PC: [{$pc->pc_number}] — Last Active User: {$studentDetails}");
         }
     }
 }

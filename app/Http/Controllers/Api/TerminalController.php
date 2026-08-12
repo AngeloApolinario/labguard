@@ -37,13 +37,18 @@ class TerminalController extends Controller
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
-        // 2. Find the PC and its Lab
+        // 2. Verify User Email (Only verified students can access labs)
+        if (!$user->email_verified_at) {
+            return response()->json(['message' => 'Your account is not verified. Please verify your email address first.'], 403);
+        }
+
+        // 3. Find the PC and its Lab
         $pc = Computer::with('lab')->where('pc_number', $request->pc_number)->first();
         if (!$pc) {
             return response()->json(['message' => 'Terminal station not found.'], 404);
         }
 
-        // 3. Block login if PC is under maintenance
+        // 4. Block login if PC is under maintenance
         if (strtolower($pc->status) === 'maintenance') {
             return response()->json(['message' => 'This terminal station is currently under maintenance.'], 403);
         }

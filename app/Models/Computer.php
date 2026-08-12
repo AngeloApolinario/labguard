@@ -74,4 +74,29 @@ class Computer extends Model
 
         return $this->status ?? 'available';
     }
+
+
+    /**
+     * Helper: Automatically releases any PC that hasn't pinged in > 30 seconds
+     */
+    public static function cleanupStaleSessions()
+    {
+        $staleThreshold = now()->subSeconds(60);
+
+        $staleComputers = self::where('status', 'active')
+            ->where(function ($query) use ($staleThreshold) {
+                $query->whereNull('last_ping_at')
+                    ->orWhere('last_ping_at', '<', $staleThreshold);
+            })
+            ->get();
+
+        foreach ($staleComputers as $pc) {
+            LabSession::where('computer_id', $pc->id)
+                ->whereNull('time_out')
+                ->update(['time_out' => now()]);
+
+            $pc->update(['status' => 'available']);
+            Log::info("Auto-released offline PC: {$pc->pc_number}");
+        }
+    }
 }

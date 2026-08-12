@@ -26,6 +26,9 @@ class DashboardController extends Controller
 
     public function index()
     {
+        // Clean up any PCs that lost Wi-Fi before rendering the page
+        Computer::cleanupStaleSessions();
+
         // Global Stats
         $totalComputers = Computer::count();
         $activeStations = Computer::where('status', 'active')->count();
@@ -195,7 +198,7 @@ class DashboardController extends Controller
             return back()->with('error', 'Critical System Error: Could not initialize facility nodes. ' . $e->getMessage());
         }
     }
-    
+
     /**
      * Import users from CSV file
      */
@@ -206,7 +209,7 @@ class DashboardController extends Controller
         ]);
 
         $file = $request->file('file');
-        
+
         if (!$file || !($handle = fopen($file->getRealPath(), 'r'))) {
             $this->flashToast('danger', 'Import Failed', 'Could not open uploaded file.');
             return back()->withErrors(['file' => 'Could not open uploaded file.']);
@@ -214,7 +217,7 @@ class DashboardController extends Controller
 
         // Get header row
         $rawHeader = fgetcsv($handle, 1000, ',');
-        
+
         if (!$rawHeader) {
             fclose($handle);
             $this->flashToast('danger', 'Import Failed', 'The uploaded file is empty.');
@@ -222,7 +225,7 @@ class DashboardController extends Controller
         }
 
         // Clean UTF-8 BOM characters (common in Excel CSV exports) & normalize headers
-        $header = array_map(function($col) {
+        $header = array_map(function ($col) {
             $col = preg_replace('/[\x{EF}\x{BB}\x{BF}]/u', '', $col);
             return strtolower(trim($col));
         }, $rawHeader);
@@ -233,7 +236,7 @@ class DashboardController extends Controller
         if (!empty($missingColumns)) {
             fclose($handle);
             $missingStr = implode(', ', $missingColumns);
-            
+
             $this->flashToast('danger', 'Invalid CSV Format', "Missing required columns: {$missingStr}");
 
             return back()->withErrors([
@@ -298,7 +301,6 @@ class DashboardController extends Controller
             $this->flashToast('success', 'Mass Enrollment Complete', $message);
 
             return back()->with('success', $message);
-
         } catch (\Exception $e) {
             DB::rollBack();
             fclose($handle);

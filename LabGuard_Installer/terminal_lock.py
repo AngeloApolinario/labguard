@@ -1452,6 +1452,10 @@ class LabGuardClient:
         threading.Thread(target=self.heartbeat_loop, daemon=True).start()
 
     def heartbeat_loop(self):
+        """Active session heartbeat loop monitoring network connection & server status."""
+        time.sleep(3)
+        consecutive_failures = 0
+
         while True:
             try:
                 lab_param = urllib.parse.quote(str(LAB_ID))
@@ -1460,6 +1464,7 @@ class LabGuardClient:
                 response = requests.get(url, headers=HEADERS, timeout=5, verify=False)
 
                 if response.status_code == 200:
+                    consecutive_failures = 0  # Reset failure counter on successful ping
                     data = response.json()
                     pc_status = data.get("status") or data.get("data", {}).get("status")
 
@@ -1473,7 +1478,14 @@ class LabGuardClient:
                         self.root.after(0, self.lock_ui_again)
                         break
             except Exception as e:
-                print(f"[DEBUG] Heartbeat Error: {e}")
+                consecutive_failures += 1
+                print(f"[DEBUG] Heartbeat Ping Failed ({consecutive_failures}/3): {e}")
+
+                # If Wi-Fi is turned off or disconnected for 15 seconds (3 pings), lock terminal
+                if consecutive_failures >= 3:
+                    print("[DEBUG] Wi-Fi connection lost for 15s. Auto-locking station...")
+                    self.root.after(0, self.lock_ui_again)
+                    break
 
             time.sleep(5)
 

@@ -28,7 +28,10 @@ class PersonnelController extends Controller
      * Staff Dashboard: Overview of all Labs
      */
     public function index()
+
     {
+        // Clean up any PCs that lost Wi-Fi before rendering the page
+        Computer::cleanupStaleSessions();
         $labs = Lab::withCount([
             'computers as total',
             'computers as occupied' => function ($query) {
@@ -144,6 +147,8 @@ class PersonnelController extends Controller
      */
     public function labs()
     {
+        // Clean up any PCs that lost Wi-Fi before rendering the page
+        Computer::cleanupStaleSessions();
         $labs = Lab::withCount([
             'computers as total',
             'computers as occupied' => function ($query) {

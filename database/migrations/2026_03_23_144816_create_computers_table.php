@@ -26,6 +26,8 @@ return new class extends Migration
             // Status Logic
             $table->enum('status', ['available', 'active', 'maintenance'])->default('available');
 
+            $table->timestamp('last_ping_at')->nullable();
+
             $table->timestamps();
 
             // Unique constraint: Ensure PC-01 only exists once PER lab

@@ -8,9 +8,11 @@ import subprocess
 import re
 import tempfile
 import urllib3
+import urllib.parse
 import tkinter as tk
 from tkinter import ttk, messagebox
 import requests
+import json
 
 import ctypes
 from ctypes import wintypes
@@ -169,7 +171,7 @@ def start_keyboard_hook():
     try:
         _hook_proc_ref = HOOKPROC(_low_level_keyboard_proc)
 
-        # Passing 0 for hMod fixes Error 126 in Python
+        # Passing None for hMod fixes Error 126 in Python
         _hook_id = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _hook_proc_ref, None, 0)
         if not _hook_id or _hook_id == 0:
             err = kernel32.GetLastError()
@@ -221,12 +223,16 @@ def load_config():
     return config_data
 
 
-# Load Configuration
+# Load Configuration Dynamically
 config = load_config()
-API_URL = "https://labguard.it.com/api/pc"
+
+# Read API_URL dynamically from config.json (Supports local dev & production URLs)
+API_URL = config.get("server_url", "https://labguard.it.com/api/pc").rstrip('/')
 LAB_ID = config.get("lab", "LAB 1")
 PC_NUMBER = config.get("pc", "PC-01")
-HEADERS = {"Host": "labguard.it.com", "Accept": "application/json"}
+
+# Clean headers without hardcoded Host header
+HEADERS = {"Accept": "application/json"}
 
 
 def cleanup_security():
@@ -556,7 +562,7 @@ class LabGuardClient:
         # Re-focus student ID entry if background is clicked
         self.root.bind("<Button-1>", self._on_bg_click)
 
-        # EMERGENCY LOCK OUT, REMOVE/COMMENT BEFORE GOING INTO PRODUCTION
+        # EMERGENCY LOCK OUT SHORTCUT (Ctrl+Alt+Shift+X)
         self.root.bind("<Control-Alt-Shift-Key-X>", self.emergency_admin_exit)
         self.root.bind("<Control-Alt-Shift-Key-x>", self.emergency_admin_exit)
 
@@ -756,7 +762,7 @@ class LabGuardClient:
             return "break"
 
     def _format_student_id_entry(self, event=None):
-        """Smoothly auto-formats student ID without mixing up digits or misplacing the cursor."""
+        """Smoothly auto-formats student ID without mixing up digits or misplacing cursor."""
         if event and event.keysym in {
             "BackSpace",
             "Delete",
@@ -783,7 +789,6 @@ class LabGuardClient:
             if was_at_end:
                 target.icursor(tk.END)
             else:
-                # Calculate correct new cursor offset after hyphen insertions
                 old_prefix_digits = len(re.sub(r"\D", "", current_value[:cursor_pos]))
                 new_pos = 0
                 digit_count = 0
@@ -825,8 +830,13 @@ class LabGuardClient:
         """Background thread checking server reachability & PC status continuously."""
         while True:
             try:
+                # URL encode lab_id and pc_number to prevent space formatting errors
+                lab_param = urllib.parse.quote(str(LAB_ID))
+                pc_param = urllib.parse.quote(str(PC_NUMBER))
+                url = f"{API_URL}/status/{lab_param}/{pc_param}"
+
                 res = requests.get(
-                    f"{API_URL}/status/{LAB_ID}/{PC_NUMBER}",
+                    url,
                     headers=HEADERS,
                     timeout=3,
                     verify=False,
@@ -846,8 +856,10 @@ class LabGuardClient:
                     self.root.after(0, self.update_net_status, True)
                     self.root.after(0, self.restore_login_ui)
                 else:
+                    print(f"[DEBUG] Network Monitor HTTP {res.status_code}: {res.text}")
                     self.root.after(0, self.update_net_status, False)
-            except Exception:
+            except Exception as e:
+                print(f"[DEBUG] Network Monitor Exception: {e}")
                 self.root.after(0, self.update_net_status, False)
             time.sleep(5)
 
@@ -1410,10 +1422,15 @@ class LabGuardClient:
                 )
                 self.root.after(1500, self.hide_terminal)
             else:
-                msg = response.json().get("message", "Invalid Credentials.")
+                try:
+                    msg = response.json().get("message", "Invalid Credentials.")
+                except Exception:
+                    msg = f"HTTP Error {response.status_code}"
+                print(f"[DEBUG] Login Failed ({response.status_code}): {response.text}")
                 CinematicNotify(self.root, "Auth Failed", msg, color="#ef4444")
                 self.btn_unlock.config(state="normal", text="UNLOCK STATION")
-        except Exception:
+        except Exception as e:
+            print(f"[DEBUG] Login Exception: {e}")
             CinematicNotify(
                 self.root,
                 "Error",
@@ -1437,7 +1454,9 @@ class LabGuardClient:
     def heartbeat_loop(self):
         while True:
             try:
-                url = f"{API_URL}/status/{LAB_ID}/{PC_NUMBER}"
+                lab_param = urllib.parse.quote(str(LAB_ID))
+                pc_param = urllib.parse.quote(str(PC_NUMBER))
+                url = f"{API_URL}/status/{lab_param}/{pc_param}"
                 response = requests.get(url, headers=HEADERS, timeout=5, verify=False)
 
                 if response.status_code == 200:
@@ -1476,7 +1495,7 @@ class LabGuardClient:
     def emergency_admin_exit(self, event=None):
         """Emergency exit shortcut for administrators."""
         print("[ADMIN] Emergency exit triggered. Cleaning up system hooks...")
-        cleanup_security()  # Restores taskbar and removes low-level keyboard hook
+        cleanup_security()
         self.root.destroy()
         sys.exit(0)
 

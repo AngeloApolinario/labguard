@@ -26,7 +26,7 @@ class TerminalController extends Controller
         ]);
 
         $inputStudentId = trim($request->student_id);
-        $cleanStudentId = preg_replace('/\D/', '', $inputStudentId); // Remove hyphens for lookup flexibility
+        $cleanStudentId = preg_replace('/\D/', '', $inputStudentId);
 
         // 1. Validate User Credentials (Checks formatted or raw student ID)
         $user = User::where('student_number', $inputStudentId)
@@ -43,7 +43,7 @@ class TerminalController extends Controller
             return response()->json(['message' => 'Terminal station not found.'], 404);
         }
 
-        // 3. Block login if PC is currently under maintenance
+        // 3. Block login if PC is under maintenance
         if (strtolower($pc->status) === 'maintenance') {
             return response()->json(['message' => 'This terminal station is currently under maintenance.'], 403);
         }
@@ -62,21 +62,22 @@ class TerminalController extends Controller
 
         $assignedTeacherId = $activeSchedule ? $activeSchedule->user_id : null;
 
-        // 4. Race Condition Fix: Close any active sessions on this PC or for this User
-        LabSession::where('computer_id', $pc->id)
-            ->orWhere('user_id', $user->id)
+        // 4. Race Condition Fix: Close active sessions on this PC or for this student number
+        LabSession::where(function ($query) use ($pc, $user) {
+            $query->where('computer_id', $pc->id)
+                ->orWhere('student_id_number', $user->student_number);
+        })
             ->whereNull('time_out')
             ->update(['time_out' => now()]);
 
-        // 5. Update PC Status and Timestamp
+        // 5. Update PC Status
         $pc->update([
             'status' => 'active',
             'last_ping_at' => now()
         ]);
 
-        // 6. Create Lab Session
+        // 6. Create Lab Session (Matches your exact lab_sessions columns)
         LabSession::create([
-            'user_id'           => $user->id,
             'computer_id'       => $pc->id,
             'lab_id'            => $pc->lab_id,
             'student_name'      => $user->name,

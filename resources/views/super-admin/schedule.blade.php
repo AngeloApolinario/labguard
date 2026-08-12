@@ -49,7 +49,7 @@
         <div class="flex items-center justify-between mb-10">
             <div>
                 <h2 class="font-black text-4xl text-slate-800 uppercase tracking-tighter">
-                    {{ $lab->lab_name }} <span class="text-[#D4AF37]">Occupancy</span>
+                    {{ $lab->name }} <span class="text-[#D4AF37]">Occupancy</span>
                 </h2>
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">
                     Scheduling & Laboratory Allocation

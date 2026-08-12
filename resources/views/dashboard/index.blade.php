@@ -21,7 +21,7 @@
     </x-slot>
 
     {{-- Initializing with 'all' ensures all PCs show on load --}}
-    <div class="py-12 px-6 min-h-screen bg-[#F8FAFC]" x-data="{ activeLab: 'all' }">
+    <div class="py-12 px-6 min-h-screen " x-data="{ activeLab: 'all' }">
         <div class="max-w-7xl mx-auto space-y-10">
 
             {{-- HUD Statistics --}}

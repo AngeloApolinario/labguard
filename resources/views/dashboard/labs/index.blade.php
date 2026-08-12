@@ -28,7 +28,7 @@
         </div>
     </x-slot>
 
-    <div class="py-12 px-6 bg-[#F8FAFC] min-h-screen">
+    <div class="py-12 px-6  min-h-screen">
         <div class="max-w-7xl mx-auto">
 
             {{-- Flash Success Message --}}

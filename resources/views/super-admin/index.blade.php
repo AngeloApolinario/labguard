@@ -5,23 +5,31 @@
             lockoutModal: false, 
             restoreModal: false 
         }"
-        class="p-8 bg-[#f8fafc] min-h-screen relative">
+        class="p-8  min-h-screen relative">
 
         {{-- Header Status Row --}}
-        <div class="flex justify-between items-center mb-10">
-            <div>
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">System Overview</h1>
-                <p class="text-slate-500">Real-time laboratory monitoring and super admin analytics</p>
-            </div>
-            <div class="flex items-center space-x-4">
-                <span class="flex items-center px-4 py-2 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">
-                    <span class="size-2 bg-green-500 rounded-full mr-2 animate-pulse"></span> LabGuard Active
-                </span>
+        <x-slot name="header">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
+                        System <span class="text-[#D4AF37]">Overview</span>
+                    </h2>
+                    <div class="flex items-center space-x-2 mt-1">
+                        <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                            Super Admin Command Center
+                        </p>
+                    </div>
+                </div>
+
                 <div class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold uppercase tracking-widest flex items-center">
                     <x-heroicon-o-shield-check class="size-4 mr-2" /> Super Admin
                 </div>
             </div>
-        </div>
+        </x-slot>
+
+
+
 
         {{-- Top Summary Stats --}}
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
@@ -59,14 +67,14 @@
                     $isMaintenance = in_array(strtolower($labStatus), ['maintenance', 'lockdown']);
 
                     if (!$isMaintenance) {
-                        if ($totalPcs !== null && $maintPcs !== null) {
-                            $isMaintenance = ($totalPcs > 0) && ($totalPcs == $maintPcs);
-                        } else {
-                            $isMaintenance = $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
-                                $pcStatus = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
-                                return in_array(strtolower($pcStatus), ['maintenance', 'lockdown', 'disabled', 'offline']);
-                            });
-                        }
+                    if ($totalPcs !== null && $maintPcs !== null) {
+                    $isMaintenance = ($totalPcs > 0) && ($totalPcs == $maintPcs);
+                    } else {
+                    $isMaintenance = $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
+                    $pcStatus = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
+                    return in_array(strtolower($pcStatus), ['maintenance', 'lockdown', 'disabled', 'offline']);
+                    });
+                    }
                     }
 
                     // Determine status color
@@ -140,28 +148,28 @@
                     @php
                     // Determine if ANY lab is currently in maintenance state
                     $hasActiveMaintenance = collect($labUtilization)->contains(function($lab) {
-                        $labStatus = is_array($lab) ? ($lab['status'] ?? 'active') : ($lab->status ?? 'active');
-                        if (in_array(strtolower($labStatus), ['maintenance', 'lockdown'])) {
-                            return true;
-                        }
+                    $labStatus = is_array($lab) ? ($lab['status'] ?? 'active') : ($lab->status ?? 'active');
+                    if (in_array(strtolower($labStatus), ['maintenance', 'lockdown'])) {
+                    return true;
+                    }
 
-                        $pcs = is_array($lab)
-                        ? ($lab['pcs'] ?? $lab['computers'] ?? $lab['stations'] ?? [])
-                        : ($lab->pcs ?? $lab->computers ?? $lab->stations ?? collect());
+                    $pcs = is_array($lab)
+                    ? ($lab['pcs'] ?? $lab['computers'] ?? $lab['stations'] ?? [])
+                    : ($lab->pcs ?? $lab->computers ?? $lab->stations ?? collect());
 
-                        $pcsCollection = collect($pcs);
+                    $pcsCollection = collect($pcs);
 
-                        $totalPcs = is_array($lab) ? ($lab['total_pcs'] ?? null) : ($lab->total_pcs ?? null);
-                        $maintPcs = is_array($lab) ? ($lab['maintenance_pcs'] ?? null) : ($lab->maintenance_pcs ?? null);
+                    $totalPcs = is_array($lab) ? ($lab['total_pcs'] ?? null) : ($lab->total_pcs ?? null);
+                    $maintPcs = is_array($lab) ? ($lab['maintenance_pcs'] ?? null) : ($lab->maintenance_pcs ?? null);
 
-                        if ($totalPcs !== null && $maintPcs !== null) {
-                            return ($totalPcs > 0) && ($totalPcs == $maintPcs);
-                        }
+                    if ($totalPcs !== null && $maintPcs !== null) {
+                    return ($totalPcs > 0) && ($totalPcs == $maintPcs);
+                    }
 
-                        return $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
-                            $status = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
-                            return in_array(strtolower($status), ['maintenance', 'lockdown', 'disabled', 'offline']);
-                        });
+                    return $pcsCollection->isNotEmpty() && $pcsCollection->every(function ($pc) {
+                    $status = is_array($pc) ? ($pc['status'] ?? '') : ($pc->status ?? '');
+                    return in_array(strtolower($status), ['maintenance', 'lockdown', 'disabled', 'offline']);
+                    });
                     });
                     @endphp
 

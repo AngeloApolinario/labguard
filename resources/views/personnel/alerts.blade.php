@@ -1,15 +1,16 @@
 <x-app-layout>
-    <div class="py-12 px-6 max-w-7xl mx-auto min-h-screen bg-[#FDFCF9]">
-        <div class="mb-12 flex justify-between items-center">
-            <div class="relative">
-                <div class="absolute -left-4 top-0 bottom-0 w-1 bg-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.6)]"></div>
-                <h2 class="font-black text-5xl text-slate-900 uppercase tracking-tighter leading-none">
-                    LAB <span class="text-[#D4AF37]">ALERTS</span>
+    <x-slot name="header">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
+                    Alerts <span class="text-[#D4AF37]">History</span>
                 </h2>
-                <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-                    <span class="inline-block w-2 h-2 rounded-full bg-[#D4AF37] animate-pulse"></span>
-                    Reported Issues & Incident Logs
-                </p>
+                <div class="flex items-center space-x-2 mt-1">
+                    <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                        Computer Alerts Overview
+                    </p>
+                </div>
             </div>
 
             <div class="flex gap-3">
@@ -24,6 +25,8 @@
                 </div>
             </div>
         </div>
+    </x-slot>
+    <div class="py-12 px-6 max-w-7xl mx-auto min-h-screen ">
 
         <div class="mb-10 group">
             <div class="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-500/5 transition-all hover:border-slate-200">

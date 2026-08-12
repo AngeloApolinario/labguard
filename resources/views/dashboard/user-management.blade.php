@@ -6,11 +6,18 @@
                 <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
                     User <span class="text-[#D4AF37]">Management</span>
                 </h2>
+                <div class="flex items-center space-x-2 mt-1">
+                    <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                        User Records Overview
+                    </p>
+                </div>
             </div>
+
         </div>
     </x-slot>
 
-    <div class="py-12 bg-slate-50 min-h-screen" x-data="{ 
+    <div class="py-12  min-h-screen" x-data="{ 
         addModal: false, 
         editModal: false, 
         massEnrollModal: false,
@@ -286,7 +293,7 @@
         <!-- Mass Enroll Modal -->
         <div x-show="massEnrollModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak>
             <div class="bg-white rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl border border-white max-h-[90vh] overflow-y-auto" @click.away="massEnrollModal = false">
-                
+
                 <div class="mb-6">
                     <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tight">Mass User Enrollment</h3>
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Upload Excel or CSV file to enroll multiple users</p>
@@ -300,15 +307,15 @@
                         </svg>
                         Excel / CSV File Format Instructions
                     </h4>
-                    
+
                     <ol class="list-decimal list-inside text-xs text-slate-600 space-y-1 font-medium mb-4">
                         <li>The first row of your spreadsheet <strong>must</strong> contain exact column header names.</li>
                         <li>Valid roles are: <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">student</code>, <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">personnel</code>, or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">admin</code>.</li>
-                        <li>Format file as <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.csv</code> or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.xlsx</code>.</li>
+                        <li>Format file as <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.csv</code> or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.TXT</code>.</li>
                     </ol>
 
                     <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Required Columns & Sample Header:</p>
-                    
+
                     <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
                         <table class="w-full text-left text-[11px] font-mono text-slate-700">
                             <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-500">

@@ -63,14 +63,14 @@
                 <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
                     Assigned <span class="text-[#D4AF37]">Facilities</span>
                 </h2>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Personnel Duty Terminal • Session Monitoring</p>
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Facilities overview</p>
             </div>
 
-            {{-- Global Duty Status --}}
+            {{-- Global Status --}}
             <div class="flex items-center space-x-4 bg-white border border-slate-100 p-2 rounded-2xl shadow-sm">
                 <div class="px-4 py-2 bg-green-500/10 rounded-xl border border-green-500/20">
-                    <p class="text-[8px] font-black text-green-600 uppercase">Duty Status</p>
-                    <p class="text-xs font-black text-green-700 uppercase">Active Shift</p>
+                    <p class="text-[8px] font-black text-green-600 uppercase">Status</p>
+                    <p class="text-xs font-black text-green-700 uppercase">Active</p>
                 </div>
                 <div class="pr-4">
                     <p class="text-[8px] font-black text-slate-400 uppercase text-right">Server Latency</p>
@@ -86,7 +86,7 @@
             {{-- Quick Stats Row --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
                 <div class="bg-slate-800 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Total Managed Units</p>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Total Computers</p>
                     <h4 class="text-4xl font-black mt-2 italic">{{ $labs->sum('total') }}</h4>
                     <div class="absolute -right-4 -bottom-4 size-24 bg-white/5 rounded-full blur-2xl group-hover:bg-[#D4AF37]/10 transition-all"></div>
                 </div>
@@ -97,7 +97,7 @@
                 </div>
 
                 <div class="bg-[#D4AF37] p-8 rounded-[2.5rem] text-white shadow-xl shadow-[#D4AF37]/20">
-                    <p class="text-[10px] font-black text-white/70 uppercase tracking-[0.2em]">Available Nodes</p>
+                    <p class="text-[10px] font-black text-white/70 uppercase tracking-[0.2em]">Available Computers</p>
                     <h4 class="text-4xl font-black mt-2 italic">{{ $labs->sum('total') - $labs->sum('occupied') }}</h4>
                 </div>
             </div>
@@ -105,6 +105,7 @@
             {{-- Detailed Lab Cards --}}
             <div class="space-y-6">
                 @foreach($labs as $lab)
+                @php $isMaintenance = $lab->isUnderMaintenance(); @endphp
                 <div class="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm hover:shadow-xl transition-all duration-500 group">
                     <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
 
@@ -116,16 +117,17 @@
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tighter">{{ $lab->lab_name }}</h3>
-                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Active Duty Sector</p>
+                                <h3 class="text-2xl font-black text-slate-800 uppercase tracking-tighter">{{ $lab->name }}</h3>
+                                {{-- simplified subtitle --}}
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Facility</p>
                             </div>
                         </div>
 
                         {{-- Progress Visualizer --}}
                         <div class="flex-1 max-w-md">
                             <div class="flex justify-between text-[9px] font-black uppercase mb-2">
-                                <span class="text-slate-400 tracking-widest">Sector Occupancy</span>
-                                <span class="text-slate-800">{{ $lab->occupied }} / {{ $lab->total }} Units</span>
+                                <span class="text-slate-400 tracking-widest">Occupancy</span>
+                                <span class="text-slate-800">{{ $lab->occupied }} / {{ $lab->total }}</span>
                             </div>
                             <div class="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
                                 <div class="h-full bg-slate-800 rounded-full transition-all duration-1000 group-hover:bg-[#D4AF37]"
@@ -135,12 +137,21 @@
 
                         {{-- Action Button --}}
                         <div>
+                            @if($isMaintenance)
+                            <div class="px-6 py-4 bg-rose-50 text-rose-700 rounded-2xl text-[12px] font-black uppercase tracking-widest flex items-center gap-3">
+                                <svg class="w-5 h-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.657 0 3-1.343 3-3V6a3 3 0 10-6 0v2c0 1.657 1.343 3 3 3zM5 11v6a2 2 0 002 2h10a2 2 0 002-2v-6" />
+                                </svg>
+                                This lab is currently under maintenance
+                            </div>
+                            @else
                             <a href="{{ route('personnel.lab.show', $lab) }}" class="flex items-center space-x-3 px-8 py-4 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest group-hover:bg-slate-800 group-hover:text-white transition-all shadow-sm">
-                                <span>Enter Terminal</span>
+                                <span>Enter</span>
                                 <svg class="size-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                 </svg>
                             </a>
+                            @endif
                         </div>
                     </div>
                 </div>

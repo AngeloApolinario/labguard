@@ -1,26 +1,26 @@
 <x-app-layout>
-    <div class="p-8 bg-[#f8fafc] min-h-screen">
+    <div class="p-8  min-h-screen">
 
-        <!-- Top Header Panel -->
-        <div class="flex justify-between items-center mb-10">
-            <div>
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Analytics &amp; Reports</h1>
-                <p class="text-slate-500">Detailed system analytics and live tracking metrics</p>
-            </div>
-            <div class="flex items-center space-x-4">
-                <span class="flex items-center px-4 py-2 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200">
-                    <span class="size-2 bg-green-500 rounded-full mr-2"></span> System Active
-                </span>
-                <div class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold uppercase tracking-widest flex items-center">
-                    <x-heroicon-o-shield-check class="size-4 mr-2" /> Super Admin
+        <x-slot name="header">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
+                        Analytics & <span class="text-[#D4AF37]">Reports</span>
+                    </h2>
+                    <div class="flex items-center space-x-2 mt-1">
+                        <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                            Labguard System Analytics Overview
+                        </p>
+                    </div>
                 </div>
+
             </div>
-        </div>
+        </x-slot>
 
         <!-- Action Bar Layout -->
         <div class="flex justify-between items-end mb-6">
             <div>
-                <h2 class="text-xl font-bold text-[#1e2945]">System Analytics &amp; Reports</h2>
                 <p class="text-sm text-slate-400">Filtering criteria: <span class="text-blue-600 font-bold underline">{{ $rangeLabel }}</span></p>
             </div>
             <div class="flex space-x-3 items-center relative">

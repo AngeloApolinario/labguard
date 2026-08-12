@@ -117,7 +117,7 @@ Route::middleware([
     Route::patch('/users/{user}', [DashboardController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [DashboardController::class, 'destroyUser'])->name('users.destroy');
     Route::post('/users/import', [DashboardController::class, 'import'])->name('users.import');
-  
+
     // WORKSTATION SESSION CONTROL
     Route::patch('/sessions/{session}/terminate', [DashboardController::class, 'terminateSession'])->name('sessions.terminate');
 
@@ -202,6 +202,8 @@ Route::middleware([
     Route::post('/users', [SuperAdminController::class, 'storeUser'])->name('users.store');
     Route::patch('/users/{user}', [SuperAdminController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [SuperAdminController::class, 'destroyUser'])->name('users.destroy');
+    Route::post('/users/import', [SuperAdminController::class, 'import'])->name('users.import');
+
 
     // GLOBAL LAB INVENTORY & SCHEDULING
     Route::get('/labs', [SuperAdminController::class, 'labs'])->name('labs');

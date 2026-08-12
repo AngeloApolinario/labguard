@@ -8,7 +8,7 @@
                 <div class="flex items-center space-x-2 mt-1">
                     <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                        System Online • Liability Tracking Active
+                        Laboratory Overview
                     </p>
                 </div>
             </div>
@@ -19,7 +19,7 @@
                     <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    Weekly Master Grid
+                    Weekly Grid
                 </a>
 
                 {{-- Quick Summary Stats --}}
@@ -40,7 +40,7 @@
         </div>
     </x-slot>
 
-    <div class="py-12 px-6 min-h-screen bg-[#F8FAFC] relative overflow-hidden">
+    <div class="py-12 px-6 min-h-screen  relative overflow-hidden">
 
         {{-- ACCESS DENIED ALERT --}}
         @if(session('error'))
@@ -80,10 +80,13 @@
 
                     // Access is locked if a schedule exists and the user is NOT the owner (and not admin)
                     $isLocked = $activeSched && auth()->id() !== $activeSched->user_id && auth()->user()->role !== 'admin';
+                    // Maintenance state from model helper
+                    $isMaintenance = $lab->isUnderMaintenance();
+                    $isUnavailable = $isLocked || $isMaintenance;
                     @endphp
 
-                    <a href="{{ $isLocked ? '#' : route('personnel.lab.show', $lab->id) }}"
-                        class="group {{ $isLocked ? 'cursor-not-allowed' : '' }}">
+                    <a href="{{ $isUnavailable ? '#' : route('personnel.lab.show', $lab->id) }}"
+                        class="group {{ $isUnavailable ? 'cursor-not-allowed' : '' }}">
 
                         <div class="relative bg-white border {{ $isLocked ? 'border-slate-100 opacity-75 grayscale' : 'border-slate-200/60 transition-all duration-500 group-hover:shadow-[0_40px_80px_rgba(212,175,55,0.15)] group-hover:-translate-y-3' }} rounded-[3rem] p-1 shadow-[0_10px_30px_rgba(0,0,0,0.02)]">
 
@@ -109,30 +112,30 @@
                                     </div>
 
                                     <div class="text-right">
-                                        <span class="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em]">Node ID</span>
-                                        <p class="text-xs font-black text-slate-800 uppercase tracking-tighter">00{{ $loop->iteration }}</p>
+                                        <span class="text-[9px] text-slate-400">Location</span>
+                                        <p class="text-sm font-bold text-slate-800">{{ $lab->location ?? '—' }}</p>
                                     </div>
                                 </div>
 
                                 <div class="mb-8">
                                     <h3 class="text-3xl font-black {{ $isLocked ? 'text-slate-400' : 'text-slate-800' }} tracking-tighter uppercase transition-colors">
-                                        {{ $lab->lab_name }}
+                                        {{ $lab->name }}
                                     </h3>
                                     @if($isLocked)
-                                    <p class="text-[10px] font-bold text-rose-400 uppercase tracking-widest mt-1 italic">
+                                    <p class="text-[10px] font-bold text-rose-400 mt-1 italic">
                                         Reserved: {{ $activeSched->user->name }}
                                     </p>
                                     @else
-                                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Standard Instructional Facility</p>
+                                    <p class="text-[10px] text-slate-400 mt-1">Location: {{ $lab->location ?? '—' }}</p>
                                     @endif
                                 </div>
 
                                 <div class="space-y-6">
                                     {{-- Occupancy Visualizer --}}
                                     <div>
-                                        <div class="flex justify-between text-[10px] font-black uppercase mb-3">
-                                            <span class="text-slate-400">Load Factor</span>
-                                            <span class="text-slate-800 italic">{{ floor(($lab->occupied / $lab->total) * 100) }}% Occupied</span>
+                                        <div class="flex justify-between text-[10px] font-black mb-3">
+                                            <span class="text-slate-400">Occupancy</span>
+                                            <span class="text-slate-800 italic">{{ floor(($lab->occupied / $lab->total) * 100) }}%</span>
                                         </div>
                                         <div class="h-3 w-full bg-slate-100 rounded-full p-0.5 border border-slate-50 overflow-hidden">
                                             <div class="h-full {{ $isLocked ? 'bg-slate-300' : 'bg-[#D4AF37]' }} rounded-full transition-all duration-[1500ms] ease-out shadow-[0_0_15px_rgba(212,175,55,0.3)]"
@@ -143,8 +146,16 @@
 
                                     {{-- Action Button --}}
                                     <div class="pt-4 flex items-center justify-between border-t border-slate-50">
-                                        <span class="text-[10px] font-black {{ $isLocked ? 'text-slate-300' : 'text-[#D4AF37]' }} uppercase tracking-widest">
-                                            {{ $isLocked ? 'Access Locked' : 'Open Monitor' }}
+                                        @if($isMaintenance)
+                                        <span class="text-[10px] font-black text-rose-500 uppercase tracking-widest">This lab is currently under maintenance</span>
+                                        <div class="size-10 bg-slate-100 text-slate-300 rounded-2xl flex items-center justify-center">
+                                            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                            </svg>
+                                        </div>
+                                        @else
+                                        <span class="text-[10px] font-black {{ $isLocked ? 'text-slate-300' : 'text-[#D4AF37]' }} tracking-widest">
+                                            {{ $isLocked ? 'Locked' : 'Enter' }}
                                         </span>
                                         <div class="size-10 {{ $isLocked ? 'bg-slate-100 text-slate-300' : 'bg-slate-800 text-white group-hover:bg-[#D4AF37]' }} rounded-2xl flex items-center justify-center transition-all duration-300">
                                             @if($isLocked)
@@ -157,6 +168,7 @@
                                             </svg>
                                             @endif
                                         </div>
+                                        @endif
                                     </div>
                                 </div>
                             </div>

@@ -1,15 +1,16 @@
 <x-app-layout>
-    <div class="py-12 px-6 max-w-7xl mx-auto min-h-screen bg-[#FDFCF9]">
-        <div class="mb-12 flex justify-between items-center">
-            <div class="relative">
-                <div class="absolute -left-4 top-0 bottom-0 w-1 bg-[#D4AF37] shadow-[0_0_15px_rgba(212,175,55,0.6)]"></div>
-                <h2 class="font-black text-5xl text-slate-900 uppercase tracking-tighter leading-none">
-                    LAB <span class="text-[#D4AF37]">ALERTS</span>
+    <x-slot name="header">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
+                    Computer <span class="text-[#D4AF37]">Alerts</span>
                 </h2>
-                <p class="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-                    <span class="inline-block w-2 h-2 rounded-full bg-[#D4AF37] animate-pulse"></span>
-                    Reported Issues & Incident Logs
-                </p>
+                <div class="flex items-center space-x-2 mt-1">
+                    <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                        Computer Alerts Overview
+                    </p>
+                </div>
             </div>
 
             <div class="flex gap-3">
@@ -17,13 +18,16 @@
                     <p class="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">Total Reports</p>
                     <p class="text-2xl font-black text-slate-800">{{ $alerts->count() }}</p>
                 </div>
-                <div class="bg-[#D4AF37]/10 px-6 py-4 rounded-3xl border border-[#D4AF37]/20 relative overflow-hidden group backdrop-blur-xl shadow-lg shadow-[#D4AF37]/5">
+                <div class="bg-[#D4AF37]/10 px-4 py-4 rounded-3xl border border-[#D4AF37]/20 relative overflow-hidden group backdrop-blur-xl shadow-lg shadow-[#D4AF37]/5">
                     <div class="absolute inset-0 bg-[#D4AF37]/5 group-hover:bg-[#D4AF37]/10 transition-colors"></div>
                     <p class="text-[8px] font-black text-[#B08D2A] uppercase mb-1 tracking-widest relative">Unresolved</p>
                     <p class="text-2xl font-black text-[#D4AF37] relative">{{ $alerts->where('status', 'pending')->count() }}</p>
                 </div>
             </div>
         </div>
+    </x-slot>
+
+    <div class="py-12 px-6 max-w-7xl mx-auto min-h-screen ">
 
         <div class="mb-10 group">
             <div class="bg-white border border-slate-100 p-8 rounded-[2.5rem] shadow-xl shadow-slate-500/5 transition-all hover:border-slate-200">

@@ -15,7 +15,7 @@
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h2 class="font-black text-2xl sm:text-4xl text-slate-800 tracking-tighter uppercase">
-                    {{ $lab->lab_name }} <span class="text-[#D4AF37]">Occupancy</span>
+                    {{ $lab->name }} <span class="text-[#D4AF37]">Occupancy</span>
                 </h2>
                 <div class="flex items-center space-x-2 mt-1">
                     <div class="size-2 bg-emerald-500 rounded-full animate-pulse"></div>

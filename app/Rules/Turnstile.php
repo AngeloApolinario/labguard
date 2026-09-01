@@ -37,6 +37,7 @@ class Turnstile implements ValidationRule
                     'response_payload' => $responseData,
                 ]);
 
+
                 $fail('The CAPTCHA verification failed. Please try again.');
             }
         } catch (Exception $e) {

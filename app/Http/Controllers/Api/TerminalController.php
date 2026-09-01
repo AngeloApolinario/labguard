@@ -37,18 +37,27 @@ class TerminalController extends Controller
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
-        // 2. Verify User Email (Only verified students can access labs)
-        if (!$user->email_verified_at) {
-            return response()->json(['message' => 'Your account is not verified. Please verify your email address first.'], 403);
+        // 2. Case-Insensitive PC and Lab Lookup
+        $labId = strtolower(trim($request->lab_id ?? $request->lab ?? ''));
+        $pcNumber = strtolower(trim($request->pc_number));
+
+        $pc = Computer::whereHas('lab', function ($query) use ($labId) {
+            if ($labId) {
+                $query->where('id', $labId)
+                    ->orWhereRaw('LOWER(name) = ?', [$labId]);
+            }
+        })->whereRaw('LOWER(pc_number) = ?', [$pcNumber])->first();
+
+        // Fallback: Case-insensitive lookup by pc_number alone
+        if (!$pc) {
+            $pc = Computer::whereRaw('LOWER(pc_number) = ?', [$pcNumber])->first();
         }
 
-        // 3. Find the PC and its Lab
-        $pc = Computer::with('lab')->where('pc_number', $request->pc_number)->first();
         if (!$pc) {
             return response()->json(['message' => 'Terminal station not found.'], 404);
         }
 
-        // 4. Block login if PC is under maintenance
+        // 3. Block login if PC is under maintenance
         if (strtolower($pc->status) === 'maintenance') {
             return response()->json(['message' => 'This terminal station is currently under maintenance.'], 403);
         }
@@ -67,7 +76,7 @@ class TerminalController extends Controller
 
         $assignedTeacherId = $activeSchedule ? $activeSchedule->user_id : null;
 
-        // 4. Race Condition Fix: Close active sessions on this PC or for this student number
+        // 4. Race Condition Fix: Close active sessions on this PC or for this student
         LabSession::where(function ($query) use ($pc, $user) {
             $query->where('computer_id', $pc->id)
                 ->orWhere('student_id_number', $user->student_number);
@@ -81,7 +90,7 @@ class TerminalController extends Controller
             'last_ping_at' => now()
         ]);
 
-        // 6. Create Lab Session (Matches your exact lab_sessions columns)
+        // 6. Create Lab Session
         LabSession::create([
             'computer_id'       => $pc->id,
             'lab_id'            => $pc->lab_id,
@@ -104,17 +113,20 @@ class TerminalController extends Controller
      */
     public function checkStatus($lab_id, $pc_number)
     {
-        // 1. Resolve PC by Lab (ID or Name) and PC Number
-        $pc = Computer::whereHas('lab', function ($query) use ($lab_id) {
-            $query->where('id', $lab_id)
-                ->orWhere('name', $lab_id);
+        $cleanLabId = strtolower(trim($lab_id));
+        $cleanPcNumber = strtolower(trim($pc_number));
+
+        // 1. Resolve PC by Lab (ID or Name) and PC Number (Case-Insensitive)
+        $pc = Computer::whereHas('lab', function ($query) use ($cleanLabId) {
+            $query->where('id', $cleanLabId)
+                ->orWhereRaw('LOWER(name) = ?', [$cleanLabId]);
         })
-            ->where('pc_number', $pc_number)
+            ->whereRaw('LOWER(pc_number) = ?', [$cleanPcNumber])
             ->first();
 
-        // 2. Fallback: Look up directly by pc_number
+        // 2. Fallback: Case-insensitive lookup directly by pc_number
         if (!$pc) {
-            $pc = Computer::where('pc_number', $pc_number)->first();
+            $pc = Computer::whereRaw('LOWER(pc_number) = ?', [$cleanPcNumber])->first();
         }
 
         // 3. If PC doesn't exist, tell terminal to stay locked ('available')
@@ -125,8 +137,8 @@ class TerminalController extends Controller
         // 4. Record Heartbeat Ping Timestamp
         $pc->update(['last_ping_at' => now()]);
 
-        // 5. SELF-HEALING: Cleanup any active PCs whose pings stopped > 30s ago (e.g. abrupt shutdown)
-        $this->cleanupStaleSessions();
+        // 5. SELF-HEALING: Cleanup any active PCs whose pings stopped > 30s ago
+        Computer::cleanupStaleSessions();
 
         // 6. Return actual PC status (normalized to lowercase)
         return response()->json([
@@ -135,12 +147,12 @@ class TerminalController extends Controller
     }
 
     /**
-     * Handle PC Reporting/Alerts with Mandatory Accountability Verification
+     * Handle PC Reporting/Alerts
      */
     public function reportIssue(Request $request)
     {
         $request->validate([
-            'pc_number'  => 'required|exists:computers,pc_number',
+            'pc_number'  => 'required',
             'student_id' => 'required',
             'password'   => 'required',
             'issue_type' => 'required|string',
@@ -159,7 +171,12 @@ class TerminalController extends Controller
             return response()->json(['message' => 'Account verification failed. Invalid credentials.'], 401);
         }
 
-        $pc = Computer::where('pc_number', $request->pc_number)->first();
+        $cleanPcNumber = strtolower(trim($request->pc_number));
+        $pc = Computer::whereRaw('LOWER(pc_number) = ?', [$cleanPcNumber])->first();
+
+        if (!$pc) {
+            return response()->json(['message' => 'Terminal station not found.'], 404);
+        }
 
         // 2. Create the alert record
         Alert::create([
@@ -175,11 +192,12 @@ class TerminalController extends Controller
     }
 
     /**
-     * Handle PC Logout (Triggered by OS shutdown, escape button, or exit handler)
+     * Handle PC Logout
      */
     public function handleLogout(Request $request)
     {
-        $computer = Computer::where('pc_number', $request->pc_number)->first();
+        $cleanPcNumber = strtolower(trim($request->pc_number));
+        $computer = Computer::whereRaw('LOWER(pc_number) = ?', [$cleanPcNumber])->first();
 
         if ($computer) {
             $session = LabSession::where('computer_id', $computer->id)
@@ -195,7 +213,6 @@ class TerminalController extends Controller
                 Log::info("Session ID {$session->id} closed for PC {$request->pc_number}");
             }
 
-            // Only mark available if NOT under maintenance
             if (strtolower($computer->status) !== 'maintenance') {
                 $computer->update(['status' => 'available']);
             }
@@ -204,30 +221,5 @@ class TerminalController extends Controller
         }
 
         return response()->json(['message' => 'PC not found'], 404);
-    }
-
-    /**
-     * Helper to auto-close sessions for computers that abruptly shut down/disconnected
-     */
-    private function cleanupStaleSessions()
-    {
-        $staleThreshold = now()->subSeconds(30);
-
-        // Find active PCs that haven't pinged in > 30 seconds
-        $staleComputers = Computer::where('status', 'active')
-            ->where(function ($query) use ($staleThreshold) {
-                $query->whereNull('last_ping_at')
-                    ->orWhere('last_ping_at', '<', $staleThreshold);
-            })
-            ->get();
-
-        foreach ($staleComputers as $pc) {
-            LabSession::where('computer_id', $pc->id)
-                ->whereNull('time_out')
-                ->update(['time_out' => now()]);
-
-            $pc->update(['status' => 'available']);
-            Log::info("Auto-released stale PC: {$pc->pc_number} (no ping received)");
-        }
     }
 }

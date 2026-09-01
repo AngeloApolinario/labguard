@@ -196,7 +196,7 @@ def stop_keyboard_hook():
 
 
 # =====================================================================
-# 4. CONFIGURATION & SHUTDOWN HOOKS
+# 4. CONFIGURATION & SANCTUM CSRF SESSION MANAGER
 # =====================================================================
 def load_config():
     """Loads configuration dynamically from config.json beside the script/exe."""
@@ -223,16 +223,44 @@ def load_config():
     return config_data
 
 
-# Load Configuration Dynamically
+# --- CONFIGURATION ---
 config = load_config()
 
-# Read API_URL dynamically from config.json (Supports local dev & production URLs)
 API_URL = config.get("server_url", "https://labguard.it.com/api/pc").rstrip('/')
-LAB_ID = config.get("lab", "LAB 1")
-PC_NUMBER = config.get("pc", "PC-01")
+if not API_URL.endswith('/api/pc'):
+    API_URL += '/api/pc'
 
-# Clean headers without hardcoded Host header
+LAB_ID = str(config.get("lab", "LAB 1")).strip()
+PC_NUMBER = str(config.get("pc", "PC-01")).strip()
 HEADERS = {"Accept": "application/json"}
+# ---------------------
+
+def get_authenticated_session():
+    """
+    Creates a requests.Session, fetches Laravel Sanctum CSRF cookies,
+    and attaches the X-XSRF-TOKEN header to prevent HTTP 419 errors.
+    """
+    session = requests.Session()
+    session.verify = False
+
+    # Extract base domain (e.g., https://labguard.it.com)
+    base_domain = API_URL.split("/api")[0]
+
+    try:
+        # Fetch CSRF cookie from Laravel
+        session.get(f"{base_domain}/sanctum/csrf-cookie", headers=HEADERS, timeout=5)
+
+        # Extract XSRF-TOKEN cookie
+        csrf_token = session.cookies.get("XSRF-TOKEN")
+        if csrf_token:
+            session.headers.update({
+                "X-XSRF-TOKEN": urllib.parse.unquote(csrf_token),
+                "Accept": "application/json"
+            })
+    except Exception as e:
+        print(f"[DEBUG] CSRF Cookie Fetch Exception: {e}")
+
+    return session
 
 
 def cleanup_security():
@@ -245,12 +273,11 @@ def send_logout_signal():
     """Tells Laravel to release this PC and set time_out."""
     cleanup_security()
     try:
-        requests.post(
+        session = get_authenticated_session()
+        session.post(
             f"{API_URL}/logout",
             json={"pc_number": PC_NUMBER},
-            headers=HEADERS,
             timeout=3,
-            verify=False,
         )
         print(f"Signal Sent: {PC_NUMBER} has been released.")
     except Exception as e:
@@ -830,17 +857,13 @@ class LabGuardClient:
         """Background thread checking server reachability & PC status continuously."""
         while True:
             try:
-                # URL encode lab_id and pc_number to prevent space formatting errors
                 lab_param = urllib.parse.quote(str(LAB_ID))
                 pc_param = urllib.parse.quote(str(PC_NUMBER))
                 url = f"{API_URL}/status/{lab_param}/{pc_param}"
 
-                res = requests.get(
-                    url,
-                    headers=HEADERS,
-                    timeout=3,
-                    verify=False,
-                )
+                session = get_authenticated_session()
+                res = session.get(url, timeout=3)
+
                 if res.status_code == 200:
                     data = res.json()
                     pc_status = data.get("status") or data.get("data", {}).get("status")
@@ -1316,37 +1339,60 @@ class LabGuardClient:
                 "remarks": remarks,
             }
 
-            try:
-                response = requests.post(
-                    f"{API_URL}/alerts",
-                    json=payload,
-                    headers=HEADERS,
-                    verify=False,
-                    timeout=8,
-                )
+            def async_report():
+                try:
+                    session = get_authenticated_session()
+                    response = session.post(
+                        f"{API_URL}/alerts",
+                        json=payload,
+                        timeout=8,
+                    )
 
-                if response.status_code in [200, 201]:
-                    CinematicNotify(
-                        self.root,
-                        "Report Logged",
-                        "Identity verified and ticket created.",
-                        color="#10b981",
+                    if response.status_code in [200, 201]:
+                        self.root.after(
+                            0,
+                            lambda: CinematicNotify(
+                                self.root,
+                                "Report Logged",
+                                "Identity verified and ticket created.",
+                                color="#10b981",
+                            ),
+                        )
+                        self.root.after(0, close_overlay)
+                    else:
+                        msg = response.json().get(
+                            "message", "Identity verification failed."
+                        )
+                        self.root.after(
+                            0,
+                            lambda: CinematicNotify(
+                                self.overlay, "Auth Failure", msg, color="#ef4444"
+                            ),
+                        )
+                        self.root.after(
+                            0,
+                            lambda: self.btn_send.config(
+                                state="normal", text="SEND REPORT"
+                            ),
+                        )
+                except Exception:
+                    self.root.after(
+                        0,
+                        lambda: CinematicNotify(
+                            self.overlay,
+                            "Connection Error",
+                            "Could not connect to database server.",
+                            color="#ef4444",
+                        ),
                     )
-                    close_overlay()
-                else:
-                    msg = response.json().get(
-                        "message", "Identity verification failed."
+                    self.root.after(
+                        0,
+                        lambda: self.btn_send.config(
+                            state="normal", text="SEND REPORT"
+                        ),
                     )
-                    CinematicNotify(self.overlay, "Auth Failure", msg, color="#ef4444")
-                    self.btn_send.config(state="normal", text="SEND REPORT")
-            except Exception:
-                CinematicNotify(
-                    self.overlay,
-                    "Connection Error",
-                    "Could not connect to database server.",
-                    color="#ef4444",
-                )
-                self.btn_send.config(state="normal", text="SEND REPORT")
+
+            threading.Thread(target=async_report, daemon=True).start()
 
         btn_container = tk.Frame(self.overlay, bg="#1e293b")
         btn_container.pack(pady=25)
@@ -1407,37 +1453,65 @@ class LabGuardClient:
             "password": password,
         }
 
-        try:
-            response = requests.post(
-                f"{API_URL}/login",
-                json=payload,
-                headers=HEADERS,
-                timeout=10,
-                verify=False,
-            )
-            if response.status_code == 200:
-                name = response.json().get("name", "User")
-                CinematicNotify(
-                    self.root, "Authorized", f"Welcome, {name}!", color="#10b981"
+        def perform_login():
+            try:
+                session = get_authenticated_session()
+                response = session.post(
+                    f"{API_URL}/login",
+                    json=payload,
+                    timeout=10,
                 )
-                self.root.after(1500, self.hide_terminal)
-            else:
-                try:
-                    msg = response.json().get("message", "Invalid Credentials.")
-                except Exception:
-                    msg = f"HTTP Error {response.status_code}"
-                print(f"[DEBUG] Login Failed ({response.status_code}): {response.text}")
-                CinematicNotify(self.root, "Auth Failed", msg, color="#ef4444")
-                self.btn_unlock.config(state="normal", text="UNLOCK STATION")
-        except Exception as e:
-            print(f"[DEBUG] Login Exception: {e}")
-            CinematicNotify(
-                self.root,
-                "Error",
-                "Server is offline. Check Wi-Fi connection.",
-                color="#ef4444",
-            )
-            self.btn_unlock.config(state="normal", text="UNLOCK STATION")
+                if response.status_code == 200:
+                    name = response.json().get("name", "User")
+                    self.root.after(
+                        0,
+                        lambda: CinematicNotify(
+                            self.root,
+                            "Authorized",
+                            f"Welcome, {name}!",
+                            color="#10b981",
+                        ),
+                    )
+                    self.root.after(1500, self.hide_terminal)
+                else:
+                    try:
+                        msg = response.json().get("message", "Invalid Credentials.")
+                    except Exception:
+                        msg = f"HTTP Error {response.status_code}"
+                    print(
+                        f"[DEBUG] Login Failed ({response.status_code}): {response.text}"
+                    )
+                    self.root.after(
+                        0,
+                        lambda: CinematicNotify(
+                            self.root, "Auth Failed", msg, color="#ef4444"
+                        ),
+                    )
+                    self.root.after(
+                        0,
+                        lambda: self.btn_unlock.config(
+                            state="normal", text="UNLOCK STATION"
+                        ),
+                    )
+            except Exception as e:
+                print(f"[DEBUG] Login Exception: {e}")
+                self.root.after(
+                    0,
+                    lambda: CinematicNotify(
+                        self.root,
+                        "Error",
+                        "Server is offline. Check Wi-Fi connection.",
+                        color="#ef4444",
+                    ),
+                )
+                self.root.after(
+                    0,
+                    lambda: self.btn_unlock.config(
+                        state="normal", text="UNLOCK STATION"
+                    ),
+                )
+
+        threading.Thread(target=perform_login, daemon=True).start()
 
     def hide_terminal(self):
         """Unlocks the PC session: Hides screen, restores Taskbar, and unhooks keyboard."""
@@ -1461,7 +1535,9 @@ class LabGuardClient:
                 lab_param = urllib.parse.quote(str(LAB_ID))
                 pc_param = urllib.parse.quote(str(PC_NUMBER))
                 url = f"{API_URL}/status/{lab_param}/{pc_param}"
-                response = requests.get(url, headers=HEADERS, timeout=5, verify=False)
+
+                session = get_authenticated_session()
+                response = session.get(url, timeout=5)
 
                 if response.status_code == 200:
                     consecutive_failures = 0  # Reset failure counter on successful ping
@@ -1483,7 +1559,9 @@ class LabGuardClient:
 
                 # If Wi-Fi is turned off or disconnected for 15 seconds (3 pings), lock terminal
                 if consecutive_failures >= 3:
-                    print("[DEBUG] Wi-Fi connection lost for 15s. Auto-locking station...")
+                    print(
+                        "[DEBUG] Wi-Fi connection lost for 15s. Auto-locking station..."
+                    )
                     self.root.after(0, self.lock_ui_again)
                     break
 

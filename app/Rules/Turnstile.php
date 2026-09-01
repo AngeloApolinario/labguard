@@ -19,6 +19,11 @@ class Turnstile implements ValidationRule
             return;
         }
 
+        if (empty($value)) {
+            $fail('The CAPTCHA verification failed. Please try again.');
+            return;
+        }
+
         try {
             $response = Http::withOptions([
                 'verify' => ! app()->isLocal(),
@@ -32,11 +37,9 @@ class Turnstile implements ValidationRule
 
             if (! ($responseData['success'] ?? false)) {
                 logger()->warning('Turnstile Verification Failed', [
-                    'used_secret' => $secretKey,
                     'errors' => $responseData['error-codes'] ?? ['Unknown error'],
                     'response_payload' => $responseData,
                 ]);
-
 
                 $fail('The CAPTCHA verification failed. Please try again.');
             }

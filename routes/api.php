@@ -32,6 +32,165 @@ use App\Models\User;
 | Mobile authentication endpoints for logging in, getting profile, 2FA, and logout.
 */
 
+
+/*
+|--------------------------------------------------------------------------
+| USER PROFILE, 2FA, PHOTO, & SESSIONS API ENDPOINTS
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:sanctum')->prefix('user')->group(function () {
+
+    // 1. Get Current Profile Data
+    Route::get('/profile', function (Request $request) {
+        return response()->json([
+            'success' => true,
+            'user'    => $request->user(),
+        ]);
+    });
+
+    // 2. Update Profile Information (Name, Email, Student Number, Phone)
+    Route::put('/profile-information', function (Request $request) {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name'           => 'required|string|max:255',
+            'email'          => 'required|email|max:255|unique:users,email,' . $user->id,
+            'student_number' => 'nullable|string|unique:users,student_number,' . $user->id,
+            'phone'          => 'nullable|string|max:20',
+        ]);
+
+        $user->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile information updated successfully.',
+            'user'    => $user->fresh(),
+        ]);
+    });
+
+    // 3. Upload Profile Photo
+    Route::post('/profile-photo', function (Request $request) {
+        $request->validate([
+            'photo' => 'required|image|max:2048', // 2MB Max
+        ]);
+
+        $user = $request->user();
+
+        if ($request->hasFile('photo')) {
+            $path = $request->file('photo')->store('profile-photos', 'public');
+            $user->update(['profile_photo_path' => $path]);
+        }
+
+        return response()->json([
+            'success'           => true,
+            'message'           => 'Profile photo uploaded successfully.',
+            'profile_photo_url' => $user->profile_photo_url,
+            'user'              => $user->fresh(),
+        ]);
+    });
+
+    // 4. Update Password
+    Route::put('/password', function (Request $request) {
+        $request->validate([
+            'current_password' => ['required', 'string'],
+            'password'         => ['required', 'string', \Illuminate\Validation\Rules\Password::defaults(), 'confirmed'],
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The provided current password does not match our records.',
+                'errors'  => ['current_password' => ['The provided current password does not match.']]
+            ], 422);
+        }
+
+        $user->update(['password' => Hash::make($request->password)]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password updated successfully.',
+        ]);
+    });
+
+    // 5. Two-Factor Authentication (Enable / Disable)
+    Route::post('/two-factor-authentication', function (Request $request) {
+        $user = $request->user();
+
+        if (method_exists($user, 'enableTwoFactorAuthentication')) {
+            app(\Laravel\Fortify\Actions\EnableTwoFactorAuthentication::class)($user);
+        }
+
+        return response()->json([
+            'success'                => true,
+            'message'                => 'Two-factor authentication enabled.',
+            'two_factor_qr_code_svg' => method_exists($user, 'twoFactorQrCodeSvg') ? $user->twoFactorQrCodeSvg() : null,
+            'two_factor_recovery_codes' => method_exists($user, 'recoveryCodes') ? $user->recoveryCodes() : [],
+        ]);
+    });
+
+    Route::delete('/two-factor-authentication', function (Request $request) {
+        $user = $request->user();
+
+        if (method_exists($user, 'disableTwoFactorAuthentication')) {
+            app(\Laravel\Fortify\Actions\DisableTwoFactorAuthentication::class)($user);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Two-factor authentication disabled.',
+        ]);
+    });
+
+    // 6. View Active Browser Sessions
+    Route::get('/browser-sessions', function (Request $request) {
+        $user = $request->user();
+
+        $sessions = DB::table('sessions')
+            ->where('user_id', $user->id)
+            ->orderBy('last_activity', 'desc')
+            ->get()
+            ->map(function ($s) {
+                return [
+                    'id'          => $s->id,
+                    'ip_address'  => $s->ip_address,
+                    'user_agent'  => $s->user_agent,
+                    'last_active' => \Carbon\Carbon::createFromTimestamp($s->last_activity)->diffForHumans(),
+                ];
+            });
+
+        return response()->json([
+            'success'  => true,
+            'sessions' => $sessions,
+        ]);
+    });
+
+    // 7. Logout Other Browser Sessions
+    Route::delete('/other-browser-sessions', function (Request $request) {
+        $request->validate(['password' => 'required|string']);
+
+        $user = $request->user();
+
+        if (!Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Password mismatch.',
+                'errors'  => ['password' => ['The provided password does not match.']]
+            ], 422);
+        }
+
+        DB::table('sessions')
+            ->where('user_id', $user->id)
+            ->where('id', '!=', session()->getId())
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged out of other browser sessions.',
+        ]);
+    });
+});
 /*
 |--------------------------------------------------------------------------
 | 1. AUTHENTICATION & USER PROFILE ENDPOINTS

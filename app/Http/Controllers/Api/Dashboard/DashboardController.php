@@ -175,7 +175,7 @@ class DashboardController extends Controller
     }
 
     public function import(Request $request)
-    {
+    {   
         $request->validate([
             'file' => 'required|mimes:csv,txt|max:5120',
         ]);

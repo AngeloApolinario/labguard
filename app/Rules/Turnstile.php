@@ -9,8 +9,16 @@ use Exception;
 
 class Turnstile implements ValidationRule
 {
+    // Tracks if we already validated a token during this request lifecycle
+    protected static bool $verifiedInThisRequest = false;
+
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
+        // If Laravel's validation engine triggers this rule a second time, skip it
+        if (static::$verifiedInThisRequest) {
+            return;
+        }
+
         $secretKey = config('services.turnstile.secret_key');
 
         if (empty($secretKey)) {
@@ -42,7 +50,11 @@ class Turnstile implements ValidationRule
                 ]);
 
                 $fail('The CAPTCHA verification failed. Please try again.');
+                return;
             }
+
+            // Mark as verified so any duplicate validator pass won't re-consume the token
+            static::$verifiedInThisRequest = true;
         } catch (Exception $e) {
             logger()->error('Turnstile Connection Exception: ' . $e->getMessage());
 

@@ -10,6 +10,7 @@ use App\Http\Controllers\Session;
 use App\Http\Controllers\SuperAdminController;
 use Illuminate\Http\Request;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\File;
 /*

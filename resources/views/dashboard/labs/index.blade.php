@@ -1,16 +1,21 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-                <h2 class="font-black text-4xl text-slate-800 tracking-tighter uppercase">
+                <h2 class="font-black text-2xl sm:text-4xl text-slate-800 tracking-tighter uppercase">
                     Facility <span class="text-[#D4AF37]">Inventory</span>
                 </h2>
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-[0.3em] mt-1">Database-Synced Lab</p>
+                <div class="flex items-center space-x-2 mt-1">
+                    <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <p class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] sm:tracking-[0.3em]">
+                        Database-Synced Lab
+                    </p>
+                </div>
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                 {{-- DOWNLOAD CLIENT SETUP BUTTON --}}
-                <a href="{{ route('downloads.setup') }}" class="flex items-center space-x-2 bg-slate-100 text-slate-700 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] hover:text-white transition-all shadow-md active:scale-95">
+                <a href="{{ route('downloads.setup') }}" class="flex items-center justify-center space-x-2 bg-slate-100 text-slate-700 px-5 sm:px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] hover:text-white transition-all shadow-md active:scale-95">
                     <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
@@ -18,7 +23,7 @@
                 </a>
 
                 {{-- TRIGGER: Native JavaScript --}}
-                <button onclick="openLabModal()" type="button" class="flex items-center space-x-2 bg-slate-800 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] transition-all shadow-xl shadow-slate-200 active:scale-95">
+                <button onclick="openLabModal()" type="button" class="flex items-center justify-center space-x-2 bg-slate-800 text-white px-5 sm:px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] transition-all shadow-xl shadow-slate-200 active:scale-95">
                     <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4" />
                     </svg>
@@ -28,12 +33,12 @@
         </div>
     </x-slot>
 
-    <div class="py-12 px-6  min-h-screen">
+    <div class="py-6 sm:py-12 px-4 sm:px-6 min-h-screen">
         <div class="max-w-7xl mx-auto">
 
             {{-- Flash Success Message --}}
             @if(session('success'))
-            <div id="flash-message" class="mb-8 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-between gap-3">
+            <div id="flash-message" class="mb-6 sm:mb-8 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
                     <p class="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{{ session('success') }}</p>
@@ -48,7 +53,7 @@
 
             {{-- Flash Error Message --}}
             @if(session('error'))
-            <div id="flash-error" class="mb-8 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-between gap-3">
+            <div id="flash-error" class="mb-6 sm:mb-8 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
                     <div class="size-2 bg-rose-500 rounded-full animate-pulse"></div>
                     <p class="text-[10px] font-black text-rose-700 uppercase tracking-widest">{{ session('error') }}</p>
@@ -61,72 +66,74 @@
             </div>
             @endif
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-10">
                 @forelse($labs as $lab)
-                <div class="group relative bg-white border border-slate-200 rounded-[3rem] p-10 transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] hover:-translate-y-2">
+                <div class="group relative bg-white border border-slate-200 rounded-3xl sm:rounded-[3rem] p-6 sm:p-10 transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] hover:-translate-y-2 flex flex-col justify-between">
 
-                    <div class="flex justify-between items-start mb-12">
-                        <div class="p-4 bg-slate-50 rounded-2xl group-hover:bg-[#D4AF37]/10 transition-colors">
-                            <svg class="size-8 text-slate-400 group-hover:text-[#D4AF37] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
+                    <div>
+                        <div class="flex justify-between items-start mb-6 sm:mb-12">
+                            <div class="p-3 sm:p-4 bg-slate-50 rounded-2xl group-hover:bg-[#D4AF37]/10 transition-colors">
+                                <svg class="size-6 sm:size-8 text-slate-400 group-hover:text-[#D4AF37] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">FACILITY ID</span>
+                                <p class="text-xs font-black text-slate-700 uppercase">#{{ str_pad($lab->id, 3, '0', STR_PAD_LEFT) }}</p>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">FACILITY ID</span>
-                            <p class="text-xs font-black text-slate-700 uppercase">#{{ str_pad($lab->id, 3, '0', STR_PAD_LEFT) }}</p>
+
+                        <h3 class="text-2xl sm:text-4xl font-black text-slate-800 mb-1 sm:mb-2 tracking-tighter uppercase">{{ $lab->name }}</h3>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">{{ $lab->location }}</p>
+
+                        <div class="space-y-6">
+                            <div class="grid grid-cols-2 gap-3 sm:gap-4">
+                                <div class="bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-100">
+                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Total Units</p>
+                                    <p class="text-lg sm:text-xl font-black text-slate-800">{{ $lab->computers->count() }}</p>
+                                </div>
+                                <div class="bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-100">
+                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Active Now</p>
+                                    <p class="text-lg sm:text-xl font-black text-[#D4AF37]">{{ $lab->computers->where('status', 'active')->count() }}</p>
+                                </div>
+                            </div>
+
+                            @php
+                            $total = $lab->computers->count();
+                            $active = $lab->computers->where('status', 'active')->count();
+                            $percent = $total > 0 ? round(($active / $total) * 100) : 0;
+                            @endphp
+
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                    <span>Utilization</span>
+                                    <span>{{ $percent }}%</span>
+                                </div>
+                                <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div class="h-full bg-slate-800 transition-all duration-1000 group-hover:bg-[#D4AF37]" style="width: {{ $percent }}%"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <h3 class="text-4xl font-black text-slate-800 mb-2 tracking-tighter uppercase">{{ $lab->name }}</h3>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">{{ $lab->location }}</p>
-
-                    <div class="space-y-6">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <p class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Total Units</p>
-                                <p class="text-xl font-black text-slate-800">{{ $lab->computers->count() }}</p>
-                            </div>
-                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <p class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Active Now</p>
-                                <p class="text-xl font-black text-[#D4AF37]">{{ $lab->computers->where('status', 'active')->count() }}</p>
-                            </div>
-                        </div>
-
-                        @php
-                        $total = $lab->computers->count();
-                        $active = $lab->computers->where('status', 'active')->count();
-                        $percent = $total > 0 ? round(($active / $total) * 100) : 0;
-                        @endphp
-
-                        <div class="space-y-2">
-                            <div class="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500">
-                                <span>Utilization</span>
-                                <span>{{ $percent }}%</span>
-                            </div>
-                            <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                                <div class="h-full bg-slate-800 transition-all duration-1000 group-hover:bg-[#D4AF37]" style="width: {{ $percent }}%"></div>
-                            </div>
-                        </div>
-
-                        <div class="pt-6 border-t border-slate-50 grid grid-cols-2 gap-4">
-                            <button type="button"
-                                data-lab-id="{{ $lab->id }}"
-                                data-lab-name="{{ $lab->name }}"
-                                data-lab-location="{{ $lab->location }}"
-                                data-lab-count="{{ $lab->computers->count() }}"
-                                data-lab-computers="{{ json_encode($lab->computers) }}"
-                                class="inspect-btn w-full py-4 bg-slate-50 text-slate-600 text-[10px] flex items-center justify-center font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-800 hover:text-white transition-all cursor-pointer">
-                                Inspect
-                            </button>
-                            <a href="{{ route('dashboard.labs.schedule', $lab->id) }}" class="w-full py-4 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] flex items-center justify-center font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#D4AF37] hover:text-white transition-all">
-                                Schedule
-                            </a>
-                        </div>
+                    <div class="pt-6 mt-6 border-t border-slate-50 grid grid-cols-2 gap-3 sm:gap-4">
+                        <button type="button"
+                            data-lab-id="{{ $lab->id }}"
+                            data-lab-name="{{ $lab->name }}"
+                            data-lab-location="{{ $lab->location }}"
+                            data-lab-count="{{ $lab->computers->count() }}"
+                            data-lab-computers="{{ json_encode($lab->computers) }}"
+                            class="inspect-btn w-full py-3.5 sm:py-4 bg-slate-50 text-slate-600 text-[10px] flex items-center justify-center font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-slate-800 hover:text-white transition-all cursor-pointer">
+                            Inspect
+                        </button>
+                        <a href="{{ route('dashboard.labs.schedule', $lab->id) }}" class="w-full py-3.5 sm:py-4 bg-[#D4AF37]/10 text-[#D4AF37] text-[10px] flex items-center justify-center font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-[#D4AF37] hover:text-white transition-all">
+                            Schedule
+                        </a>
                     </div>
                 </div>
                 @empty
-                <div class="col-span-full py-20 text-center border-2 border-dashed border-slate-200 rounded-[3rem] bg-white">
-                    <p class="text-slate-400 font-black uppercase tracking-widest">No Facility Data detected.</p>
+                <div class="col-span-full py-16 sm:py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl sm:rounded-[3rem] bg-white">
+                    <p class="text-slate-400 font-black uppercase tracking-widest text-xs sm:text-sm">No Facility Data detected.</p>
                 </div>
                 @endforelse
             </div>
@@ -134,34 +141,34 @@
     </div>
 
     {{-- CREATE LAB MODAL --}}
-    <div id="labModal" class="hidden fixed inset-0 z-[10000] items-center justify-center p-6 bg-slate-900/90 backdrop-blur-md">
-        <div class="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl relative overflow-hidden">
+    <div id="labModal" class="hidden fixed inset-0 z-[10000] items-center justify-center p-4 sm:p-6 bg-slate-900/90 backdrop-blur-md overflow-y-auto">
+        <div class="bg-white w-full max-w-lg rounded-3xl sm:rounded-[3rem] p-6 sm:p-10 shadow-2xl relative overflow-hidden my-auto">
             <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#D4AF37] to-amber-200"></div>
 
-            <h3 class="text-4xl font-black text-slate-900 uppercase tracking-tighter mb-2">Initialize <span class="text-[#D4AF37]">Laboratory</span></h3>
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-10">Deploying new facility to central server</p>
+            <h3 class="text-2xl sm:text-4xl font-black text-slate-900 uppercase tracking-tighter mb-1 sm:mb-2">Initialize <span class="text-[#D4AF37]">Laboratory</span></h3>
+            <p class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-6 sm:mb-10">Deploying new facility to central server</p>
 
             <form action="{{ route('dashboard.labs.store') }}" method="POST" onsubmit="setLoadingState(this, 'submitBtn', 'Initializing...')">
                 @csrf
-                <div class="space-y-8">
+                <div class="space-y-5 sm:space-y-8">
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Laboratory Name</label>
-                        <input type="text" name="name" required placeholder="e.g., Computer Lab 1" class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] transition-all outline-none uppercase">
+                        <input type="text" name="name" required placeholder="e.g., Computer Lab 1" class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-3.5 sm:p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] transition-all outline-none uppercase">
                     </div>
 
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Facility Location</label>
-                        <input type="text" name="location" required placeholder="e.g., 3rd Floor" class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] transition-all outline-none">
+                        <input type="text" name="location" required placeholder="e.g., 3rd Floor" class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-3.5 sm:p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] transition-all outline-none">
                     </div>
 
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">PC Capacity</label>
-                        <input type="number" name="pc_count" min="1" max="60" required placeholder="Units" class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none">
+                        <input type="number" name="pc_count" min="1" max="60" required placeholder="Units" class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-3.5 sm:p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none">
                     </div>
 
-                    <div class="flex gap-4 pt-4">
-                        <button type="button" onclick="closeLabModal()" class="flex-1 py-5 text-[10px] font-black uppercase text-slate-400">Cancel</button>
-                        <button type="submit" id="submitBtn" class="flex-1 py-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] shadow-xl transition-all">
+                    <div class="flex gap-3 sm:gap-4 pt-2 sm:pt-4">
+                        <button type="button" onclick="closeLabModal()" class="flex-1 py-4 sm:py-5 text-[10px] font-black uppercase text-slate-400">Cancel</button>
+                        <button type="submit" id="submitBtn" class="flex-1 py-4 sm:py-5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#D4AF37] shadow-xl transition-all">
                             Create Facility
                         </button>
                     </div>
@@ -171,16 +178,16 @@
     </div>
 
     {{-- INSPECT & EDIT MODAL --}}
-    <div id="inspectModal" class="hidden fixed inset-0 z-[10000] items-center justify-center p-6 bg-slate-900/90 backdrop-blur-md">
-        <div class="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-2xl relative overflow-hidden max-h-[90vh] flex flex-col">
+    <div id="inspectModal" class="hidden fixed inset-0 z-[10000] items-center justify-center p-4 sm:p-6 bg-slate-900/90 backdrop-blur-md overflow-hidden">
+        <div class="bg-white w-full max-w-2xl rounded-3xl sm:rounded-[3rem] p-6 sm:p-10 shadow-2xl relative overflow-hidden max-h-[90vh] flex flex-col my-auto">
             <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-slate-800 to-[#D4AF37]"></div>
 
-            <div class="flex justify-between items-start mb-6">
+            <div class="flex justify-between items-start mb-4 sm:mb-6">
                 <div>
-                    <h3 id="inspectTitle" class="text-3xl font-black text-slate-900 uppercase tracking-tighter">LAB INSPECTION</h3>
-                    <p id="inspectSubtitle" class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Manage unit inventory & facility parameters</p>
+                    <h3 id="inspectTitle" class="text-2xl sm:text-3xl font-black text-slate-900 uppercase tracking-tighter">LAB INSPECTION</h3>
+                    <p id="inspectSubtitle" class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Manage unit inventory & facility parameters</p>
                 </div>
-                <button onclick="closeInspectModal()" class="text-slate-400 hover:text-slate-700 font-black p-2">
+                <button onclick="closeInspectModal()" class="text-slate-400 hover:text-slate-700 font-black p-1 sm:p-2">
                     <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -188,46 +195,46 @@
             </div>
 
             {{-- Tab Switcher --}}
-            <div class="flex gap-2 border-b border-slate-100 pb-4 mb-6">
-                <button type="button" onclick="switchInspectTab('units')" id="tabUnitsBtn" class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white transition-all">
+            <div class="flex gap-2 border-b border-slate-100 pb-4 mb-4 sm:mb-6">
+                <button type="button" onclick="switchInspectTab('units')" id="tabUnitsBtn" class="px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white transition-all">
                     Units List
                 </button>
-                <button type="button" onclick="switchInspectTab('edit')" id="tabEditBtn" class="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+                <button type="button" onclick="switchInspectTab('edit')" id="tabEditBtn" class="px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
                     Edit Facility
                 </button>
             </div>
 
             {{-- TAB 1: UNITS LIST --}}
-            <div id="inspectUnitsTab" class="overflow-y-auto flex-1 pr-2">
-                <div id="computersListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div id="inspectUnitsTab" class="overflow-y-auto flex-1 pr-1 sm:pr-2">
+                <div id="computersListContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {{-- Dynamically populated via JS --}}
                 </div>
             </div>
 
             {{-- TAB 2: EDIT FORM --}}
-            <div id="inspectEditTab" class="hidden overflow-y-auto flex-1 pr-2">
+            <div id="inspectEditTab" class="hidden overflow-y-auto flex-1 pr-1 sm:pr-2">
                 <form id="editLabForm" method="POST" onsubmit="setLoadingState(this, 'updateBtn', 'Updating...')">
                     @csrf
                     @method('PUT')
-                    <div class="space-y-6">
+                    <div class="space-y-5 sm:space-y-6">
                         <div>
                             <label class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Laboratory Name</label>
-                            <input type="text" id="editName" name="name" required class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none uppercase">
+                            <input type="text" id="editName" name="name" required class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-3.5 sm:p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none uppercase">
                         </div>
 
                         <div>
                             <label class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Facility Location</label>
-                            <input type="text" id="editLocation" name="location" required class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none">
+                            <input type="text" id="editLocation" name="location" required class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-3.5 sm:p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none">
                         </div>
 
                         <div>
                             <label class="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2">Adjust PC Capacity (Adds/Removes units)</label>
-                            <input type="number" id="editCount" name="pc_count" min="1" max="60" required class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none">
+                            <input type="number" id="editCount" name="pc_count" min="1" max="60" required class="w-full mt-2 bg-slate-50 border-slate-100 border rounded-2xl p-3.5 sm:p-4 text-sm font-black focus:ring-2 focus:ring-[#D4AF37] outline-none">
                         </div>
 
-                        <div class="flex gap-4 pt-4">
-                            <button type="button" onclick="closeInspectModal()" class="flex-1 py-5 text-[10px] font-black uppercase text-slate-400">Cancel</button>
-                            <button type="submit" id="updateBtn" class="flex-1 py-5 bg-[#D4AF37] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 shadow-xl transition-all">
+                        <div class="flex gap-3 sm:gap-4 pt-2 sm:pt-4">
+                            <button type="button" onclick="closeInspectModal()" class="flex-1 py-4 sm:py-5 text-[10px] font-black uppercase text-slate-400">Cancel</button>
+                            <button type="submit" id="updateBtn" class="flex-1 py-4 sm:py-5 bg-[#D4AF37] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 shadow-xl transition-all">
                                 Save Changes
                             </button>
                         </div>
@@ -297,7 +304,7 @@
                     const pcLabel = pc.pc_number || pc.name || `PC-${pc.id}`;
 
                     container.innerHTML += `
-                        <div class="p-4 rounded-2xl border ${statusColor} flex items-center justify-between">
+                        <div class="p-3.5 sm:p-4 rounded-2xl border ${statusColor} flex items-center justify-between">
                             <div class="flex items-center gap-3">
                                 <div class="size-2.5 rounded-full ${dotColor}"></div>
                                 <div>
@@ -305,7 +312,7 @@
                                     <p class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Status: ${pc.status || 'offline'}</p>
                                 </div>
                             </div>
-                            <span class="text-[9px] font-black uppercase tracking-widest px-3 py-1 bg-white rounded-lg shadow-sm">
+                            <span class="text-[9px] font-black uppercase tracking-widest px-2.5 sm:px-3 py-1 bg-white rounded-lg shadow-sm">
                                 ${(pc.status || 'OFFLINE').toUpperCase()}
                             </span>
                         </div>
@@ -334,13 +341,13 @@
             if (tab === 'units') {
                 unitsTab.classList.remove('hidden');
                 editTab.classList.add('hidden');
-                unitsBtn.className = "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white transition-all";
-                editBtn.className = "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all";
+                unitsBtn.className = "px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white transition-all";
+                editBtn.className = "px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all";
             } else {
                 unitsTab.classList.add('hidden');
                 editTab.classList.remove('hidden');
-                editBtn.className = "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white transition-all";
-                unitsBtn.className = "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all";
+                editBtn.className = "px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white transition-all";
+                unitsBtn.className = "px-4 sm:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all";
             }
         }
 

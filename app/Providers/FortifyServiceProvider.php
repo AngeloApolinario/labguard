@@ -7,6 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
 use App\Http\Responses\LoginResponse;
+use App\Rules\Turnstile; // <-- 1. IMPORT YOUR TURNSTILE RULE HERE
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -53,6 +54,13 @@ class FortifyServiceProvider extends ServiceProvider
         });
 
         Fortify::authenticateUsing(function ($request) {
+            // <-- 2. ADD THIS VALIDATION BLOCK BEFORE QUERYING THE USER
+            $request->validate([
+                'email' => ['required', 'email'],
+                'password' => ['required', 'string'],
+                'cf-turnstile-response' => ['required', new Turnstile],
+            ]);
+
             // Active (non-deleted) user query
             $user = User::where('email', $request->email)->first();
 

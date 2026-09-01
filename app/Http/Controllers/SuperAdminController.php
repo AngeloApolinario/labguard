@@ -399,23 +399,32 @@ class SuperAdminController extends Controller
      */
     public function triggerBackup()
     {
-        $filename = "backup_" . env('DB_DATABASE') . "_" . now()->format('Y_m_dH_i_s') . ".sql";
+        $database = config('database.connections.mysql.database');
+        $username = config('database.connections.mysql.username');
+        $password = config('database.connections.mysql.password');
+        $host     = config('database.connections.mysql.host', '127.0.0.1');
+        $port     = config('database.connections.mysql.port', '3306');
 
-        // Build path context for secure internal app directory
-        $storagePath = storage_path('app/backups/');
+        $filename = "backup_" . $database . "_" . now()->format('Y_m_d_H_i_s') . ".sql";
+        $storagePath = storage_path('app/backups');
+
         if (! file_exists($storagePath)) {
             mkdir($storagePath, 0755, true);
         }
 
-        $fullPath = $storagePath . $filename;
+        $fullPath = $storagePath . '/' . $filename;
 
-        // Construct standard mysqldump command layout safely
+        // Use full binary path if 'mysqldump' alone is not in PATH
+        $binary = 'mysqldump';
+
         $command = sprintf(
-            'mysqldump --user=%s --password=%s --host=%s %s > %s 2>&1',
-            escapeshellarg(env('DB_USERNAME')),
-            escapeshellarg(env('DB_PASSWORD')),
-            escapeshellarg(env('DB_HOST', '127.0.0.1')),
-            escapeshellarg(env('DB_DATABASE')),
+            'MYSQL_PWD=%s %s --user=%s --host=%s --port=%s %s > %s 2>&1',
+            escapeshellarg($password),
+            $binary,
+            escapeshellarg($username),
+            escapeshellarg($host),
+            escapeshellarg($port),
+            escapeshellarg($database),
             escapeshellarg($fullPath)
         );
 
@@ -428,14 +437,19 @@ class SuperAdminController extends Controller
 
             $this->flashToast('success', 'Backup Created', 'Database snapshot generated and archived successfully.');
 
-            return redirect()->back()->with('status', 'Database architectural snapshot generated and archived to secure local path successfully.');
+            return redirect()->back()->with('status', 'Database snapshot generated and archived successfully.');
         }
 
-        Log::error('Database dump routine failed execution. Output details: ' . implode("\n", $output));
+        // Inspect detailed output in storage/logs/laravel.log
+        Log::error('Database dump routine failed execution.', [
+            'exit_code' => $returnVar,
+            'output'    => implode("\n", $output),
+            'command'   => $command
+        ]);
 
         $this->flashToast('danger', 'Backup Failed', 'Database backup generation failed. Check server permissions.');
 
-        return redirect()->back()->with('error', 'Database utility structural engine execution failed. Check server permissions.');
+        return redirect()->back()->with('error', 'Database utility structural engine execution failed. Check server logs for details.');
     }
 
     /**

@@ -1,6 +1,5 @@
 <x-app-layout>
     <style>
-        /* Utility to hide horizontal scrollbar while keeping scroll functionality */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
@@ -8,6 +7,30 @@
         .no-scrollbar {
             -ms-overflow-style: none;
             scrollbar-width: none;
+        }
+
+        /* Dark container custom scrollbar */
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #D4AF37;
+        }
+
+        .custom-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: #334155 rgba(15, 23, 42, 0.6);
         }
     </style>
 
@@ -37,7 +60,7 @@
         </div>
     </x-slot>
 
-    {{-- Floating Toast Notifications --}}
+    {{-- Toast Notifications --}}
     <div class="fixed top-4 right-4 left-4 sm:left-auto sm:top-10 sm:right-10 z-[100] flex flex-col gap-3 sm:w-80 pointer-events-none">
         @if(session('success'))
         <div x-data="{ show: true }" x-init="setTimeout(() => show = false, 5000)" x-show="show"
@@ -84,7 +107,7 @@
     <div class="py-6 sm:py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen bg-[#F8FAFC]">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-10 items-start">
 
-            {{-- Left Column: Entry Form --}}
+            {{-- Entry Form --}}
             <div class="bg-white p-6 sm:p-8 rounded-3xl sm:rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 sticky top-6">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Assign Instructor</p>
 
@@ -92,7 +115,7 @@
                     @csrf
                     <div>
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Authorized Teacher</label>
-                        <select name="user_id" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                        <select name="user_id" required class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                             <option value="" disabled selected>Select Instructor...</option>
                             @foreach($teachers as $teacher)
                             <option value="{{ $teacher->id }}" {{ old('user_id') == $teacher->id ? 'selected' : '' }}>{{ $teacher->name }}</option>
@@ -103,7 +126,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
                         <div>
                             <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Day</label>
-                            <select name="day" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                            <select name="day" required class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                                 @foreach(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $day)
                                 <option value="{{ $day }}" {{ old('day') == $day ? 'selected' : '' }}>{{ $day }}</option>
                                 @endforeach
@@ -111,18 +134,18 @@
                         </div>
                         <div>
                             <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Subject Code</label>
-                            <input type="text" name="subject_code" value="{{ old('subject_code') }}" placeholder="E.g. IT-402" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 uppercase font-bold focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                            <input type="text" name="subject_code" value="{{ old('subject_code') }}" placeholder="E.g. IT-402" required class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 uppercase font-bold focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                         </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Start Time</label>
-                            <input type="time" name="start_time" value="{{ old('start_time') }}" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-3 sm:px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                            <input type="time" name="start_time" value="{{ old('start_time') }}" required class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-3 sm:px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                         </div>
                         <div>
                             <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">End Time</label>
-                            <input type="time" name="end_time" value="{{ old('end_time') }}" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-3 sm:px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                            <input type="time" name="end_time" value="{{ old('end_time') }}" required class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-3 sm:px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                         </div>
                     </div>
 
@@ -132,7 +155,7 @@
                 </form>
             </div>
 
-            {{-- Right Column: Schedule Container --}}
+            {{-- Schedule Display Container --}}
             <div class="lg:col-span-2 bg-slate-900 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl flex flex-col border border-slate-800/80 overflow-hidden"
                 x-data="{ 
                     activeDay: new URLSearchParams(window.location.search).get('day') || 'All',
@@ -144,7 +167,7 @@
                     }
                  }">
 
-                {{-- Header & Non-Overflowing Filter Bar --}}
+                {{-- Filter Bar Header --}}
                 <div class="mb-6 pb-6 border-b border-slate-800/80 flex flex-col gap-4">
                     <div class="flex items-center justify-between">
                         <div>
@@ -152,7 +175,6 @@
                             <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Filtering by: <span class="text-[#D4AF37]" x-text="activeDay"></span></p>
                         </div>
 
-                        {{-- Bulk Revoke Button --}}
                         <form action="{{ route('dashboard.labs.schedule.destroyByDay', $lab->id) }}" method="POST"
                             x-on:submit="return confirm('Revoke ALL laboratory slots for ' + activeDay + '?')">
                             @csrf @method('DELETE')
@@ -166,10 +188,10 @@
                         </form>
                     </div>
 
-                    {{-- Day Filter Chips (Scrollable without overflow or scrollbars) --}}
+                    {{-- Day Filter Chips --}}
                     <div class="w-full overflow-x-auto no-scrollbar py-1">
                         <div class="flex items-center gap-1.5 min-w-max">
-                            <template x-for="day in ['All', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']">
+                            <template x-for="day in ['All', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']" :key="day">
                                 <button
                                     @click="setDay(day)"
                                     :class="activeDay === day ? 'bg-[#D4AF37] text-slate-950 font-black shadow-lg shadow-[#D4AF37]/20' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700/50'"
@@ -181,8 +203,8 @@
                     </div>
                 </div>
 
-                {{-- Desktop Table View --}}
-                <div class="hidden sm:block overflow-y-auto max-h-[520px] pr-2 no-scrollbar">
+                {{-- Desktop View --}}
+                <div class="hidden sm:block overflow-y-auto max-h-[520px] pr-2 custom-scroll">
                     <table class="w-full text-left border-collapse">
                         <thead class="sticky top-0 bg-slate-900 z-10">
                             <tr class="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] border-b border-slate-800">
@@ -232,8 +254,8 @@
                     </table>
                 </div>
 
-                {{-- Mobile Card Layout View --}}
-                <div class="block sm:hidden overflow-y-auto max-h-[480px] space-y-3 pr-1">
+                {{-- Mobile View --}}
+                <div class="block sm:hidden overflow-y-auto max-h-[480px] space-y-3 pr-1 custom-scroll">
                     @forelse($schedules as $entry)
                     <div class="p-4 bg-slate-800/60 rounded-2xl border border-slate-700/50 space-y-3"
                         x-show="activeDay === 'All' || activeDay === '{{ $entry->day }}'">
@@ -271,34 +293,3 @@
         </div>
     </div>
 </x-app-layout>
-<style>
-    /* Modern Custom Scrollbar for Dark Container */
-    .lg\:col-span-2 ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-    }
-
-    .lg\:col-span-2 ::-webkit-scrollbar-track {
-        background: rgba(15, 23, 42, 0.6);
-        /* Slate 900 tint */
-        border-radius: 9999px;
-    }
-
-    .lg\:col-span-2 ::-webkit-scrollbar-thumb {
-        background: #334155;
-        /* Slate 700 */
-        border-radius: 9999px;
-        transition: background 0.2s ease;
-    }
-
-    .lg\:col-span-2 ::-webkit-scrollbar-thumb:hover {
-        background: #D4AF37;
-        /* Signature Gold Accent */
-    }
-
-    /* Firefox Support */
-    .lg\:col-span-2 * {
-        scrollbar-width: thin;
-        scrollbar-color: #334155 rgba(15, 23, 42, 0.6);
-    }
-</style>

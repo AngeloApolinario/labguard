@@ -19,6 +19,8 @@ class DatabaseSeeder extends Seeder
             ComputerSeeder::class,
             UserSeeder::class,
             ScheduleSeeder::class,
+            LabSessionSeeder::class,
+            AlertSeeder::class,
         ]);
     }
 }

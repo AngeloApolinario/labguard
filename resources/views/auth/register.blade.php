@@ -1,4 +1,21 @@
 <x-guest-layout>
+    {{-- Convert Laravel validation errors into a Danger Toast --}}
+    @if ($errors->any())
+    @php
+    session()->now('toast', [
+    'type' => 'danger',
+    'title' => 'Registration Error',
+    'message' => $errors->first()
+    ]);
+    @endphp
+    @endif
+
+    {{-- Render Toast Component --}}
+    <x-toast />
+
+    <!-- Include Cloudflare Turnstile Script -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
     <div class="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 relative overflow-hidden">
 
         <div class="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
@@ -20,8 +37,6 @@
             <div class="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] p-8 overflow-hidden relative">
 
                 <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent"></div>
-
-                <x-validation-errors class="mb-4 text-rose-400 text-xs font-bold uppercase tracking-wide" />
 
                 <form method="POST" action="{{ route('register') }}" class="space-y-5">
                     @csrf
@@ -93,6 +108,14 @@
                         </label>
                     </div>
                     @endif
+
+                    <!-- Cloudflare Turnstile CAPTCHA Widget -->
+                    <div class="flex justify-center my-3">
+                        <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}" data-theme="dark"></div>
+                    </div>
+                    @error('cf-turnstile-response')
+                    <p class="text-rose-400 text-[10px] font-bold uppercase tracking-wider text-center -mt-1 mb-2">{{ $message }}</p>
+                    @enderror
 
                     <div class="flex flex-col space-y-4 pt-2">
                         <button class="relative w-full group overflow-hidden rounded-xl bg-[#D4AF37] p-4 transition-all hover:bg-[#e6c152] active:scale-95 shadow-[0_10px_20px_-5px_rgba(212,175,55,0.4)]">

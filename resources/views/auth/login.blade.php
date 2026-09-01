@@ -126,13 +126,13 @@
         </div>
     </div>
 
-    {{-- Auto-reset Turnstile on validation error --}}
+   {{-- Auto-reset Turnstile on validation error --}}
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            @if($errors - > any())
-            if (typeof turnstile !== 'undefined') {
-                turnstile.reset();
-            }
+        document.addEventListener('DOMContentLoaded', function () {
+            @if ($errors->any())
+                if (typeof turnstile !== 'undefined') {
+                    turnstile.reset();
+                }
             @endif
         });
     </script>

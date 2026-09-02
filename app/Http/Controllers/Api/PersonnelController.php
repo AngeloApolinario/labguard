@@ -20,49 +20,38 @@ class PersonnelController extends Controller
     {
         Computer::cleanupStaleSessions();
 
-        $labs = Lab::withCount([
+        $labs = Lab::with(['computers'])->withCount([
             'computers as total',
             'computers as occupied' => function ($query) {
                 $query->where('status', 'active');
             },
         ])->get();
 
-        return response()->json([
-            'labs' => $labs,
-        ]);
+        return response()->json(['success' => true, 'data' => $labs]);
     }
 
-    /**
-     * Show a specific lab grid for assigning students to PCs
-     */
     public function showLab(Lab $lab)
     {
         $currentTime = now()->format('H:i:s');
         $currentDay = now()->format('l');
 
         $currentSchedule = $lab->schedules()
-            ->with('user')
             ->where('day', $currentDay)
             ->where('start_time', '<=', $currentTime)
             ->where('end_time', '>=', $currentTime)
             ->first();
 
-        if ($currentSchedule) {
-            if (auth()->id() !== $currentSchedule->user_id && auth()->user()->role !== 'admin') {
-                return response()->json([
-                    'message' => "Access Denied: This lab is currently reserved for {$currentSchedule->user->name}.",
-                ], 403);
-            }
-        }
-
         $computers = $lab->computers()->with(['activeSession'])->orderBy('pc_number')->get();
         $schedules = $lab->schedules()->with('user')->where('day', $currentDay)->orderBy('start_time')->get();
 
         return response()->json([
-            'lab' => $lab,
-            'computers' => $computers,
-            'schedules' => $schedules,
-            'currentSchedule' => $currentSchedule,
+            'success' => true,
+            'data' => [
+                'lab'              => $lab,
+                'computers'        => $computers,
+                'schedules'        => $schedules,
+                'current_schedule' => $currentSchedule,
+            ]
         ]);
     }
 

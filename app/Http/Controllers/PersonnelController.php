@@ -28,18 +28,18 @@ class PersonnelController extends Controller
      * Staff Dashboard: Overview of all Labs
      */
     public function index()
-
     {
-        // Clean up any PCs that lost Wi-Fi before rendering the page
         Computer::cleanupStaleSessions();
-        $labs = Lab::withCount([
+
+        // Eager load computers AND schedules.user so schedules exist in the API payload
+        $labs = Lab::with(['computers', 'schedules.user'])->withCount([
             'computers as total',
             'computers as occupied' => function ($query) {
                 $query->where('status', 'active');
             },
         ])->get();
 
-        return view('personnel.index', compact('labs'));
+        return response()->json(['success' => true, 'data' => $labs]);
     }
 
     /**

@@ -20,7 +20,8 @@ class PersonnelController extends Controller
     {
         Computer::cleanupStaleSessions();
 
-        $labs = Lab::with(['computers'])->withCount([
+        // Eager load computers AND schedules.user so schedules exist in the API payload
+        $labs = Lab::with(['computers', 'schedules.user'])->withCount([
             'computers as total',
             'computers as occupied' => function ($query) {
                 $query->where('status', 'active');

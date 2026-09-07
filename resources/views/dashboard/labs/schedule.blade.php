@@ -107,8 +107,8 @@
     <div class="py-6 sm:py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen bg-[#F8FAFC]">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-10 items-start">
 
-            {{-- Entry Form --}}
-            <div class="bg-white p-6 sm:p-8 rounded-3xl sm:rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 sticky top-6">
+            {{-- Entry Form (with Alpine Data binding for Quick-Fill) --}}
+            <div x-data="{ subjectCode: '{{ old('subject_code', '') }}' }" class="bg-white p-6 sm:p-8 rounded-3xl sm:rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 sticky top-6">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Assign Instructor</p>
 
                 <form action="{{ route('dashboard.labs.schedule.store', $lab->id) }}" method="POST" class="space-y-4">
@@ -132,9 +132,30 @@
                                 @endforeach
                             </select>
                         </div>
+
+                        {{-- Subject Code Input with Quick-Fill helper --}}
                         <div>
-                            <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Subject Code</label>
-                            <input type="text" name="subject_code" value="{{ old('subject_code') }}" placeholder="E.g. IT-402" required class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 uppercase font-bold focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                            <div class="flex items-center justify-between ml-2 mb-1">
+                                <label class="text-[8px] font-black text-slate-400 uppercase block">Subject Code</label>
+                            </div>
+
+                            <input type="text"
+                                name="subject_code"
+                                x-model="subjectCode"
+                                placeholder="E.g. IT-402"
+                                required
+                                class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 uppercase font-bold focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+
+                            {{-- One-Click Quick-Fill Chips --}}
+                            <div class="flex items-center gap-1.5 mt-2 ml-1">
+                                <span class="text-[8px] font-black text-slate-400 uppercase tracking-wider">Quick Fill:</span>
+                                <button type="button" @click="subjectCode = 'OPEN LAB'" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-[#D4AF37]/15 hover:text-[#D4AF37] text-slate-600 text-[8px] font-black uppercase tracking-wider transition-colors border border-slate-200 shadow-2xs">
+                                    OPEN LAB
+                                </button>
+                                <button type="button" @click="subjectCode = 'FREE LAB'" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-[#D4AF37]/15 hover:text-[#D4AF37] text-slate-600 text-[8px] font-black uppercase tracking-wider transition-colors border border-slate-200 shadow-2xs">
+                                    FREE LAB
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -146,6 +167,21 @@
                         <div>
                             <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">End Time</label>
                             <input type="time" name="end_time" value="{{ old('end_time') }}" required class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-3 sm:px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                        </div>
+                    </div>
+
+                    {{-- Elegant, Non-Intrusive Open Lab Instructions Micro-Card --}}
+                    <div class="p-3.5 bg-gradient-to-r from-amber-500/10 via-[#D4AF37]/5 to-transparent rounded-2xl border border-[#D4AF37]/25 flex items-start gap-3 mt-3">
+                        <div class="p-1.5 bg-[#D4AF37]/20 border border-[#D4AF37]/30 rounded-xl text-[#D4AF37] shrink-0 mt-0.5 shadow-2xs">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.516 0c.85.493 1.509 1.333 1.509 2.316V18" />
+                            </svg>
+                        </div>
+                        <div class="text-[10px] leading-relaxed text-slate-600">
+                            <span class="font-black text-slate-800 uppercase tracking-wider block text-[9px] mb-0.5">
+                                Pro-Tip • Setting Up Open / Free Lab
+                            </span>
+                            <span>Type <code class="px-1.5 py-0.5 bg-white border border-[#D4AF37]/30 rounded font-mono font-black text-[#D4AF37]">OPEN LAB</code> or <code class="px-1.5 py-0.5 bg-white border border-[#D4AF37]/30 rounded font-mono font-black text-[#D4AF37]">FREE LAB</code> in Subject Code to unlock workstations for <strong class="text-slate-800">all students</strong> without subject enrollment restrictions.</span>
                         </div>
                     </div>
 
@@ -208,7 +244,7 @@
                     <table class="w-full text-left border-collapse">
                         <thead class="sticky top-0 bg-slate-900 z-10">
                             <tr class="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] border-b border-slate-800">
-                                <th class="pb-3 bg-slate-900">Instructor</th>
+                                <th class="pb-3 bg-slate-900">Instructor & Subject</th>
                                 <th class="pb-3 bg-slate-900">Day</th>
                                 <th class="pb-3 bg-slate-900">Time Window</th>
                                 <th class="pb-3 text-right bg-slate-900">Action</th>
@@ -216,6 +252,9 @@
                         </thead>
                         <tbody class="divide-y divide-slate-800/80">
                             @forelse($schedules as $entry)
+                            @php
+                            $isOpenOrFree = str_contains(strtoupper($entry->subject_code), 'OPEN') || str_contains(strtoupper($entry->subject_code), 'FREE');
+                            @endphp
                             <tr class="group hover:bg-white/[0.02] transition-colors"
                                 x-show="activeDay === 'All' || activeDay === '{{ $entry->day }}'"
                                 x-transition:enter="transition ease-out duration-200"
@@ -224,7 +263,15 @@
                                 <td class="py-4 font-black text-white text-sm uppercase">
                                     <div class="flex flex-col">
                                         <span>{{ $entry->user->name }}</span>
+
+                                        @if($isOpenOrFree)
+                                        <span class="inline-flex items-center gap-1.5 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded-md mt-1 w-max shadow-2xs">
+                                            <span class="size-1 rounded-full bg-emerald-400 animate-ping"></span>
+                                            {{ $entry->subject_code }} • Open Access
+                                        </span>
+                                        @else
                                         <span class="text-[9px] text-[#D4AF37] tracking-widest italic font-bold uppercase mt-0.5">{{ $entry->subject_code }}</span>
+                                        @endif
                                     </div>
                                 </td>
                                 <td class="py-4 font-bold text-xs uppercase tracking-widest">
@@ -257,12 +304,23 @@
                 {{-- Mobile View --}}
                 <div class="block sm:hidden overflow-y-auto max-h-[480px] space-y-3 pr-1 custom-scroll">
                     @forelse($schedules as $entry)
+                    @php
+                    $isOpenOrFree = str_contains(strtoupper($entry->subject_code), 'OPEN') || str_contains(strtoupper($entry->subject_code), 'FREE');
+                    @endphp
                     <div class="p-4 bg-slate-800/60 rounded-2xl border border-slate-700/50 space-y-3"
                         x-show="activeDay === 'All' || activeDay === '{{ $entry->day }}'">
                         <div class="flex items-start justify-between">
                             <div>
                                 <h5 class="text-white font-black text-sm uppercase">{{ $entry->user->name }}</h5>
+
+                                @if($isOpenOrFree)
+                                <span class="inline-flex items-center gap-1.5 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded-md mt-1 w-max">
+                                    <span class="size-1 rounded-full bg-emerald-400 animate-ping"></span>
+                                    {{ $entry->subject_code }} • Open Access
+                                </span>
+                                @else
                                 <p class="text-[9px] text-[#D4AF37] font-bold tracking-widest italic uppercase mt-0.5">{{ $entry->subject_code }}</p>
+                                @endif
                             </div>
                             <span class="px-2.5 py-1 bg-slate-700/80 rounded-lg text-[9px] font-black uppercase text-slate-300 tracking-wider">
                                 {{ $entry->day }}

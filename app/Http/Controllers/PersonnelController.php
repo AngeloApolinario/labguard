@@ -8,8 +8,11 @@ use App\Models\Lab;
 use App\Models\LabSession;
 use App\Models\Schedule;
 use App\Models\User;
+use App\Models\Alert;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Models\SubjectEnrollment;
+
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -200,6 +203,33 @@ class PersonnelController extends Controller
     }
 
     /**
+     * Mark an alert as dismissed/false alarm.
+     */
+    public function discardAlert(Request $request, $id)
+    {
+        $alert = Alert::find($id);
+
+        if (!$alert) {
+            if ($request->expectsJson()) {
+                return response()->json(['status' => 'error', 'message' => 'Alert not found.'], 404);
+            }
+            $this->flashToast('danger', 'Not Found', 'Alert record could not be found.');
+            return back()->with('error', 'Alert not found.');
+        }
+
+        $alert->update([
+            'status' => 'discarded',
+            'resolved_at' => now(),
+        ]);
+
+
+        $this->flashToast('success', 'Alert Discarded', 'The alert has been successfully dismissed as a false alarm.');
+
+        return back()->with('success', 'Alert successfully discarded as a false alarm.');
+    }
+
+
+    /**
      * EXPORTING THE ATTENDANCE REPORT AS CSV
      * Reads a custom date if passed by the Master Schedule grid view layout
      */
@@ -261,5 +291,77 @@ class PersonnelController extends Controller
 
             fclose($file);
         }, $fileName);
+    }
+
+
+
+    //ENROLLMENT OF STUDENTS TO SUBJECTS
+
+
+    public function enrollStudent(Request $request)
+    {
+        $request->validate([
+            'subject_code' => 'required|string',
+            'emails'       => 'nullable|string',
+            'file'         => 'nullable|file|mimes:csv,txt|max:5120',
+        ]);
+
+        $subjectCode = trim($request->subject_code);
+        $emailsToEnroll = [];
+
+        // 1. Smart Extraction from Text Box (Copy-Pasted Excel/Text)
+        if ($request->filled('emails')) {
+            preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $request->emails, $matches);
+            $emailsToEnroll = array_merge($emailsToEnroll, $matches[0] ?? []);
+        }
+
+        // 2. Smart Extraction from Uploaded CSV / TXT Roster File
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $content = file_get_contents($file->getRealPath());
+            preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $content, $matches);
+            $emailsToEnroll = array_merge($emailsToEnroll, $matches[0] ?? []);
+        }
+
+        // Clean, lowercase, and deduplicate email list
+        $emailsToEnroll = array_unique(array_map('strtolower', array_map('trim', $emailsToEnroll)));
+
+        if (empty($emailsToEnroll)) {
+            return back()->with('error', 'No valid email addresses were found in your input.');
+        }
+
+        // 3. Batch Enroll All Students
+        $enrolledCount = 0;
+        foreach ($emailsToEnroll as $email) {
+            SubjectEnrollment::updateOrCreate([
+                'subject_code' => $subjectCode,
+                'email'        => $email,
+            ]);
+            $enrolledCount++;
+        }
+
+        return back()->with('success', "Successfully enrolled {$enrolledCount} student(s) into {$subjectCode} for the entire week!");
+    }
+
+    /**
+     * Remove a student enrollment from a subject
+     */
+    public function unenrollStudent(SubjectEnrollment $enrollment)
+    {
+        $subjectCode = $enrollment->subject_code;
+        $email = $enrollment->email;
+        $enrollment->delete();
+
+        return back()->with('success', "Removed {$email} from {$subjectCode}.");
+    }
+
+    public function clearRoster(Request $request)
+    {
+        $request->validate(['subject_code' => 'required|string']);
+
+        $subjectCode = $request->subject_code;
+        $count = SubjectEnrollment::where('subject_code', $subjectCode)->delete();
+
+        return back()->with('success', "Cleared all {$count} enrolled student(s) from {$subjectCode}.");
     }
 }

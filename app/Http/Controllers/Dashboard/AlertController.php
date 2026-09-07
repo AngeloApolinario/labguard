@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
@@ -20,114 +19,185 @@ class AlertController extends Controller
     }
 
     /**
-     * Display a listing of all alerts (History).
+     * Display a listing of all alerts (History) with filtering and pagination.
      */
     public function index(Request $request)
     {
-        // Eager load relationships so Laboratory and Reporter data are accessible
         $query = Alert::with(['computer.lab', 'reporter'])->latest();
 
-        // Filter by PC Number
         if ($request->filled('pc_number')) {
             $query->whereHas('computer', function ($q) use ($request) {
                 $q->where('pc_number', 'like', '%' . $request->pc_number . '%');
             });
         }
 
-        // Filter by Specific Date
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);
         }
 
-        // Filter by Status (pending/resolved)
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // Paginate results while preserving filter query parameters in links
         $alerts = $query->paginate(15)->appends($request->query());
+
+        if ($request->expectsJson()) {
+            return response()->json($alerts);
+        }
 
         return view('dashboard.alerts.index', compact('alerts'));
     }
 
     /**
-     * Store a new alert sent from the Python Terminal.
+     * Store a new alert sent from terminal devices or clients.
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'pc_number' => 'required|exists:computers,pc_number',
+            'pc_number'  => 'required|exists:computers,pc_number',
             'issue_type' => 'required|string',
-            'remarks' => 'required|string',
+            'remarks'    => 'required|string',
         ]);
 
         $computer = Computer::where('pc_number', $request->pc_number)->first();
 
         $alert = Alert::create([
             'computer_id' => $computer->id,
-            'reporter_id' => auth()->id(),
-            'issue_type' => $request->issue_type,
-            'remarks' => $request->remarks,
-            'status' => 'pending',
+            'lab_id'      => $computer->lab_id,
+            'reported_by' => auth()->id(),
+            'issue_type'  => $request->issue_type,
+            'remarks'     => $request->remarks,
+            'status'      => 'pending',
         ]);
 
-        $this->flashToast('success', 'Alert Received', 'Alert received and logged successfully.');
-
-        return response()->json([
-            'message' => 'Alert received',
-            'id' => $alert->id,
-            'toast' => [
-                'type' => 'success',
-                'title' => 'Alert Received',
+        if ($request->expectsJson()) {
+            return response()->json([
                 'message' => 'Alert received and logged successfully.',
-            ],
-        ], 201);
+                'alert'   => $alert,
+            ], 201);
+        }
+
+        $this->flashToast('success', 'Alert Created', 'Incident report successfully submitted.');
+        return back()->with('success', 'Alert reported successfully.');
     }
 
     /**
      * Mark an alert as resolved.
      */
-    public function resolve(Request $request, Alert $alert)
+    public function resolve(Request $request, $alert)
     {
+        $alert = $alert instanceof Alert ? $alert : Alert::findOrFail($alert);
+
         $alert->update([
-            'status' => 'resolved',
+            'status'      => 'resolved',
             'resolved_at' => now(),
         ]);
 
-        activity()
-            ->useLog('incident_response')
-            ->performedOn($alert)
-            ->causedBy(auth()->user())
-            ->withProperties([
-                'alert_title' => $alert->title ?? $alert->issue_type,
-                'lab_room' => $alert->computer->laboratory->name ?? 'N/A',
-                'notes' => $request->resolution_notes,
-            ])
-            ->log("Resolved security alert: '{$alert->issue_type}'");
+        if (function_exists('activity')) {
+            activity()
+                ->useLog('incident_response')
+                ->performedOn($alert)
+                ->causedBy(auth()->user())
+                ->withProperties([
+                    'alert_title' => $alert->title ?? $alert->issue_type,
+                    'lab_room'    => $alert->computer->lab->name ?? 'N/A',
+                    'notes'       => $request->resolution_notes,
+                ])
+                ->log("Resolved security alert: '{$alert->issue_type}'");
+        }
 
-        $this->flashToast('success', 'Issue Resolved', 'Issue marked as resolved.');
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Issue marked as resolved.',
+                'alert'   => $alert,
+            ]);
+        }
 
+        $this->flashToast('success', 'Alert Resolved', 'The alert has been marked as resolved.');
         return back()->with('success', 'Issue marked as resolved.');
     }
 
-    public function undoResolution(Alert $alert)
+    /**
+     * Discard an alert as a false alarm or trolling.
+     */
+    public function discardAlert(Request $request, $alert)
     {
-        // Safety check: ensure we only undo alerts that are actually resolved
-        if ($alert->status !== 'resolved') {
-            $this->flashToast('danger', 'Undo Failed', 'Only resolved alerts can be restored to pending status.');
+        $alert = $alert instanceof Alert ? $alert : Alert::find($alert);
 
-            return redirect()->back()->with('error', 'Only resolved alerts can be restored to pending status.');
+        if (!$alert) {
+            if ($request->expectsJson()) {
+                return response()->json(['status' => 'error', 'message' => 'Alert not found.'], 404);
+            }
+            $this->flashToast('danger', 'Not Found', 'Alert record could not be found.');
+            return back()->with('error', 'Alert not found.');
         }
 
-        // Update status back to pending
         $alert->update([
-            'status' => 'pending',
-            'resolved_at' => null,
-            'resolved_by' => null,
+            'status'      => 'discarded',
+            'resolved_at' => now(),
         ]);
 
-        $this->flashToast('warning', 'Resolution Undone', "Alert for {$alert->computer->pc_number} restored to pending status.");
+        if (function_exists('activity')) {
+            activity()
+                ->useLog('incident_response')
+                ->performedOn($alert)
+                ->causedBy(auth()->user())
+                ->log("Dismissed alert as false alarm / discarded: '{$alert->issue_type}'");
+        }
 
-        return redirect()->back()->with('success', "Alert for {$alert->computer->pc_number} restored to pending status.");
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Alert successfully discarded as a false alarm.',
+                'alert'   => $alert,
+            ]);
+        }
+
+        $this->flashToast('success', 'Alert Discarded', 'The alert has been successfully dismissed as a false alarm.');
+        return back()->with('success', 'Alert successfully discarded as a false alarm.');
+    }
+
+    /**
+     * Restore a resolved OR discarded alert back to pending status.
+     */
+    public function undoResolution(Request $request, $alert)
+    {
+        $alert = $alert instanceof Alert ? $alert : Alert::findOrFail($alert);
+
+        // Allowed to undo BOTH resolved and discarded alerts
+        if (!in_array($alert->status, ['resolved', 'discarded'])) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Only resolved or discarded alerts can be restored to pending status.',
+                ], 422);
+            }
+            $this->flashToast('warning', 'Invalid Action', 'Only resolved or discarded alerts can be restored.');
+            return back()->with('error', 'Only resolved or discarded alerts can be restored.');
+        }
+
+        $previousStatus = $alert->status;
+
+        $alert->update([
+            'status'      => 'pending',
+            'resolved_at' => null,
+        ]);
+
+        if (function_exists('activity')) {
+            activity()
+                ->useLog('incident_response')
+                ->performedOn($alert)
+                ->causedBy(auth()->user())
+                ->log("Restored {$previousStatus} alert for {$alert->computer->pc_number} back to pending");
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => "Alert for {$alert->computer->pc_number} restored to pending status.",
+                'alert'   => $alert,
+            ]);
+        }
+
+        $this->flashToast('info', 'Alert Restored', "Alert for {$alert->computer->pc_number} restored to pending status.");
+        return back()->with('success', "Alert for {$alert->computer->pc_number} restored to pending status.");
     }
 }

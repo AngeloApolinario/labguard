@@ -5,152 +5,676 @@
         <x-slot name="header">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h2 class="font-black text-3xl sm:text-4xl text-slate-800 tracking-tighter uppercase">
-                        Analytics & <span class="text-[#D4AF37]">Reports</span>
+                    <h2 class="font-black text-2xl sm:text-4xl text-slate-800 tracking-tighter uppercase">
+                        Hardware & Lab <span class="text-[#D4AF37]">Telemetry</span>
                     </h2>
                     <div class="flex items-center space-x-2 mt-1">
-                        <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                            Labguard System Analytics Overview
+                        <div class="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            Workstation Diagnostics & Operations Hub
                         </p>
                     </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-[#D4AF37] border border-slate-800 rounded-xl text-[10px] font-mono font-black uppercase shadow-sm">
+                        <span class="size-2 rounded-full bg-emerald-400 animate-ping"></span>
+                        Telemetry Active
+                    </span>
                 </div>
             </div>
         </x-slot>
 
-        {{-- Action & Filter Bar --}}
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 bg-white/80 backdrop-blur-xl p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-xl shadow-slate-500/5">
-            <div class="flex items-center gap-2">
-                <span class="size-2 rounded-full bg-blue-500"></span>
-                <p class="text-xs font-bold text-slate-400">
-                    Filtering criteria: <span class="text-blue-600 font-black underline underline-offset-4">{{ $rangeLabel }}</span>
+        {{-- ========================================================================= --}}
+        {{-- INTERACTIVE CONTROL BAR (POLISHED GRID + DATE LOCK + TOP-LAYER DROPDOWN)  --}}
+        {{-- ========================================================================= --}}
+        @php
+        $todayStr = now()->format('Y-m-d');
+        $past7Str = now()->subDays(7)->format('Y-m-d');
+        $past30Str = now()->subDays(30)->format('Y-m-d');
+
+        $isToday = ($startDateInput === $todayStr && $endDateInput === $todayStr);
+        $isPast7 = ($startDateInput === $past7Str && $endDateInput === $todayStr);
+        $isPast30 = ($startDateInput === $past30Str && $endDateInput === $todayStr);
+        $isAllTime = ($startDateInput === '2024-01-01' || request('preset') === 'all');
+        @endphp
+
+        <div x-data="{
+            exportOpen: false,
+            today: '{{ $todayStr }}',
+            formatDate(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+            setPreset(days) {
+                const end = new Date();
+                const start = new Date();
+                if (days === 'all') {
+                    start.setFullYear(2024, 0, 1);
+                } else {
+                    start.setDate(end.getDate() - days);
+                }
+                document.getElementById('start_date').value = this.formatDate(start);
+                document.getElementById('end_date').value = this.formatDate(end);
+                document.getElementById('telemetryFilterForm').submit();
+            },
+            validateDates() {
+                const start = document.getElementById('start_date');
+                const end = document.getElementById('end_date');
+                if (end.value > this.today) {
+                    end.value = this.today;
+                }
+                if (start.value > end.value) {
+                    start.value = end.value;
+                }
+            }
+        }"
+            class="mb-8 relative z-50 bg-white/95 backdrop-blur-xl p-5 sm:p-7 rounded-[2rem] border border-slate-200/80 shadow-xl shadow-slate-900/5 [isolation:isolate]">
+
+            <form id="telemetryFilterForm" action="{{ url()->current() }}" method="GET" class="space-y-4">
+
+                {{-- Responsive Grid: Balanced on mobile (1 col), tablet (4+8 / 12 col), and desktop (3+5+4 col) --}}
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+
+                    {{-- 1. Laboratory Zone Filter --}}
+                    <div class="md:col-span-4 xl:col-span-3 w-full">
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">
+                            Laboratory Facility
+                        </label>
+                        <div class="relative">
+                            <select name="lab_id" onchange="this.form.submit()" class="w-full h-11 appearance-none pl-3.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all cursor-pointer truncate">
+                                <option value="">🌐 All Campus Laboratories</option>
+                                @foreach($allLabs as $lab)
+                                <option value="{{ $lab->id }}" {{ ($selectedLabId == $lab->id) ? 'selected' : '' }}>
+                                    {{ $lab->name }}
+                                </option>
+                                @endforeach
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+                                <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- 2. Calendar Pop-up Date Inputs (LOCKED: CANNOT EXCEED TODAY) --}}
+                    <div class="md:col-span-8 xl:col-span-5 w-full">
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">From Date</label>
+                                <input type="date"
+                                    id="start_date"
+                                    name="start_date"
+                                    max="{{ $todayStr }}"
+                                    @change="validateDates()"
+                                    value="{{ $startDateInput }}"
+                                    class="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold tabular-nums text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all [color-scheme:light] cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">To Date</label>
+                                <input type="date"
+                                    id="end_date"
+                                    name="end_date"
+                                    max="{{ $todayStr }}"
+                                    @change="validateDates()"
+                                    value="{{ $endDateInput }}"
+                                    class="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold tabular-nums text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all [color-scheme:light] cursor-pointer">
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- 3. Action Group: Apply, Reset, and Dropdown (Aligned baseline with label spacer) --}}
+                    <div class="md:col-span-12 xl:col-span-4 w-full">
+                        <label class="hidden md:block xl:block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 select-none">
+                            Actions
+                        </label>
+                        <div class="flex items-center gap-2 w-full">
+                            <button type="submit" class="h-11 px-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm inline-flex items-center justify-center shrink-0">
+                                Apply
+                            </button>
+
+                            <a href="{{ url()->current() }}" class="h-11 px-3.5 inline-flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shrink-0">
+                                Reset
+                            </a>
+
+                            {{-- Export Dropdown (Standardized width, high z-index, escape handling) --}}
+                            <div class="relative flex-1" @click.away="exportOpen = false" @keydown.escape.window="exportOpen = false">
+                                <button type="button"
+                                    @click="exportOpen = !exportOpen"
+                                    class="w-full h-11 px-3.5 bg-gradient-to-r from-[#D4AF37] to-amber-500 hover:from-amber-400 hover:to-amber-600 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider shadow-md shadow-amber-500/15 transition-all flex items-center justify-center gap-1.5 active:scale-95 whitespace-nowrap">
+                                    <svg class="size-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                    </svg>
+                                    <span>Export Report</span>
+                                    <svg class="size-3.5 shrink-0 transition-transform duration-200" :class="{'rotate-180': exportOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+
+                                {{-- Dropdown Card (z-[9999] floating above all cards and canvases) --}}
+                                <div x-show="exportOpen"
+                                    x-cloak
+                                    x-transition:enter="transition ease-out duration-150"
+                                    x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+                                    x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                                    x-transition:leave="transition ease-in duration-100"
+                                    x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                                    x-transition:leave-end="opacity-0 scale-95 -translate-y-2"
+                                    class="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-2.5rem)] bg-white border border-slate-200 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] z-[9999] p-2 space-y-1 ring-1 ring-black/10">
+
+                                    {{-- Export 1: Terminal Check-ins --}}
+                                    <a href="{{ route('super-admin.analytics.export', array_merge(request()->query(), ['type' => 'checklists'])) }}"
+                                        class="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group">
+                                        <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                                            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                                            </svg>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <span class="block text-xs font-black uppercase text-slate-900 tracking-tight">Hardware Check-ins</span>
+                                            <span class="block text-[11px] text-slate-500 font-medium mt-0.5 leading-snug">Audit inspection logs, peripheral states, student logins</span>
+                                        </div>
+                                    </a>
+
+                                    {{-- Export 2: Security & Hardware Alerts --}}
+                                    <a href="{{ route('super-admin.analytics.export', array_merge(request()->query(), ['type' => 'alerts'])) }}"
+                                        class="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group border-t border-slate-100">
+                                        <div class="p-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-colors">
+                                            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                            </svg>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <span class="block text-xs font-black uppercase text-slate-900 tracking-tight">Security & Alert Logs</span>
+                                            <span class="block text-[11px] text-slate-500 font-medium mt-0.5 leading-snug">Defect reports, false alarms, and resolution history</span>
+                                        </div>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                {{-- Quick Presets Pill Row (With Active State Feedback) --}}
+                <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
+                            <svg class="size-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Range Presets:
+                        </span>
+                        <button type="button" @click="setPreset(0)" class="px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider transition-all {{ $isToday ? 'bg-slate-900 text-[#D4AF37] font-black shadow-sm ring-1 ring-slate-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-200/80' }}">Today</button>
+                        <button type="button" @click="setPreset(7)" class="px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider transition-all {{ $isPast7 ? 'bg-slate-900 text-[#D4AF37] font-black shadow-sm ring-1 ring-slate-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-200/80' }}">Past 7 Days</button>
+                        <button type="button" @click="setPreset(30)" class="px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider transition-all {{ $isPast30 ? 'bg-slate-900 text-[#D4AF37] font-black shadow-sm ring-1 ring-slate-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-200/80' }}">Past 30 Days</button>
+                        <button type="button" @click="setPreset('all')" class="px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider transition-all {{ $isAllTime ? 'bg-slate-900 text-[#D4AF37] font-black shadow-sm ring-1 ring-slate-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-200/80' }}">All Time</button>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium shrink-0">
+                        <span class="size-1.5 rounded-full bg-[#D4AF37]"></span>
+                        <span>Scope:</span>
+                        <span class="font-mono font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200/60">{{ $rangeLabel }}</span>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        {{-- ========================================================================= --}}
+        {{-- TOP 4 CRITICAL TELEMETRY STATS --}}
+        {{-- ========================================================================= --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+
+            {{-- Stat 1: Hardware Integrity Rate --}}
+            <div class="bg-white/95 backdrop-blur-xl p-6 rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-900/5 group hover:border-[#D4AF37] transition-all">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hardware Health Index</span>
+                    <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                        <svg class="size-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <h3 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight font-mono">{{ $hardwareIntegrityRate }}%</h3>
+                    <span class="text-[10px] font-black text-emerald-600 uppercase">Operational</span>
+                </div>
+                <div class="w-full bg-slate-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div class="bg-emerald-500 h-full rounded-full transition-all duration-700" style="width: {{ $hardwareIntegrityRate }}%"></div>
+                </div>
+            </div>
+
+            {{-- Stat 2: Verified Check-ins --}}
+            <div class="bg-white/95 backdrop-blur-xl p-6 rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-900/5 group hover:border-[#D4AF37] transition-all">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Verified Check-ins</span>
+                    <div class="p-2 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        <svg class="size-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 019 9v.375M10.125 2.25A3.375 3.375 0 0113.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 013.375 3.375M9 15l2.25 2.25L15 12" />
+                        </svg>
+                    </div>
+                </div>
+                <h3 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight font-mono">{{ number_format($totalChecklists) }}</h3>
+                <p class="text-[10px] font-bold text-slate-500 uppercase mt-2">
+                    <span class="text-rose-600 font-black">{{ $flaggedChecklists }} flagged</span> discrepancies
                 </p>
             </div>
 
-            <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
-
-                {{-- Range Selector Dropdown --}}
-                <div class="relative w-full sm:w-auto text-left" x-data="{ open: false }" @click.away="open = false">
-                    <button
-                        @click="open = !open"
-                        type="button"
-                        class="w-full sm:w-auto flex items-center justify-between sm:justify-start px-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-black uppercase text-slate-700 shadow-sm hover:bg-slate-100/80 transition-all focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50">
-                        <div class="flex items-center">
-                            <x-heroicon-o-calendar class="size-4 mr-2 text-slate-400" />
-                            <span>Range: {{ $rangeLabel }}</span>
-                        </div>
-                        <svg class="w-4 h-4 ml-2 text-slate-400 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            {{-- Stat 3: Live Workstation Fleet --}}
+            <div class="bg-white/95 backdrop-blur-xl p-6 rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-900/5 group hover:border-[#D4AF37] transition-all">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Workstation Fleet</span>
+                    <div class="p-2 rounded-xl bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                        <svg class="size-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
                         </svg>
-                    </button>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <h3 class="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight font-mono">{{ $fleetActive }}</h3>
+                    <span class="text-xs font-black text-slate-400 font-mono">/ {{ $totalComputers }} Online</span>
+                </div>
+                <div class="flex items-center gap-2.5 mt-2 text-[10px] font-black uppercase tracking-wider">
+                    <span class="text-emerald-600">{{ $fleetAvailable }} Free</span>
+                    <span class="text-slate-300">•</span>
+                    <span class="text-rose-600">{{ $fleetMaint }} Quarantine</span>
+                </div>
+            </div>
 
-                    <div
-                        x-show="open"
-                        x-transition:enter="transition ease-out duration-150"
-                        x-transition:enter-start="transform opacity-0 scale-95 -translate-y-2"
-                        x-transition:enter-end="transform opacity-100 scale-100 translate-y-0"
-                        x-transition:leave="transition ease-in duration-100"
-                        x-transition:leave-start="transform opacity-100 scale-100 translate-y-0"
-                        x-transition:leave-end="transform opacity-0 scale-95 -translate-y-2"
-                        class="absolute left-0 sm:right-0 sm:left-auto top-full sm:top-auto sm:bottom-full mt-2 sm:mt-0 sm:mb-2 w-full sm:w-52 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-2xl shadow-slate-900/10 z-50 p-1.5"
-                        style="display: none;">
-                        <a href="{{ route('super-admin.analytics', ['range' => 'all']) }}" class="flex items-center justify-between px-3.5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all {{ $range === 'all' ? 'bg-slate-900 text-[#D4AF37]' : 'text-slate-600 hover:bg-slate-50' }}">All Time Records</a>
-                        <a href="{{ route('super-admin.analytics', ['range' => 'today']) }}" class="flex items-center justify-between px-3.5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all {{ $range === 'today' ? 'bg-slate-900 text-[#D4AF37]' : 'text-slate-600 hover:bg-slate-50' }}">Today</a>
-                        <a href="{{ route('super-admin.analytics', ['range' => 'week']) }}" class="flex items-center justify-between px-3.5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all {{ $range === 'week' ? 'bg-slate-900 text-[#D4AF37]' : 'text-slate-600 hover:bg-slate-50' }}">Past 7 Days</a>
-                        <a href="{{ route('super-admin.analytics', ['range' => 'month']) }}" class="flex items-center justify-between px-3.5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all {{ $range === 'month' ? 'bg-slate-900 text-[#D4AF37]' : 'text-slate-600 hover:bg-slate-50' }}">Current Month</a>
+            {{-- Stat 4: Incident Response Triage --}}
+            <div class="bg-white/95 backdrop-blur-xl p-6 rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-900/5 group hover:border-[#D4AF37] transition-all">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Open Incidents</span>
+                    <div class="p-2 rounded-xl {{ $pendingAlerts > 0 ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' : 'bg-slate-100 text-slate-400' }}">
+                        <svg class="size-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex items-baseline gap-2">
+                    <h3 class="text-3xl sm:text-4xl font-black {{ $pendingAlerts > 0 ? 'text-rose-600' : 'text-slate-900' }} tracking-tight font-mono">{{ $pendingAlerts }}</h3>
+                    <span class="text-[10px] font-black text-slate-400 uppercase">Attention Needed</span>
+                </div>
+                <p class="text-[10px] font-bold text-slate-500 uppercase mt-2">
+                    <span class="text-emerald-600 font-black">{{ $resolvedAlerts }} resolved</span> • {{ $discardedAlerts }} discarded
+                </p>
+            </div>
+
+        </div>
+
+        {{-- ========================================================================= --}}
+        {{-- SECTION 2: HARDWARE AUDIT MATRIX & WEAR-AND-TEAR RADAR --}}
+        {{-- ========================================================================= --}}
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-8">
+
+            {{-- 1. Peripheral Defect Matrix --}}
+            <div class="lg:col-span-7 bg-white/95 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-xl shadow-slate-900/5 flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+                        <div>
+                            <h3 class="text-lg font-black text-slate-900 uppercase tracking-tight">Workstation Peripheral Wear Index</h3>
+                            <p class="text-xs text-slate-500 font-medium mt-0.5">Component discrepancies flagged by students during check-in</p>
+                        </div>
+                        <span class="self-start sm:self-auto px-3 py-1 bg-slate-900 text-[#D4AF37] rounded-xl text-[10px] font-mono font-black uppercase tracking-widest border border-slate-800">
+                            6-Point Verification
+                        </span>
+                    </div>
+
+                    {{-- Component Progress Matrix --}}
+                    <div class="space-y-3.5">
+                        @php
+                        $maxFailures = max(max(array_values($peripheralFailures)), 1);
+                        $peripheralMeta = [
+                        'monitor' => ['name' => 'Display Monitor', 'desc' => 'Cracks, Dead Pixels, No Signal', 'icon' => 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3'],
+                        'keyboard' => ['name' => 'Keyboard Unit', 'desc' => 'Missing Keys, Stuck Switches, USB Cable', 'icon' => 'M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6zM6 7.5h.008v.008H6V7.5zm3.75 0h.008v.008H9.75V7.5zm3.75 0h.008v.008H13.5V7.5zm3.75 0h.008v.008H17.25V7.5z'],
+                        'mouse' => ['name' => 'Optical Mouse', 'desc' => 'Sensor Tracking, Unresponsive Buttons', 'icon' => 'M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672z'],
+                        'avr' => ['name' => 'Power Regulator (AVR)', 'desc' => 'Grounded Power, Indicator Light Off', 'icon' => 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z'],
+                        'chassis' => ['name' => 'PC Chassis & Ports', 'desc' => 'Case Sealed, Loose Motherboard Cables', 'icon' => 'M5.25 14.25h13.5m-13.5 3h13.5m-9.75 3h6m3-16.5H4.5A1.5 1.5 0 003 5.25v13.5A1.5 1.5 0 004.5 20.25h15a1.5 1.5 0 001.5-1.5V5.25a1.5 1.5 0 00-1.5-1.5z'],
+                        'headset' => ['name' => 'Audio / Headset', 'desc' => 'Cushioning, Damaged Wire, Jack Fault', 'icon' => 'M19.114 5.636a9 9 0 00-14.228 0M12 3v9m0 0a3 3 0 106 0m-6 0a3 3 0 11-6 0'],
+                        ];
+                        @endphp
+
+                        @foreach($peripheralFailures as $key => $failCount)
+                        @php
+                        $meta = $peripheralMeta[$key] ?? ['name' => ucfirst($key), 'desc' => 'Hardware Component', 'icon' => 'M9 12.75L11.25 15 15 9.75'];
+                        $pct = round(($failCount / $maxFailures) * 100);
+                        @endphp
+                        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100/70 transition-colors">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-3">
+                                    <div class="size-8 rounded-xl bg-white border border-slate-200 text-amber-600 flex items-center justify-center shrink-0 shadow-sm">
+                                        <svg class="size-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="{{ $meta['icon'] }}" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-black text-slate-800 uppercase tracking-tight">{{ $meta['name'] }}</h4>
+                                        <p class="text-[10px] text-slate-400 font-bold">{{ $meta['desc'] }}</p>
+                                    </div>
+                                </div>
+
+                                <div class="text-right">
+                                    @if($failCount > 0)
+                                    <span class="text-xs font-mono font-black text-rose-600">
+                                        {{ $failCount }} {{ Str::plural('Defect', $failCount) }}
+                                    </span>
+                                    @else
+                                    <span class="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                        Flawless
+                                    </span>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                                @if($failCount > 0)
+                                <div class="bg-gradient-to-r from-amber-500 to-rose-500 h-full rounded-full transition-all duration-700" style="width: {{ $pct }}%"></div>
+                                @else
+                                <div class="bg-emerald-400/30 h-full rounded-full" style="width: 100%"></div>
+                                @endif
+                            </div>
+                        </div>
+                        @endforeach
                     </div>
                 </div>
 
-                {{-- Exporter Button --}}
-                <a href="{{ route('super-admin.analytics.export', ['range' => $range]) }}" class="w-full sm:w-auto flex items-center justify-center px-5 py-2.5 bg-[#D4AF37] hover:bg-[#b5932a] text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-[#D4AF37]/20 transition-all transform hover:scale-[1.02] active:scale-95">
-                    <x-heroicon-o-arrow-down-tray class="size-4 mr-2" />
-                    <span>Export Report</span>
+                <div class="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span>Live Telemetry Stream</span>
+                    <span class="text-slate-600">Station Terminal Synced</span>
+                </div>
+            </div>
+
+            {{-- 2. Check-in Integrity Ratio Doughnut --}}
+            <div class="lg:col-span-5 bg-white/95 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-xl shadow-slate-900/5 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-black text-slate-900 uppercase tracking-tight">Checklist Ratio</h3>
+                        <span class="text-[10px] font-black text-emerald-700 bg-emerald-500/15 border border-emerald-500/20 px-2.5 py-1 rounded-full uppercase">
+                            Audit Compliance
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 font-medium mb-6">Ratio of clean, flawless check-ins versus student-reported discrepancies</p>
+
+                    {{-- Chart Container --}}
+                    <div class="relative flex items-center justify-center p-2">
+                        <div class="relative size-56 flex items-center justify-center">
+                            <canvas id="checklistDoughnutChart"></canvas>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                                <span class="text-3xl font-black text-slate-900 font-mono">{{ $hardwareIntegrityRate }}%</span>
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Passing Rate</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Breakdown Pills --}}
+                    <div class="grid grid-cols-2 gap-3 mt-6">
+                        <div class="p-3.5 bg-emerald-500/5 rounded-2xl border border-emerald-500/20 text-center">
+                            <span class="text-[10px] font-black text-emerald-700 uppercase tracking-wider block">Flawless Passes</span>
+                            <span class="text-xl font-black text-slate-900 font-mono mt-0.5 block">{{ number_format($flawlessChecklists) }}</span>
+                        </div>
+                        <div class="p-3.5 bg-rose-500/5 rounded-2xl border border-rose-500/20 text-center">
+                            <span class="text-[10px] font-black text-rose-700 uppercase tracking-wider block">Issues Flagged</span>
+                            <span class="text-xl font-black text-slate-900 font-mono mt-0.5 block">{{ number_format($flaggedChecklists) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                    Inspection protocol enforced prior to desktop unlock
+                </div>
+            </div>
+
+        </div>
+
+        {{-- ========================================================================= --}}
+        {{-- SECTION 3: HOURLY CHECK-IN VOLUME --}}
+        {{-- ========================================================================= --}}
+        <div class="bg-white/95 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-xl shadow-slate-900/5 mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900 uppercase tracking-tight">Lab Traffic & Check-in Velocity</h3>
+                    <p class="text-xs text-slate-500 font-medium">Terminal check-in peak distribution by hour of day (7:00 AM – 8:00 PM)</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="size-2.5 rounded-full bg-amber-500"></span>
+                    <span class="text-[10px] font-black text-slate-600 uppercase tracking-wider">Student Sessions</span>
+                </div>
+            </div>
+
+            <div class="relative h-64 w-full">
+                <canvas id="trafficAreaChart"></canvas>
+            </div>
+        </div>
+
+        {{-- ========================================================================= --}}
+        {{-- SECTION 4: TECHNICIAN ACTION QUEUE --}}
+        {{-- ========================================================================= --}}
+        <div class="bg-white/95 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-xl shadow-slate-900/5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900 uppercase tracking-tight">Technician Triage Queue</h3>
+                    <p class="text-xs text-slate-500 font-medium">Recent workstation check-ins that detected broken or missing components</p>
+                </div>
+                <a href="{{ route('dashboard.sessions.index') }}" class="text-[10px] font-black text-amber-700 hover:text-amber-800 hover:underline uppercase tracking-wider flex items-center gap-1">
+                    <span>View All Station Logs</span>
+                    <svg class="size-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
                 </a>
             </div>
-        </div>
 
-        {{-- Live Statistics Grid --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6 mb-8">
-            @foreach($stats as $stat)
-            <div class="relative overflow-hidden bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-slate-100/80 shadow-xl shadow-slate-500/5 hover:border-[#D4AF37]/40 transition-all group">
-                <div class="flex items-center justify-between mb-3">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">{{ $stat['label'] }}</p>
-                    <div class="w-2 h-2 rounded-full bg-[#D4AF37] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                </div>
-                <h3 class="text-3xl font-black text-slate-900 tracking-tight">{{ $stat['value'] }}</h3>
-                <div class="flex items-center gap-1.5 mt-2">
-                    <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide">{{ $stat['change'] }}</span>
-                </div>
-            </div>
-            @endforeach
-        </div>
-
-        {{-- Analytics Breakdown Section --}}
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mb-8">
-
-            {{-- Lab Distribution Card --}}
-            <div class="lg:col-span-1 bg-white/80 backdrop-blur-xl p-6 sm:p-8 rounded-3xl sm:rounded-[2.5rem] border border-slate-100/80 shadow-2xl shadow-slate-500/5 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">Lab Usage</h3>
-                        <span class="text-[9px] font-black text-[#D4AF37] uppercase tracking-widest bg-[#D4AF37]/10 px-2.5 py-1 rounded-full border border-[#D4AF37]/20">Distribution</span>
-                    </div>
-
-                    <div class="space-y-6">
-                        @forelse($labUsage as $lab)
-                        <div>
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-xs font-black text-slate-700 uppercase tracking-wider">{{ $lab['name'] }}</span>
-                                <span class="text-xs font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-lg">{{ $lab['percent'] }}%</span>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                @forelse($recentIssues as $audit)
+                <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-rose-300 transition-all space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-200/60 pb-3">
+                        <div class="flex items-center gap-2.5">
+                            <div class="size-8 rounded-xl bg-slate-900 text-[#D4AF37] font-mono font-black text-xs flex items-center justify-center">
+                                {{ $audit->pc_number }}
                             </div>
-                            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
-                                <div class="{{ $lab['color'] }} h-full rounded-full transition-all duration-700 ease-out" style="width: {{ $lab['percent'] }}%"></div>
+                            <div>
+                                <h4 class="text-xs font-black text-slate-900 uppercase">{{ $audit->lab_name ?? 'Default Lab' }}</h4>
+                                <span class="text-[10px] font-mono text-slate-400 font-bold block">{{ $audit->student_id_number }}</span>
                             </div>
                         </div>
-                        @empty
-                        <div class="py-12 text-center text-slate-300 font-black uppercase tracking-widest text-xs">
-                            No lab session activity logged
+
+                        <span class="px-2.5 py-1 rounded-lg text-[9px] font-mono font-black uppercase bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                            Discrepancy
+                        </span>
+                    </div>
+
+                    {{-- Badges of failed components --}}
+                    <div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">Failed Components</span>
+                        <div class="flex flex-wrap gap-1.5">
+                            @if(!$audit->monitor_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Monitor</span>
+                            @endif
+                            @if(!$audit->keyboard_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Keyboard</span>
+                            @endif
+                            @if(!$audit->mouse_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Mouse</span>
+                            @endif
+                            @if(!$audit->avr_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">AVR</span>
+                            @endif
+                            @if(!$audit->pc_case_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Chassis</span>
+                            @endif
+                            @if(!$audit->headset_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Headset</span>
+                            @endif
                         </div>
-                        @endforelse
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500 font-bold">
+                        <span>
+                            {{ $audit->verified_at ? \Carbon\Carbon::parse($audit->verified_at)->diffForHumans() : 'Just now' }}
+                        </span>
+                        <a href="{{ route('dashboard.sessions.index', ['pc_number' => $audit->pc_number]) }}" class="text-amber-700 font-black hover:underline uppercase">
+                            Audit Station →
+                        </a>
                     </div>
                 </div>
-
-                <div class="mt-8 pt-4 border-t border-slate-100 text-center">
-                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">Real-time telemetry updated live</p>
+                @empty
+                <div class="col-span-full py-12 text-center bg-slate-50 rounded-2xl border border-slate-200/60">
+                    <svg class="size-8 text-emerald-500 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p class="text-xs font-black text-slate-800 uppercase tracking-wider">All Workstations Verified Operational</p>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase mt-0.5">No hardware discrepancies reported during current inspection window</p>
                 </div>
+                @endforelse
             </div>
-
-            {{-- Top Reported Issues Card --}}
-            <div class="lg:col-span-2 bg-white/80 backdrop-blur-xl p-6 sm:p-8 rounded-3xl sm:rounded-[2.5rem] border border-slate-100/80 shadow-2xl shadow-slate-500/5">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
-                    <h3 class="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight">Top Reported Issues</h3>
-                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] sm:text-right">Scope: {{ $rangeLabel }}</span>
-                </div>
-
-                <div class="space-y-3">
-                    @forelse($topIssues as $issue)
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 bg-slate-50/70 rounded-2xl border border-slate-100 hover:bg-slate-100/60 transition-all gap-3 group">
-                        <div class="flex items-center gap-3">
-                            <div class="w-2 h-2 rounded-full bg-rose-500 group-hover:scale-125 transition-transform"></div>
-                            <span class="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-tight">{{ $issue->issue_type }}</span>
-                        </div>
-
-                        <div class="flex items-center justify-between sm:justify-end space-x-4">
-                            <span class="px-3 py-1.5 bg-slate-900 text-[#D4AF37] rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-800 shadow-sm">
-                                {{ $issue->count }} {{ Str::plural('report', $issue->count) }}
-                            </span>
-                            <x-heroicon-o-arrow-trending-up class="size-5 text-rose-500 flex-shrink-0" />
-                        </div>
-                    </div>
-                    @empty
-                    <div class="text-center py-16 text-slate-300 font-black uppercase tracking-[0.3em] text-xs">
-                        No alerts or issues reported during this period
-                    </div>
-                    @endforelse
-                </div>
-            </div>
-
         </div>
 
     </div>
+
+    {{-- ========================================================================= --}}
+    {{-- CHART.JS INITIALIZATION --}}
+    {{-- ========================================================================= --}}
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 1. Doughnut Chart
+            const flawless = {
+                {
+                    (int)($flawlessChecklists ?? 0)
+                }
+            };
+            const flagged = {
+                {
+                    (int)($flaggedChecklists ?? 0)
+                }
+            };
+            const hasData = (flawless + flagged) > 0;
+
+            const ctxDoughnut = document.getElementById('checklistDoughnutChart').getContext('2d');
+            new Chart(ctxDoughnut, {
+                type: 'doughnut',
+                data: {
+                    labels: hasData ? ['Flawless Passes', 'Flagged Issues'] : ['No Data Recorded'],
+                    datasets: [{
+                        data: hasData ? [flawless, flagged] : [1],
+                        backgroundColor: hasData ? ['#10b981', '#f43f5e'] : ['#e2e8f0'],
+                        borderWidth: 0,
+                        hoverOffset: hasData ? 4 : 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '76%',
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: hasData,
+                            backgroundColor: '#0f172a',
+                            titleFont: {
+                                family: 'Arial',
+                                size: 12,
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                family: 'Arial',
+                                size: 11
+                            },
+                            padding: 10,
+                            cornerRadius: 8,
+                        }
+                    }
+                }
+            });
+
+            // 2. Area Chart: Hourly Check-in Velocity
+            const ctxTraffic = document.getElementById('trafficAreaChart').getContext('2d');
+            const gradient = ctxTraffic.createLinearGradient(0, 0, 0, 240);
+            gradient.addColorStop(0, 'rgba(212, 175, 55, 0.35)');
+            gradient.addColorStop(1, 'rgba(212, 175, 55, 0.0)');
+
+            const hourlyLabels = @json(array_column($hourlyData ?? [], 'hour'));
+            const hourlyCounts = @json(array_column($hourlyData ?? [], 'count'));
+
+            new Chart(ctxTraffic, {
+                type: 'line',
+                data: {
+                    labels: hourlyLabels,
+                    datasets: [{
+                        label: 'Check-ins',
+                        data: hourlyCounts,
+                        borderColor: '#D4AF37',
+                        borderWidth: 2.5,
+                        backgroundColor: gradient,
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 3.5,
+                        pointBackgroundColor: '#0f172a',
+                        pointBorderColor: '#D4AF37',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 5.5,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleFont: {
+                                family: 'Arial',
+                                size: 12,
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                family: 'Arial',
+                                size: 11
+                            },
+                            padding: 10,
+                            cornerRadius: 8,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                font: {
+                                    family: 'Arial',
+                                    size: 10,
+                                    weight: 'bold'
+                                },
+                                color: '#94a3b8'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(226, 232, 240, 0.7)'
+                            },
+                            ticks: {
+                                font: {
+                                    family: 'Arial',
+                                    size: 10,
+                                    weight: 'bold'
+                                },
+                                color: '#94a3b8',
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+    @endpush
 </x-app-layout>

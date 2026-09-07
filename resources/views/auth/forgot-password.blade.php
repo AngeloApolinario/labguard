@@ -70,7 +70,7 @@
                     </button>
 
                     <a href="{{ route('login') }}" class="block text-center text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 active:text-[#D4AF37] transition-colors py-2">
-                        Return to Secure Login
+                        Return to Login Page
                     </a>
                 </div>
             </form>

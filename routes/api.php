@@ -38,6 +38,7 @@ use App\Models\User;
 | USER PROFILE, 2FA, PHOTO, & SESSIONS API ENDPOINTS
 |--------------------------------------------------------------------------
 */
+
 Route::middleware('auth:sanctum')->prefix('user')->group(function () {
 
     // 1. Get Current Profile Data
@@ -305,6 +306,7 @@ Route::prefix('pc')->group(function () {
     Route::get('/status/{lab_id}/{pc_number}', [TerminalController::class, 'checkStatus']);
     Route::post('/logout', [TerminalController::class, 'handleLogout']);
     Route::post('/alerts', [TerminalController::class, 'reportIssue']);
+    Route::post('/checklist', [TerminalController::class, 'storeChecklist']);
 });
 
 

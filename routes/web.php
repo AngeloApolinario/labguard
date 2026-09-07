@@ -137,6 +137,8 @@ Route::middleware([
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
     Route::patch('/alerts/{alert}/undo', [AlertController::class, 'undoResolution'])->name('alerts.undo');
+    Route::patch('/alerts/{alert}/discard', [AlertController::class, 'discardAlert'])->name('alerts.discard');
+
 
     // HISTORICAL SESSIONS & AUDITING
     Route::get('/sessions', [Session::class, 'index'])->name('sessions.index');
@@ -168,12 +170,18 @@ Route::middleware([
     // SCHEDULES & REPORT EXPORTS
     Route::get('/schedule-overview', [PersonnelController::class, 'fullSchedule'])->name('full-schedule');
     Route::get('/export/{schedule}', [PersonnelController::class, 'exportScheduleAttendance'])->name('export');
+    //SCHEDULE ENROLLMENTS
+    Route::post('/enroll-student', [PersonnelController::class, 'enrollStudent'])->name('enroll');
+    Route::delete('/unenroll/{enrollment}', [PersonnelController::class, 'unenrollStudent'])->name('unenroll');
+    Route::delete('/clear-roster', [PersonnelController::class, 'clearRoster'])->name('clear-roster');
 
     // LOGS & ALERTS
     Route::get('/sessions', [PersonnelController::class, 'sessionHistory'])->name('sessions');
     Route::get('/alerts', [PersonnelController::class, 'alertHistory'])->name('alerts');
     Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
     Route::patch('/alerts/{alert}/undo', [AlertController::class, 'undoResolution'])->name('alerts.undo');
+    Route::patch('/alerts/{id}/discard', [PersonnelController::class, 'discardAlert'])
+        ->name('alerts.discard');
 });
 
 
@@ -197,6 +205,7 @@ Route::middleware([
     Route::get('/analytics/export', [SuperAdminController::class, 'exportReport'])->name('analytics.export');
     Route::get('/settings', [SuperAdminController::class, 'settings'])->name('settings');
     Route::get('/logs', [SuperAdminController::class, 'logs'])->name('logs');
+
 
     // SYSTEM-WIDE USER MANAGEMENT
     Route::get('/users', [SuperAdminController::class, 'userManagement'])->name('users');

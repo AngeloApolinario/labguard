@@ -8,6 +8,7 @@ use App\Models\Lab;
 use App\Models\LabSession;
 use App\Models\Schedule;
 use App\Models\User;
+use App\Models\SessionChecklist;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -524,178 +525,389 @@ class SuperAdminController extends Controller
     // ANALYTICS CONTROLLER
     public function analytics(Request $request)
     {
-        // Determine the active date boundary based on the selected range parameter
-        $range = $request->query('range', 'all'); // Default to all-time if nothing selected
-        $startDate = null;
+        // 1. Resolve Dates (Custom Date Picker or Default to 7 Days)
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->start_date)->startOfDay()
+            : now()->subDays(7)->startOfDay();
 
-        switch ($range) {
-            case 'today':
-                $startDate = \Carbon\Carbon::today();
-                $rangeLabel = 'Today';
-                break;
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->end_date)->endOfDay()
+            : now()->endOfDay();
 
-            case 'week':
-                $startDate = \Carbon\Carbon::now()->subDays(7);
-                $rangeLabel = 'Past 7 Days';
-                break;
+        $selectedLabId = $request->query('lab_id');
 
-            case 'month':
-                $startDate = \Carbon\Carbon::now()->startOfMonth();
-                $rangeLabel = 'This Month';
-                break;
+        // Format dates for the calendar inputs
+        $startDateInput = $startDate->format('Y-m-d');
+        $endDateInput   = $endDate->format('Y-m-d');
+        $rangeLabel     = $startDate->format('M d, Y') . ' — ' . $endDate->format('M d, Y');
 
-            default:
-                $startDate = null;
-                $rangeLabel = 'All Time';
-                break;
+        // 2. Base Query Scopes with Lab Filter
+        $checklistQuery = SessionChecklist::whereBetween('created_at', [$startDate, $endDate]);
+        $sessionQuery   = LabSession::whereBetween('created_at', [$startDate, $endDate]);
+        $alertQuery     = Alert::whereBetween('created_at', [$startDate, $endDate]);
+
+        if ($selectedLabId) {
+            $sessionQuery->where('lab_id', $selectedLabId);
+            $alertQuery->where('lab_id', $selectedLabId);
+
+            // Link checklist through computer or lab_name
+            $lab = Lab::find($selectedLabId);
+            if ($lab) {
+                $checklistQuery->where(function ($q) use ($lab) {
+                    $q->where('lab_name', $lab->name)
+                        ->orWhereHas('labSession', fn($sq) => $sq->where('lab_id', $lab->id));
+                });
+            }
         }
 
-        // 1. Calculate Actual System Statistics
-        $totalUsers = User::count();
+        // 3. Hardware Inspection & Check-in Analytics
+        $totalChecklists    = (clone $checklistQuery)->count();
+        $flawlessChecklists = (clone $checklistQuery)->where('all_operational', true)->count();
+        $flaggedChecklists  = $totalChecklists - $flawlessChecklists;
 
-        // Total Alerts query with active date range filter
-        $alertsQuery = DB::table('alerts')->where('status', 'pending');
-        if ($startDate) {
-            $alertsQuery->where('created_at', '>=', $startDate);
-        }
-        $activeAlertsCount = $alertsQuery->count();
+        $hardwareIntegrityRate = $totalChecklists > 0
+            ? round(($flawlessChecklists / $totalChecklists) * 100, 1)
+            : 100.0;
 
-        // Total Activity Log Count from DB filtered by time range
-        $activityLogQuery = DB::table('activity_log');
-        if ($startDate) {
-            $activityLogQuery->where('created_at', '>=', $startDate);
-        }
-        $totalLogEntries = $activityLogQuery->count();
-
-        $stats = [
-            [
-                'label' => 'TOTAL ACCOUNTS',
-                'value' => number_format($totalUsers),
-                'change' => 'Registered users',
-            ],
-            [
-                'label' => 'ACTIVE ALERTS (' . strtoupper($rangeLabel) . ')',
-                'value' => number_format($activeAlertsCount),
-                'change' => 'Requires attention',
-            ],
-            [
-                'label' => 'SYSTEM LOG ENTRIES (' . strtoupper($rangeLabel) . ')',
-                'value' => number_format($totalLogEntries),
-                'change' => 'Captured DB rows',
-            ],
+        // Peripheral Wear Matrix
+        $peripheralFailures = [
+            'monitor'  => (clone $checklistQuery)->where('monitor_ok', false)->count(),
+            'keyboard' => (clone $checklistQuery)->where('keyboard_ok', false)->count(),
+            'mouse'    => (clone $checklistQuery)->where('mouse_ok', false)->count(),
+            'avr'      => (clone $checklistQuery)->where('avr_ok', false)->count(),
+            'chassis'  => (clone $checklistQuery)->where('pc_case_ok', false)->count(),
+            'headset'  => (clone $checklistQuery)->where('headset_ok', false)->count(),
         ];
 
-        // 2. Fetch Actual Lab Usage Distribution joining with 'labs' (Filtered by Date Range)
-        $labRecordsQuery = DB::table('lab_sessions')
-            ->join('labs', 'lab_sessions.lab_id', '=', 'labs.id');
+        // 4. Live Computer Fleet State
+        $computerFleet = Computer::when($selectedLabId, fn($q) => $q->where('lab_id', $selectedLabId));
+        $totalComputers = (clone $computerFleet)->count();
+        $fleetActive    = (clone $computerFleet)->where('status', 'active')->count();
+        $fleetAvailable = (clone $computerFleet)->where('status', 'available')->count();
+        $fleetMaint     = (clone $computerFleet)->where('status', 'maintenance')->count();
 
-        if ($startDate) {
-            $labRecordsQuery->where('lab_sessions.created_at', '>=', $startDate);
-        }
+        // 5. Alert & Incident Telemetry
+        $pendingAlerts   = (clone $alertQuery)->where('status', 'pending')->count();
+        $resolvedAlerts  = (clone $alertQuery)->where('status', 'resolved')->count();
+        $discardedAlerts = (clone $alertQuery)->where('status', 'discarded')->count();
 
-        $labRecords = $labRecordsQuery
-            ->select('labs.name as lab_name', DB::raw('count(*) as total'))
-            ->groupBy('labs.id', 'labs.name')
+        // 6. Action Queue (Flagged Checklists)
+        $recentIssues = (clone $checklistQuery)
+            ->where(function ($q) {
+                $q->where('all_operational', false)
+                    ->orWhere('monitor_ok', false)
+                    ->orWhere('keyboard_ok', false)
+                    ->orWhere('mouse_ok', false)
+                    ->orWhere('avr_ok', false)
+                    ->orWhere('pc_case_ok', false)
+                    ->orWhere('headset_ok', false);
+            })
+            ->latest('id')
+            ->take(6)
             ->get();
 
-        $totalSessions = $labRecords->sum('total') ?: 1;
+        // 7. Hourly Velocity
+        $hourlyDistribution = (clone $sessionQuery)
+            ->selectRaw('HOUR(time_in) as hour, count(*) as count')
+            ->whereNotNull('time_in')
+            ->groupBy('hour')
+            ->orderBy('hour')
+            ->pluck('count', 'hour')
+            ->toArray();
 
-        $colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500'];
-        $labUsage = [];
-
-        foreach ($labRecords as $index => $record) {
-            $labUsage[] = [
-                'name' => $record->lab_name,
-                'percent' => round(($record->total / $totalSessions) * 100),
-                'color' => $colors[$index % count($colors)],
+        $hourlyData = [];
+        for ($h = 7; $h <= 20; $h++) {
+            $hourlyData[] = [
+                'hour'  => Carbon::createFromTime($h)->format('g A'),
+                'count' => $hourlyDistribution[$h] ?? 0,
             ];
         }
 
-        // 3. Fetch Top Reported Issue Types from 'alerts' table within selected period
-        $topIssuesQuery = DB::table('alerts')
-            ->select('issue_type', DB::raw('count(*) as count'));
+        $allLabs = Lab::orderBy('name')->get();
 
-        if ($startDate) {
-            $topIssuesQuery->where('created_at', '>=', $startDate);
-        } else {
-            $topIssuesQuery->where('created_at', '>=', now()->startOfMonth());
-        }
-
-        $topIssues = $topIssuesQuery->groupBy('issue_type')
-            ->orderByDesc('count')
-            ->take(5)
-            ->get();
-
-        return view('super-admin.analytics', compact('stats', 'labUsage', 'topIssues', 'range', 'rangeLabel'));
+        return view('super-admin.analytics', compact(
+            'startDateInput',
+            'endDateInput',
+            'rangeLabel',
+            'selectedLabId',
+            'allLabs',
+            'totalChecklists',
+            'flawlessChecklists',
+            'flaggedChecklists',
+            'hardwareIntegrityRate',
+            'peripheralFailures',
+            'totalComputers',
+            'fleetActive',
+            'fleetAvailable',
+            'fleetMaint',
+            'pendingAlerts',
+            'resolvedAlerts',
+            'discardedAlerts',
+            'recentIssues',
+            'hourlyData'
+        ));
     }
 
-    public function exportReport(Request $request): StreamedResponse
+    /**
+     * Export Handler for Check-ins and Alerts CSV
+     */
+    public function export(Request $request)
     {
-        $range = $request->query('range', 'all');
-        $startDate = null;
+        $type = $request->query('type', 'checklists');
+        $startDate = $request->filled('start_date') ? Carbon::parse($request->start_date)->startOfDay() : now()->subDays(7)->startOfDay();
+        $endDate = $request->filled('end_date') ? Carbon::parse($request->end_date)->endOfDay() : now()->endOfDay();
+        $labId = $request->query('lab_id');
 
-        if ($range === 'today') {
-            $startDate = Carbon::today();
-        } elseif ($range === 'week') {
-            $startDate = Carbon::now()->subDays(7);
-        } elseif ($range === 'month') {
-            $startDate = Carbon::now()->startOfMonth();
+        if ($type === 'alerts') {
+            return $this->exportAlerts($startDate, $endDate, $labId);
         }
 
-        $fileName = 'labguard_alerts_' . $range . '_report_' . date('Y-m-d') . '.csv';
+        return $this->exportChecklists($startDate, $endDate, $labId);
+    }
 
-        $alertsQuery = DB::table('alerts')
-            ->leftJoin('labs', 'alerts.lab_id', '=', 'labs.id')
-            ->select([
-                'alerts.id',
-                'labs.name as laboratory_name',
-                'alerts.computer_id',
-                'alerts.issue_type',
-                'alerts.remarks',
-                'alerts.status',
-                'alerts.reported_by',
-                'alerts.created_at',
-            ]);
+    private function exportChecklists($start, $end, $labId)
+    {
+        $filename = "Hardware_Checkins_" . now()->format('Ymd_His') . ".csv";
+        $query = SessionChecklist::whereBetween('created_at', [$start, $end]);
 
-        if ($startDate) {
-            $alertsQuery->where('alerts.created_at', '>=', $startDate);
+        if ($labId) {
+            $lab = Lab::find($labId);
+            if ($lab) $query->where('lab_name', $lab->name);
         }
 
-        $alerts = $alertsQuery->orderBy('alerts.created_at', 'desc')->get();
+        $records = $query->latest('id')->get();
 
         $headers = [
-            'Content-type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename=$fileName",
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Expires' => '0',
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename={$filename}",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
         ];
 
-        $callback = function () use ($alerts) {
-            $file = fopen('php://output', 'w');
+        $callback = function () use ($records) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['ID', 'PC Number', 'Lab', 'Student ID', 'Monitor', 'Keyboard', 'Mouse', 'AVR', 'Chassis', 'Headset', 'All Operational', 'Verified At']);
 
-            // CSV Structural Headers
-            fputcsv($file, ['Alert ID', 'Laboratory Name', 'Computer ID', 'Issue Type', 'Remarks/Details', 'Status', 'Reported By', 'Timestamp']);
-
-            foreach ($alerts as $alert) {
-                fputcsv($file, [
-                    $alert->id,
-                    $alert->laboratory_name ?? 'N/A',
-                    $alert->computer_id ?? 'N/A',
-                    $alert->issue_type,
-                    $alert->remarks ?? 'No remarks provided',
-                    ucfirst($alert->status),
-                    $alert->reported_by ?? 'System',
-                    $alert->created_at,
+            foreach ($records as $r) {
+                fputcsv($handle, [
+                    $r->id,
+                    $r->pc_number,
+                    $r->lab_name,
+                    $r->student_id_number,
+                    $r->monitor_ok ? 'PASS' : 'FAIL',
+                    $r->keyboard_ok ? 'PASS' : 'FAIL',
+                    $r->mouse_ok ? 'PASS' : 'FAIL',
+                    $r->avr_ok ? 'PASS' : 'FAIL',
+                    $r->pc_case_ok ? 'PASS' : 'FAIL',
+                    $r->headset_ok ? 'PASS' : 'FAIL',
+                    $r->all_operational ? 'YES' : 'NO',
+                    $r->verified_at?->format('Y-m-d H:i:s'),
                 ]);
             }
-
-            fclose($file);
+            fclose($handle);
         };
 
         return response()->stream($callback, 200, $headers);
     }
 
+    private function exportAlerts($start, $end, $labId)
+    {
+        $filename = "Security_Alerts_" . now()->format('Ymd_His') . ".csv";
+        $query = Alert::with(['computer', 'lab'])->whereBetween('created_at', [$start, $end]);
+
+        if ($labId) $query->where('lab_id', $labId);
+        $records = $query->latest('id')->get();
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename={$filename}",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $callback = function () use ($records) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['ID', 'PC Number', 'Lab', 'Issue Type', 'Status', 'Remarks', 'Date Reported', 'Resolved At']);
+
+            foreach ($records as $r) {
+                fputcsv($handle, [
+                    $r->id,
+                    $r->computer->pc_number ?? 'N/A',
+                    $r->lab->name ?? 'N/A',
+                    $r->issue_type,
+                    strtoupper($r->status),
+                    $r->remarks,
+                    $r->created_at->format('Y-m-d H:i:s'),
+                    $r->resolved_at?->format('Y-m-d H:i:s') ?? 'N/A',
+                ]);
+            }
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+    public function exportReport(Request $request)
+    {
+        $type = $request->query('type', 'checklists');
+
+        // 1. Resolve date range from the calendar inputs or presets
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = Carbon::parse($request->start_date)->startOfDay();
+            $endDate   = Carbon::parse($request->end_date)->endOfDay();
+        } else {
+            $range = $request->query('range', 'week');
+            $startDate = match ($range) {
+                'today' => now()->startOfDay(),
+                'week'  => now()->subDays(7)->startOfDay(),
+                'month' => now()->startOfMonth(),
+                default => Carbon::createFromTimestamp(0),
+            };
+            $endDate = now()->endOfDay();
+        }
+
+        $labId = $request->query('lab_id');
+
+        // 2. Delegate to the requested export handler
+        if ($type === 'alerts') {
+            return $this->exportAlertsCsv($startDate, $endDate, $labId);
+        }
+
+        return $this->exportChecklistsCsv($startDate, $endDate, $labId);
+    }
+
+    /**
+     * Generate & Stream Hardware Check-ins CSV
+     */
+    protected function exportChecklistsCsv($startDate, $endDate, $labId = null)
+    {
+        $filename = "Hardware_Checkins_" . now()->format('Ymd_His') . ".csv";
+
+        $query = SessionChecklist::whereBetween('created_at', [$startDate, $endDate]);
+
+        if ($labId) {
+            $lab = Lab::find($labId);
+            if ($lab) {
+                $query->where(function ($q) use ($lab) {
+                    $q->where('lab_name', $lab->name)
+                        ->orWhereHas('labSession', fn($sq) => $sq->where('lab_id', $lab->id));
+                });
+            }
+        }
+
+        $records = $query->latest('id')->get();
+
+        $headers = [
+            "Content-type"        => "text/csv; charset=UTF-8",
+            "Content-Disposition" => "attachment; filename={$filename}",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        return response()->stream(function () use ($records) {
+            $handle = fopen('php://output', 'w');
+
+            // UTF-8 BOM for Microsoft Excel compatibility
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($handle, [
+                'Audit ID',
+                'Station / PC Number',
+                'Laboratory Zone',
+                'Student ID Number',
+                'Display Monitor',
+                'Keyboard Unit',
+                'Optical Mouse',
+                'Power Unit (AVR)',
+                'PC Chassis',
+                'Audio / Headset',
+                'All Operational?',
+                'Verified At'
+            ]);
+
+            foreach ($records as $r) {
+                fputcsv($handle, [
+                    $r->id,
+                    $r->pc_number,
+                    $r->lab_name ?? 'N/A',
+                    $r->student_id_number,
+                    $r->monitor_ok ? 'PASS' : 'FAIL',
+                    $r->keyboard_ok ? 'PASS' : 'FAIL',
+                    $r->mouse_ok ? 'PASS' : 'FAIL',
+                    $r->avr_ok ? 'PASS' : 'FAIL',
+                    $r->pc_case_ok ? 'PASS' : 'FAIL',
+                    $r->headset_ok ? 'PASS' : 'FAIL',
+                    $r->all_operational ? 'YES' : 'NO',
+                    optional($r->verified_at)->format('Y-m-d H:i:s') ?? optional($r->created_at)->format('Y-m-d H:i:s'),
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
+    }
+
+    /**
+     * Generate & Stream Security and Incident Alerts CSV
+     */
+    protected function exportAlertsCsv($startDate, $endDate, $labId = null)
+    {
+        $filename = "Security_Alerts_" . now()->format('Ymd_His') . ".csv";
+
+        $query = Alert::with(['computer.lab', 'reporter'])->whereBetween('created_at', [$startDate, $endDate]);
+
+        if ($labId) {
+            $query->where('lab_id', $labId);
+        }
+
+        $records = $query->latest('id')->get();
+
+        $headers = [
+            "Content-type"        => "text/csv; charset=UTF-8",
+            "Content-Disposition" => "attachment; filename={$filename}",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        return response()->stream(function () use ($records) {
+            $handle = fopen('php://output', 'w');
+
+            // UTF-8 BOM for Microsoft Excel compatibility
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($handle, [
+                'Alert ID',
+                'PC Number',
+                'Laboratory Zone',
+                'Reported By (Name)',
+                'Student ID / Number',
+                'Issue Category',
+                'Status',
+                'Remarks / Problem Description',
+                'Reported Date',
+                'Resolved Date'
+            ]);
+
+            foreach ($records as $r) {
+                fputcsv($handle, [
+                    $r->id,
+                    $r->computer->pc_number ?? 'N/A',
+                    $r->lab->name ?? $r->computer->lab->name ?? 'N/A',
+                    $r->reporter->name ?? $r->reportedBy->name ?? 'Student',
+                    $r->reporter->student_number ?? $r->reportedBy->student_number ?? 'N/A',
+                    $r->issue_type,
+                    strtoupper($r->status),
+                    $r->remarks ?? $r->description ?? 'N/A',
+                    optional($r->created_at)->format('Y-m-d H:i:s'),
+                    optional($r->resolved_at)->format('Y-m-d H:i:s') ?? 'N/A',
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
+    }
 
     /**
      * Import users from CSV file

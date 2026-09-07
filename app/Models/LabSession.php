@@ -47,4 +47,9 @@ class LabSession extends Model
     {
         return $this->belongsTo(User::class)->withTrashed();;
     }
+    public function checklist()
+    {
+
+        return $this->hasOne(SessionChecklist::class, 'lab_session_id');
+    }
 }

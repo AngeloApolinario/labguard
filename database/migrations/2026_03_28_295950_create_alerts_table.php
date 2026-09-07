@@ -29,7 +29,7 @@ return new class extends Migration
             $table->text('remarks');
 
             // Tracking the fix
-            $table->enum('status', ['pending', 'fixing', 'resolved'])->default('pending');
+            $table->enum('status', ['pending', 'fixing', 'resolved', 'discarded'])->default('pending');
             $table->timestamp('resolved_at')->nullable();
             $table->timestamps();
         });

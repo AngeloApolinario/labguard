@@ -1,6 +1,5 @@
 <x-app-layout>
     <x-slot name="header">
-        {{-- Header Container: Stacks on mobile, aligns horizontally on tablet/desktop --}}
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h2 class="font-black text-2xl sm:text-3xl md:text-4xl text-slate-800 tracking-tighter uppercase">
@@ -14,7 +13,6 @@
                 </div>
             </div>
 
-            {{-- Stat Cards Header: Grid on tiny screens, flex on larger views --}}
             <div class="grid grid-cols-2 sm:flex gap-3 w-full md:w-auto">
                 <div class="bg-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm backdrop-blur-xl flex-1 sm:flex-initial">
                     <p class="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">Total Reports</p>
@@ -54,6 +52,7 @@
                             <option value="">All Reports</option>
                             <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Needs Attention</option>
                             <option value="resolved" {{ request('status') == 'resolved' ? 'selected' : '' }}>Resolved</option>
+                            <option value="discarded" {{ request('status') == 'discarded' ? 'selected' : '' }}>False Alarm / Discarded</option>
                         </select>
                     </div>
 
@@ -69,7 +68,7 @@
             </div>
         </div>
 
-        {{-- Desktop Table View (Hidden on mobile/tablet) --}}
+        {{-- Desktop Table View --}}
         <div class="hidden md:block bg-white border border-slate-100/60 rounded-[3rem] overflow-hidden shadow-2xl shadow-slate-500/5">
             <table class="w-full text-left border-collapse">
                 <thead>
@@ -79,12 +78,12 @@
                         <th class="py-6 px-4">Issue Type</th>
                         <th class="py-6 px-4">Details / Remarks</th>
                         <th class="py-6 px-4">Date & Time</th>
-                        <th class="py-6 px-8 text-right">Action</th>
+                        <th class="py-6 px-8 text-right">Action / Verification</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($alerts as $alert)
-                    <tr class="group hover:bg-slate-50/50 transition-colors {{ $alert->status == 'resolved' ? 'opacity-70 bg-slate-50/30' : '' }}">
+                    <tr class="group hover:bg-slate-50/50 transition-colors {{ in_array($alert->status, ['resolved', 'discarded']) ? 'opacity-70 bg-slate-50/30' : '' }}">
                         <td class="py-8 px-8">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-[#D4AF37] text-xs shadow-inner shrink-0">
@@ -128,28 +127,43 @@
 
                         <td class="py-8 px-8 text-right">
                             @if($alert->status == 'pending')
-                            <form action="{{ route('personnel.alerts.resolve', $alert->id) }}" method="POST">
-                                @csrf
-                                @method('PATCH')
-                                <button type="submit" class="group/btn relative overflow-hidden bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[9px] font-black uppercase px-6 py-3 rounded-2xl transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)]">
-                                    <span class="relative z-10">Mark as Resolved</span>
-                                    <div class="absolute inset-0 bg-white/10 translate-y-full group-hover/btn:translate-y-0 transition-transform"></div>
-                                </button>
-                            </form>
+                            <div class="flex items-center justify-end gap-2">
+                                {{-- Discard / False Alarm Button --}}
+                                <form action="{{ route('personnel.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm / student trolling?');">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit" title="Discard as false alarm" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[9px] font-black uppercase px-4 py-3 rounded-2xl transition-all">
+                                        Discard
+                                    </button>
+                                </form>
+
+                                {{-- Resolve Button --}}
+                                <form action="{{ route('personnel.alerts.resolve', $alert->id) }}" method="POST">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit" class="bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[9px] font-black uppercase px-5 py-3 rounded-2xl transition-all shadow-md">
+                                        Resolve
+                                    </button>
+                                </form>
+                            </div>
                             @else
                             <div class="flex items-center justify-end gap-3">
+                                @if($alert->status == 'discarded')
+                                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                    <span class="text-rose-600 text-[9px] font-black uppercase tracking-wider">False Alarm</span>
+                                </div>
+                                @else
                                 <div class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
                                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                                     <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
                                 </div>
+                                @endif
 
-                                <form action="{{ route('personnel.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution and mark it as pending again?');">
+                                <form action="{{ route('personnel.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Undo this status and make it pending again?');">
                                     @csrf
                                     @method('PATCH')
-                                    <button type="submit" title="Undo resolution" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 flex items-center gap-1">
-                                        <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                        </svg>
+                                    <button type="submit" title="Undo status" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1">
                                         <span>Undo</span>
                                     </button>
                                 </form>
@@ -171,12 +185,11 @@
             </table>
         </div>
 
-        {{-- Mobile & Tablet Card View (Visible below MD breakpoint) --}}
+        {{-- Mobile Card View --}}
         <div class="block md:hidden space-y-4">
             @forelse($alerts as $alert)
-            <div class="bg-white border border-slate-100/80 rounded-3xl p-5 shadow-xl shadow-slate-500/5 {{ $alert->status == 'resolved' ? 'opacity-70 bg-slate-50/50' : '' }}">
+            <div class="bg-white border border-slate-100/80 rounded-3xl p-5 shadow-xl shadow-slate-500/5 {{ in_array($alert->status, ['resolved', 'discarded']) ? 'opacity-70 bg-slate-50/50' : '' }}">
 
-                {{-- Card Header: PC & Timestamp --}}
                 <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-100">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-[#D4AF37] text-xs shadow-inner shrink-0">
@@ -195,7 +208,6 @@
                     </div>
                 </div>
 
-                {{-- Card Body: Reporter & Remarks --}}
                 <div class="py-4 space-y-3">
                     <div class="flex items-center justify-between text-xs">
                         <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Reported By</span>
@@ -212,30 +224,42 @@
                     </div>
                 </div>
 
-                {{-- Card Footer: Action Buttons --}}
                 <div class="pt-3 border-t border-slate-100 flex items-center justify-end">
                     @if($alert->status == 'pending')
-                    <form action="{{ route('personnel.alerts.resolve', $alert->id) }}" method="POST" class="w-full">
-                        @csrf
-                        @method('PATCH')
-                        <button type="submit" class="w-full bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[10px] font-black uppercase py-3 rounded-2xl transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)] text-center">
-                            Mark as Resolved
-                        </button>
-                    </form>
+                    <div class="grid grid-cols-2 gap-2 w-full">
+                        <form action="{{ route('personnel.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm?');">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-black uppercase py-3 rounded-2xl transition-all text-center">
+                                Discard
+                            </button>
+                        </form>
+                        <form action="{{ route('personnel.alerts.resolve', $alert->id) }}" method="POST">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="w-full bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[10px] font-black uppercase py-3 rounded-2xl transition-all shadow-md text-center">
+                                Resolve
+                            </button>
+                        </form>
+                    </div>
                     @else
                     <div class="flex items-center justify-between w-full gap-2">
+                        @if($alert->status == 'discarded')
+                        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                            <span class="text-rose-600 text-[9px] font-black uppercase tracking-wider">False Alarm</span>
+                        </div>
+                        @else
                         <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                             <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
                         </div>
+                        @endif
 
-                        <form action="{{ route('personnel.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution and mark it as pending again?');">
+                        <form action="{{ route('personnel.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Undo this status?');">
                             @csrf
                             @method('PATCH')
-                            <button type="submit" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 flex items-center gap-1">
-                                <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                </svg>
+                            <button type="submit" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1">
                                 <span>Undo</span>
                             </button>
                         </form>

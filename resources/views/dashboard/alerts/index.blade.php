@@ -8,7 +8,7 @@
                 <div class="flex items-center space-x-2 mt-1">
                     <div class="size-2 bg-green-500 rounded-full animate-pulse"></div>
                     <p class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] sm:tracking-[0.3em]">
-                        Computer Alerts Overview
+                        Admin Incident & Alerts Management
                     </p>
                 </div>
             </div>
@@ -16,7 +16,7 @@
             <div class="flex gap-2 sm:gap-3">
                 <div class="flex-1 sm:flex-none bg-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm backdrop-blur-xl">
                     <p class="text-[8px] font-black text-slate-400 uppercase mb-0.5 sm:mb-1 tracking-widest">Total Reports</p>
-                    <p class="text-xl sm:text-2xl font-black text-slate-800">{{ $alerts->count() }}</p>
+                    <p class="text-xl sm:text-2xl font-black text-slate-800">{{ $alerts->total() ?? $alerts->count() }}</p>
                 </div>
                 <div class="flex-1 sm:flex-none bg-[#D4AF37]/10 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl sm:rounded-3xl border border-[#D4AF37]/20 relative overflow-hidden group backdrop-blur-xl shadow-lg shadow-[#D4AF37]/5">
                     <div class="absolute inset-0 bg-[#D4AF37]/5 group-hover:bg-[#D4AF37]/10 transition-colors"></div>
@@ -51,6 +51,7 @@
                             <option value="">All Reports</option>
                             <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Needs Attention</option>
                             <option value="resolved" {{ request('status') == 'resolved' ? 'selected' : '' }}>Resolved</option>
+                            <option value="discarded" {{ request('status') == 'discarded' ? 'selected' : '' }}>Discarded (False Alarm)</option>
                         </select>
                     </div>
 
@@ -69,7 +70,7 @@
         {{-- Mobile Cards Layout (< md screens) --}}
         <div class="block md:hidden space-y-4">
             @forelse($alerts as $alert)
-            <div class="bg-white border border-slate-100 p-5 rounded-3xl shadow-lg shadow-slate-500/5 space-y-4 {{ $alert->status == 'resolved' ? 'opacity-75 bg-slate-50/50' : '' }}">
+            <div class="bg-white border border-slate-100 p-5 rounded-3xl shadow-lg shadow-slate-500/5 space-y-4 {{ $alert->status != 'pending' ? 'opacity-75 bg-slate-50/50' : '' }}">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-[#D4AF37] text-xs shadow-inner">
@@ -102,14 +103,47 @@
                 </p>
                 @endif
 
+                {{-- Action Bar --}}
                 <div class="pt-2 border-t border-slate-100">
                     @if($alert->status == 'pending')
-                    <form action="{{ route('dashboard.alerts.resolve', $alert) }}" method="POST" class="w-full">
-                        @csrf @method('PATCH')
-                        <button class="w-full bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[10px] font-black uppercase py-3 rounded-2xl transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)]">
-                            Mark as Resolved
-                        </button>
-                    </form>
+                    <div class="grid grid-cols-2 gap-2">
+                        {{-- Admin Discard --}}
+                        <form action="{{ route('dashboard.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm / student trolling?');">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[9px] font-black uppercase py-3 rounded-2xl transition-all">
+                                Discard
+                            </button>
+                        </form>
+
+                        {{-- Admin Resolve --}}
+                        <form action="{{ route('dashboard.alerts.resolve', $alert->id) }}" method="POST">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="w-full bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[9px] font-black uppercase py-3 rounded-2xl transition-all shadow-md">
+                                Resolve
+                            </button>
+                        </form>
+                    </div>
+                    @elseif($alert->status == 'discarded')
+                    <div class="flex items-center justify-between">
+                        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                            <span class="text-rose-600 text-[9px] font-black uppercase tracking-wider">Discarded</span>
+                        </div>
+
+                        {{-- Undo Discard --}}
+                        <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Restore this discarded alert back to pending?');">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1">
+                                <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                </svg>
+                                <span>Undo</span>
+                            </button>
+                        </form>
+                    </div>
                     @else
                     <div class="flex items-center justify-between">
                         <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
@@ -117,8 +151,10 @@
                             <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
                         </div>
 
-                        <form action="{{ route('dashboard.alerts.undo', $alert) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution?');">
-                            @csrf @method('PATCH')
+                        {{-- Undo Resolution --}}
+                        <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Restore this resolved alert back to pending?');">
+                            @csrf
+                            @method('PATCH')
                             <button type="submit" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1">
                                 <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -154,7 +190,7 @@
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                         @forelse($alerts as $alert)
-                        <tr class="group hover:bg-slate-50/50 transition-colors {{ $alert->status == 'resolved' ? 'opacity-70 bg-slate-50/30' : '' }}">
+                        <tr class="group hover:bg-slate-50/50 transition-colors {{ $alert->status != 'pending' ? 'opacity-70 bg-slate-50/30' : '' }}">
                             <td class="py-8 px-8">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-[#D4AF37] text-xs shadow-inner">
@@ -194,15 +230,47 @@
                                 </div>
                             </td>
 
+                            {{-- Admin Actions Column --}}
                             <td class="py-8 px-8 text-right">
                                 @if($alert->status == 'pending')
-                                <form action="{{ route('dashboard.alerts.resolve', $alert) }}" method="POST">
-                                    @csrf @method('PATCH')
-                                    <button class="group/btn relative overflow-hidden bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[9px] font-black uppercase px-6 py-3 rounded-2xl transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)]">
-                                        <span class="relative z-10">Mark as Resolved</span>
-                                        <div class="absolute inset-0 bg-white/10 translate-y-full group-hover/btn:translate-y-0 transition-transform"></div>
-                                    </button>
-                                </form>
+                                <div class="flex items-center justify-end gap-2">
+                                    {{-- Admin Discard Action --}}
+                                    <form action="{{ route('dashboard.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm / student trolling?');">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" title="Discard as false alarm" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[9px] font-black uppercase px-4 py-3 rounded-2xl transition-all">
+                                            Discard
+                                        </button>
+                                    </form>
+
+                                    {{-- Admin Resolve Action --}}
+                                    <form action="{{ route('dashboard.alerts.resolve', $alert->id) }}" method="POST">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="bg-[#D4AF37] hover:bg-[#B08D2A] text-white text-[9px] font-black uppercase px-5 py-3 rounded-2xl transition-all shadow-md">
+                                            Resolve
+                                        </button>
+                                    </form>
+                                </div>
+                                @elseif($alert->status == 'discarded')
+                                <div class="flex items-center justify-end gap-3">
+                                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                        <span class="text-rose-600 text-[9px] font-black uppercase tracking-wider">Discarded</span>
+                                    </div>
+
+                                    {{-- Admin Undo Discard Action --}}
+                                    <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Restore this discarded alert back to pending?');">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" title="Undo discard" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 flex items-center gap-1">
+                                            <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                            </svg>
+                                            <span>Undo</span>
+                                        </button>
+                                    </form>
+                                </div>
                                 @else
                                 <div class="flex items-center justify-end gap-3">
                                     <div class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
@@ -210,8 +278,10 @@
                                         <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
                                     </div>
 
-                                    <form action="{{ route('dashboard.alerts.undo', $alert) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution?');">
-                                        @csrf @method('PATCH')
+                                    {{-- Admin Undo Resolve Action --}}
+                                    <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution?');">
+                                        @csrf
+                                        @method('PATCH')
                                         <button type="submit" title="Undo resolution" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-95 flex items-center gap-1">
                                             <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -236,6 +306,12 @@
                     </tbody>
                 </table>
             </div>
+
+            @if($alerts->hasPages())
+            <div class="p-6 bg-slate-50/50 border-t border-slate-100/80">
+                {{ $alerts->links() }}
+            </div>
+            @endif
         </div>
 
     </div>

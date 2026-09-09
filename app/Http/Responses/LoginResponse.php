@@ -14,6 +14,12 @@ class LoginResponse implements LoginResponseContract
         $user = auth()->user();
         $role = strtolower($user->role);
 
+        // 1. If unverified student, ALWAYS send to verification notice upon login
+        if ($role === 'student' && is_null($user->email_verified_at)) {
+            return redirect()->route('verification.notice');
+        }
+
+        // 2. Role destinations for verified users & staff
         return match ($role) {
             'super-admin' => redirect()->route('super-admin.index'),
             'admin'       => redirect()->route('dashboard.index'),

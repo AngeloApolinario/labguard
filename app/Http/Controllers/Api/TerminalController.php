@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 class TerminalController extends Controller
 {
     /**
-     * Handle Student Login from Python Terminal with Strict Enrollment & Schedule Validation
+     * Handle Student Login from Python Terminal with Strict Enrollment, Schedule & Email Verification
      */
     public function login(Request $request)
     {
@@ -37,6 +37,13 @@ class TerminalController extends Controller
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials.'], 401);
+        }
+
+        // 1b. Student Account Verification Check
+        if (strtolower($user->role) === 'student' && is_null($user->email_verified_at)) {
+            return response()->json([
+                'message' => 'Access Denied: Your student account is not verified. Please verify your email before accessing the terminal.'
+            ], 403);
         }
 
         // 2. Case-Insensitive PC and Lab Lookup
@@ -97,7 +104,7 @@ class TerminalController extends Controller
             if (!$isOpenLab) {
                 $studentEmail = strtolower(trim($user->email));
 
-                // Check 4C: Direct check against enrollment table (no $hasEnrollments bypass)
+                // Check 4C: Direct check against enrollment table
                 $isEnrolled = SubjectEnrollment::whereRaw('LOWER(TRIM(subject_code)) = ?', [strtolower($subjectCode)])
                     ->whereRaw('LOWER(TRIM(email)) = ?', [$studentEmail])
                     ->exists();
@@ -138,7 +145,7 @@ class TerminalController extends Controller
         return response()->json([
             'message' => 'Access Granted',
             'name'    => $user->name,
-            'role'    => $user->role, // <-- ADD THIS LINE FOR RBAC
+            'role'    => $user->role,
             'teacher' => $activeSchedule?->user?->name ?? 'No active class'
         ], 200);
     }

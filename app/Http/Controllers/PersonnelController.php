@@ -195,12 +195,48 @@ class PersonnelController extends Controller
     /**
      * View Alerts/Maintenance History
      */
-    public function alertHistory()
+    public function alertHistory(Request $request)
     {
-        $alerts = \App\Models\Alert::with(['computer.lab'])->latest()->paginate(15);
+        $query = Alert::with(['computer.lab', 'reporter'])->latest();
 
-        return view('personnel.alerts', compact('alerts'));
+        // 1. Filter by PC Number (Smart match handles PC-1 vs PC-01 automatically)
+        if ($request->filled('pc_number')) {
+            $pcInput = trim($request->pc_number);
+            $query->whereHas('computer', function ($q) use ($pcInput) {
+                $cleanNum = preg_replace('/\D/', '', $pcInput);
+
+                $q->where('pc_number', 'like', "%{$pcInput}%");
+
+                if (!empty($cleanNum)) {
+                    $num = (int)$cleanNum;
+                    $q->orWhere('pc_number', 'like', "%PC-{$num}%")
+                        ->orWhere('pc_number', 'like', "%PC-0{$num}%")
+                        ->orWhere('pc_number', 'like', "%PC {$num}%")
+                        ->orWhere('pc_number', 'like', "%PC 0{$num}%");
+                }
+            });
+        }
+
+        // 2. Filter by Date Reported
+        if ($request->filled('date')) {
+            $query->whereDate('created_at', $request->date);
+        }
+
+        // 3. Filter by Status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Accurate counts for header stats
+        $totalReports = Alert::count();
+        $unresolvedCount = Alert::where('status', 'pending')->count();
+
+        // Paginate and retain active filter query strings
+        $alerts = $query->paginate(15)->withQueryString();
+
+        return view('personnel.alerts', compact('alerts', 'totalReports', 'unresolvedCount'));
     }
+
 
     /**
      * Mark an alert as dismissed/false alarm.

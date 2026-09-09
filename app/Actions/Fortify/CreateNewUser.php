@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 use Laravel\Jetstream\Jetstream;
+use Illuminate\Validation\Rules\Password;
 
 class CreateNewUser implements CreatesNewUsers
 {
@@ -24,7 +25,15 @@ class CreateNewUser implements CreatesNewUsers
                 'max:255',
                 Rule::unique('users')->whereNull('deleted_at'),
             ],
-            'password' => $this->passwordRules(),
+            'password' => [
+                'required',
+                'string',
+                Password::min(8)
+                    ->mixedCase()
+                    ->numbers()
+                    ->symbols(),
+                'confirmed',
+            ],
             'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
             'student_number' => [
                 'required',

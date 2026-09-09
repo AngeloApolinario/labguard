@@ -63,35 +63,106 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-4" x-data="{ show: false }">
-                        <div class="space-y-1">
-                            <label for="password" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">New Password</label>
-                            <div class="relative group">
-                                <input id="password"
-                                    class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 pr-11 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600"
-                                    :type="show ? 'text' : 'password'"
-                                    name="password"
-                                    placeholder="••••••••" required autocomplete="new-password" />
+                    {{-- Subtle & Minimal Password Suite --}}
+                    <div class="space-y-2" x-data="{
+                        show: false,
+                        password: '',
+                        get minLength() { return this.password.length >= 8; },
+                        get hasUpper() { return /[A-Z]/.test(this.password); },
+                        get hasLower() { return /[a-z]/.test(this.password); },
+                        get hasNumber() { return /[0-9]/.test(this.password); },
+                        get hasSpecial() { return /[^A-Za-z0-9]/.test(this.password); },
+                        get score() {
+                            let s = 0;
+                            if (this.minLength) s++;
+                            if (this.hasUpper && this.hasLower) s++;
+                            if (this.hasNumber) s++;
+                            if (this.hasSpecial) s++;
+                            return s;
+                        },
+                        get label() {
+                            if (!this.password) return '';
+                            if (this.score <= 1) return 'Weak';
+                            if (this.score === 2) return 'Fair';
+                            if (this.score === 3) return 'Good';
+                            return 'Strong';
+                        },
+                        get barColor() {
+                            if (this.score <= 1) return 'bg-rose-500/80';
+                            if (this.score === 2) return 'bg-amber-400/80';
+                            if (this.score === 3) return 'bg-sky-400/80';
+                            return 'bg-emerald-400';
+                        },
+                        get textColor() {
+                            if (this.score <= 1) return 'text-rose-400';
+                            if (this.score === 2) return 'text-amber-400';
+                            if (this.score === 3) return 'text-sky-400';
+                            return 'text-emerald-400';
+                        }
+                    }">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="space-y-1">
+                                <label for="password" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Password</label>
+                                <div class="relative group">
+                                    <input id="password"
+                                        x-model="password"
+                                        class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 pr-11 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600"
+                                        :type="show ? 'text' : 'password'"
+                                        name="password"
+                                        placeholder="••••••••" required autocomplete="new-password" />
 
-                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#D4AF37] transition-colors focus:outline-none">
-                                    <svg x-show="!show" xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                    <svg x-show="show" x-cloak xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                                    </svg>
-                                </button>
+                                    <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-[#D4AF37] transition-colors focus:outline-none">
+                                        <svg x-show="!show" xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        <svg x-show="show" x-cloak xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label for="password_confirmation" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Confirm</label>
+                                <input id="password_confirmation"
+                                    class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600"
+                                    :type="show ? 'text' : 'password'"
+                                    name="password_confirmation"
+                                    placeholder="••••••••" required autocomplete="new-password" />
                             </div>
                         </div>
 
-                        <div class="space-y-1">
-                            <label for="password_confirmation" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Confirm</label>
-                            <input id="password_confirmation"
-                                class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600"
-                                :type="show ? 'text' : 'password'"
-                                name="password_confirmation"
-                                placeholder="••••••••" required autocomplete="new-password" />
+                        {{-- Razor-Thin Progress Line & Subdued Micro-Indicators --}}
+                        <div class="pt-0.5 space-y-1.5 px-1">
+                            {{-- 2px Segmented Progress Line --}}
+                            <div class="grid grid-cols-4 gap-1 h-[2px] w-full bg-white/10 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 1 ? barColor : 'bg-transparent'"></div>
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 2 ? barColor : 'bg-transparent'"></div>
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 3 ? barColor : 'bg-transparent'"></div>
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 4 ? barColor : 'bg-transparent'"></div>
+                            </div>
+
+                            {{-- Subtle Inline Criteria Dots --}}
+                            <div class="flex items-center justify-between text-[8px] font-medium tracking-wide">
+                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <span :class="minLength ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
+                                        <span class="size-1 rounded-full transition-colors" :class="minLength ? 'bg-emerald-400' : 'bg-slate-700'"></span>8+ chars
+                                    </span>
+                                    <span :class="(hasUpper && hasLower) ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
+                                        <span class="size-1 rounded-full transition-colors" :class="(hasUpper && hasLower) ? 'bg-emerald-400' : 'bg-slate-700'"></span>Aa mixed
+                                    </span>
+                                    <span :class="hasNumber ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
+                                        <span class="size-1 rounded-full transition-colors" :class="hasNumber ? 'bg-emerald-400' : 'bg-slate-700'"></span> 0-9 digit
+                                    </span>
+                                    <span :class="hasSpecial ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
+                                        <span class="size-1 rounded-full transition-colors" :class="hasSpecial ? 'bg-emerald-400' : 'bg-slate-700'"></span> Symbol
+                                    </span>
+                                </div>
+
+                                {{-- Quiet Status Text --}}
+                                <span :class="textColor" x-text="label" class="uppercase text-[8px] font-black tracking-wider transition-colors"></span>
+                            </div>
                         </div>
                     </div>
 

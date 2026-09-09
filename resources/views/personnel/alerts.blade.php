@@ -16,12 +16,12 @@
             <div class="grid grid-cols-2 sm:flex gap-3 w-full md:w-auto">
                 <div class="bg-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm backdrop-blur-xl flex-1 sm:flex-initial">
                     <p class="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-widest">Total Reports</p>
-                    <p class="text-xl sm:text-2xl font-black text-slate-800">{{ $alerts->count() }}</p>
+                    <p class="text-xl sm:text-2xl font-black text-slate-800">{{ $totalReports ?? ($alerts->total() ?? $alerts->count()) }}</p>
                 </div>
                 <div class="bg-[#D4AF37]/10 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl sm:rounded-3xl border border-[#D4AF37]/20 relative overflow-hidden group backdrop-blur-xl shadow-lg shadow-[#D4AF37]/5 flex-1 sm:flex-initial">
                     <div class="absolute inset-0 bg-[#D4AF37]/5 group-hover:bg-[#D4AF37]/10 transition-colors"></div>
                     <p class="text-[8px] font-black text-[#B08D2A] uppercase mb-1 tracking-widest relative">Unresolved</p>
-                    <p class="text-xl sm:text-2xl font-black text-[#D4AF37] relative">{{ $alerts->where('status', 'pending')->count() }}</p>
+                    <p class="text-xl sm:text-2xl font-black text-[#D4AF37] relative">{{ $unresolvedCount ?? $alerts->where('status', 'pending')->count() }}</p>
                 </div>
             </div>
         </div>
@@ -32,11 +32,11 @@
         {{-- Filter Bar Container --}}
         <div class="mb-6 sm:mb-10 group">
             <div class="bg-white border border-slate-100 p-4 sm:p-6 md:p-8 rounded-3xl sm:rounded-[2.5rem] shadow-xl shadow-slate-500/5 transition-all hover:border-slate-200">
-                <form action="{{ url()->current() }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-end">
+                <form action="{{ route('personnel.alerts') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-end">
 
                     <div class="w-full">
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">PC Name or Number</label>
-                        <input type="text" name="pc_number" value="{{ request('pc_number') }}" placeholder="Search PC..."
+                        <input type="text" name="pc_number" value="{{ request('pc_number') }}" placeholder="Search PC (e.g. PC-01)..."
                             class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs focus:ring-[#D4AF37] focus:border-[#D4AF37] placeholder:text-slate-400 py-3">
                     </div>
 
@@ -57,10 +57,10 @@
                     </div>
 
                     <div class="flex gap-2 sm:gap-3 w-full">
-                        <button type="submit" class="flex-1 bg-slate-900 text-white font-black uppercase text-[10px] px-4 sm:px-8 py-3.5 rounded-2xl hover:bg-[#D4AF37] transition-all transform hover:scale-105 active:scale-95 shadow-xl shadow-black/10">
+                        <button type="submit" class="flex-1 bg-slate-900 text-white font-black uppercase text-[10px] px-4 sm:px-8 py-3.5 rounded-2xl hover:bg-[#D4AF37] hover:text-slate-900 transition-all transform hover:scale-105 active:scale-95 shadow-xl shadow-black/10">
                             Filter
                         </button>
-                        <a href="{{ url()->current() }}" class="flex-1 text-center justify-center bg-slate-100 text-slate-500 font-black uppercase text-[10px] px-4 sm:px-6 py-3.5 rounded-2xl hover:bg-slate-200 transition-all flex items-center">
+                        <a href="{{ route('personnel.alerts') }}" class="flex-1 text-center justify-center bg-slate-100 text-slate-500 font-black uppercase text-[10px] px-4 sm:px-6 py-3.5 rounded-2xl hover:bg-slate-200 transition-all flex items-center">
                             Reset
                         </a>
                     </div>
@@ -176,13 +176,20 @@
                         <td colspan="6" class="py-32 text-center">
                             <div class="space-y-3">
                                 <div class="text-slate-200 text-5xl font-black">ALL CLEAR</div>
-                                <p class="text-slate-400 font-black uppercase tracking-widest text-[10px]">No alerts found</p>
+                                <p class="text-slate-400 font-black uppercase tracking-widest text-[10px]">No alerts found matching your criteria</p>
                             </div>
                         </td>
                     </tr>
                     @endforelse
                 </tbody>
             </table>
+
+            {{-- Pagination Footer --}}
+            @if(method_exists($alerts, 'links') && $alerts->hasPages())
+            <div class="p-6 bg-slate-50/50 border-t border-slate-100">
+                {{ $alerts->links() }}
+            </div>
+            @endif
         </div>
 
         {{-- Mobile Card View --}}
@@ -272,10 +279,17 @@
             <div class="bg-white border border-slate-100/60 rounded-3xl p-12 text-center shadow-xl shadow-slate-500/5">
                 <div class="space-y-2">
                     <div class="text-slate-200 text-3xl font-black">ALL CLEAR</div>
-                    <p class="text-slate-400 font-black uppercase tracking-widest text-[10px]">No alerts found</p>
+                    <p class="text-slate-400 font-black uppercase tracking-widest text-[10px]">No alerts found matching your criteria</p>
                 </div>
             </div>
             @endforelse
+
+            {{-- Mobile Pagination Footer --}}
+            @if(method_exists($alerts, 'links') && $alerts->hasPages())
+            <div class="pt-2">
+                {{ $alerts->links() }}
+            </div>
+            @endif
         </div>
 
     </div>

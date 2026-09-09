@@ -43,14 +43,14 @@ class AlertSeeder extends Seeder
                 'updated_at'  => $now->copy()->subHours(2),
             ],
 
-            // 2. Network Issue (Status set to 'fixing')
+
             [
                 'computer_id' => $computerId2,
                 'lab_id'      => $labId1,
                 'reported_by' => $teacher->id ?? $defaultReporterId,
                 'issue_type'  => 'Network Disconnection',
                 'remarks'     => 'No internet connectivity. LAN cable appears intact but port light is off.',
-                'status'      => 'fixing',
+                'status'      => 'pending',
                 'resolved_at' => null,
                 'created_at'  => $now->copy()->subHours(5),
                 'updated_at'  => $now->copy()->subHour(),

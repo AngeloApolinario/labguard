@@ -41,9 +41,21 @@
                 <form method="POST" action="{{ route('register') }}" class="space-y-5">
                     @csrf
 
+                    {{-- Full Name (Sanitized: Letters and spaces only, no symbols or numbers) --}}
                     <div class="space-y-1">
                         <label for="name" class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest ml-1">Full Name</label>
-                        <input id="name" class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600" type="text" name="name" value="{{ old('name') }}" placeholder="Full Name" required autofocus autocomplete="name" />
+                        <input id="name"
+                            class="block w-full bg-black/40 border-white/10 rounded-xl text-white text-sm py-3.5 px-5 focus:border-[#D4AF37] focus:ring-0 transition-all placeholder:text-slate-600"
+                            type="text"
+                            name="name"
+                            value="{{ old('name') }}"
+                            placeholder="e.g. Juan Dela Cruz"
+                            required
+                            autofocus
+                            autocomplete="name"
+                            pattern="[a-zA-ZñÑ\s\.\-']+"
+                            title="Full name must only contain letters and spaces (no numbers or symbols)."
+                            oninput="this.value = this.value.replace(/[^a-zA-ZñÑ\s\.\-']/g, '')" />
                     </div>
 
                     <div class="space-y-1">
@@ -63,7 +75,7 @@
                         </div>
                     </div>
 
-                    {{-- Subtle & Minimal Password Suite --}}
+                    {{-- Subtle & Clean Password Suite --}}
                     <div class="space-y-2" x-data="{
                         show: false,
                         password: '',
@@ -133,35 +145,36 @@
                             </div>
                         </div>
 
-                        {{-- Razor-Thin Progress Line & Subdued Micro-Indicators --}}
-                        <div class="pt-0.5 space-y-1.5 px-1">
-                            {{-- 2px Segmented Progress Line --}}
-                            <div class="grid grid-cols-4 gap-1 h-[2px] w-full bg-white/10 rounded-full overflow-hidden">
+                        {{-- Subtle Feedback Bar & Micro-Indicators --}}
+                        <div class="mt-3.5 px-1 space-y-2">
+                            {{-- Header: Label & Status --}}
+                            <div class="flex items-center justify-between text-[8px] font-bold uppercase tracking-wider">
+                                <span class="text-slate-500">Security Health</span>
+                                <span :class="textColor" x-text="label" class="transition-colors font-black"></span>
+                            </div>
+
+                            {{-- 2px Thin Segmented Bar --}}
+                            <div class="grid grid-cols-4 gap-1.5 h-[2px] w-full bg-white/10 rounded-full overflow-hidden">
                                 <div class="h-full rounded-full transition-all duration-300" :class="score >= 1 ? barColor : 'bg-transparent'"></div>
                                 <div class="h-full rounded-full transition-all duration-300" :class="score >= 2 ? barColor : 'bg-transparent'"></div>
                                 <div class="h-full rounded-full transition-all duration-300" :class="score >= 3 ? barColor : 'bg-transparent'"></div>
                                 <div class="h-full rounded-full transition-all duration-300" :class="score >= 4 ? barColor : 'bg-transparent'"></div>
                             </div>
 
-                            {{-- Subtle Inline Criteria Dots --}}
-                            <div class="flex items-center justify-between text-[8px] font-medium tracking-wide">
-                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                    <span :class="minLength ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
-                                        <span class="size-1 rounded-full transition-colors" :class="minLength ? 'bg-emerald-400' : 'bg-slate-700'"></span>8+ chars
-                                    </span>
-                                    <span :class="(hasUpper && hasLower) ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
-                                        <span class="size-1 rounded-full transition-colors" :class="(hasUpper && hasLower) ? 'bg-emerald-400' : 'bg-slate-700'"></span>Aa mixed
-                                    </span>
-                                    <span :class="hasNumber ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
-                                        <span class="size-1 rounded-full transition-colors" :class="hasNumber ? 'bg-emerald-400' : 'bg-slate-700'"></span> 0-9 digit
-                                    </span>
-                                    <span :class="hasSpecial ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1">
-                                        <span class="size-1 rounded-full transition-colors" :class="hasSpecial ? 'bg-emerald-400' : 'bg-slate-700'"></span> Symbol
-                                    </span>
-                                </div>
-
-                                {{-- Quiet Status Text --}}
-                                <span :class="textColor" x-text="label" class="uppercase text-[8px] font-black tracking-wider transition-colors"></span>
+                            {{-- Original Subtle Inline Dots with Balanced Spacing --}}
+                            <div class="flex items-center justify-between text-[5.5px] font-small pt-1">
+                                <span :class="minLength ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1.5">
+                                    <span class="size-1 rounded-full transition-colors shrink-0" :class="minLength ? 'bg-emerald-400' : 'bg-slate-700'"></span> 8+ chars
+                                </span>
+                                <span :class="(hasUpper && hasLower) ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1.5">
+                                    <span class="size-1 rounded-full transition-colors shrink-0" :class="(hasUpper && hasLower) ? 'bg-emerald-400' : 'bg-slate-700'"></span> Aa mixed
+                                </span>
+                                <span :class="hasNumber ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1.5">
+                                    <span class="size-1 rounded-full transition-colors shrink-0" :class="hasNumber ? 'bg-emerald-400' : 'bg-slate-700'"></span> 0-9 digit
+                                </span>
+                                <span :class="hasSpecial ? 'text-emerald-400 font-bold' : 'text-slate-500'" class="transition-colors flex items-center gap-1.5">
+                                    <span class="size-1 rounded-full transition-colors shrink-0" :class="hasSpecial ? 'bg-emerald-400' : 'bg-slate-700'"></span> Symbol
+                                </span>
                             </div>
                         </div>
                     </div>

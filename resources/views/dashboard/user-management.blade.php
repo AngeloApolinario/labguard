@@ -16,10 +16,11 @@
         </div>
     </x-slot>
 
+    {{-- Root Container: Automatically re-opens modals if validation errors exist --}}
     <div class="py-6 sm:py-12 min-h-screen" x-data="{ 
-        addModal: false, 
+        addModal: {{ $errors->hasAny(['name', 'email', 'student_number', 'role', 'phone', 'password']) ? 'true' : 'false' }}, 
         editModal: false, 
-        massEnrollModal: false,
+        massEnrollModal: {{ $errors->has('file') ? 'true' : 'false' }},
         currentUser: {},
         search: '',
         selectedRole: ''
@@ -180,10 +181,23 @@
         <!-- Add User Modal -->
         <div x-show="addModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak>
             <div class="bg-white rounded-2xl sm:rounded-[2rem] p-6 sm:p-10 max-w-xl w-full shadow-2xl border border-white max-h-[90vh] flex flex-col" @click.away="addModal = false">
-                <div class="mb-6 shrink-0">
+                <div class="mb-4 shrink-0">
                     <h3 class="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">System Enrollment</h3>
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Add Personnel or Student</p>
                 </div>
+
+                {{-- Prominent Validation Alert inside the Modal --}}
+                @if($errors->hasAny(['name', 'email', 'student_number', 'role', 'phone', 'password']))
+                <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-2.5 mb-4 text-xs font-semibold shrink-0">
+                    <svg class="size-4 shrink-0 text-rose-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                        <span class="font-black uppercase tracking-wider block text-[10px] text-rose-800">Enrollment Error</span>
+                        <span>{{ $errors->first() }}</span>
+                    </div>
+                </div>
+                @endif
 
                 <form action="{{ route('dashboard.users.store') }}" method="POST" class="space-y-4 sm:space-y-5 overflow-y-auto pr-1">
                     @csrf
@@ -232,11 +246,90 @@
                                 placeholder="09123456789" required>
                             @error('phone') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
                         </div>
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Password</label>
-                            <input type="password" name="password"
-                                class="w-full rounded-xl @error('password') border-red-500 @else border-slate-200 @enderror bg-slate-50 text-sm py-3 px-4 focus:ring-[#D4AF37]"
-                                required>
+
+                        {{-- Subtle Interactive Password Suite --}}
+                        <div class="space-y-1" x-data="{
+                            show: false,
+                            password: '',
+                            get minLength() { return this.password.length >= 8; },
+                            get hasUpper() { return /[A-Z]/.test(this.password); },
+                            get hasLower() { return /[a-z]/.test(this.password); },
+                            get hasNumber() { return /[0-9]/.test(this.password); },
+                            get hasSpecial() { return /[^A-Za-z0-9]/.test(this.password); },
+                            get score() {
+                                let s = 0;
+                                if (this.minLength) s++;
+                                if (this.hasUpper && this.hasLower) s++;
+                                if (this.hasNumber) s++;
+                                if (this.hasSpecial) s++;
+                                return s;
+                            },
+                            get label() {
+                                if (!this.password) return '';
+                                if (this.score <= 1) return 'Weak';
+                                if (this.score === 2) return 'Fair';
+                                if (this.score === 3) return 'Good';
+                                return 'Strong';
+                            },
+                            get barColor() {
+                                if (this.score <= 1) return 'bg-rose-500/80';
+                                if (this.score === 2) return 'bg-amber-400/80';
+                                if (this.score === 3) return 'bg-sky-400/80';
+                                return 'bg-emerald-500';
+                            },
+                            get textColor() {
+                                if (this.score <= 1) return 'text-rose-500';
+                                if (this.score === 2) return 'text-amber-500';
+                                if (this.score === 3) return 'text-sky-500';
+                                return 'text-emerald-600';
+                            }
+                        }">
+                            <div class="flex items-center justify-between ml-1">
+                                <label class="text-[10px] font-black text-slate-400 uppercase">Password</label>
+                                <span :class="textColor" x-text="label" class="uppercase text-[8px] font-black tracking-wider transition-colors"></span>
+                            </div>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'"
+                                    name="password"
+                                    x-model="password"
+                                    class="w-full rounded-xl @error('password') border-red-500 @else border-slate-200 @enderror bg-slate-50 text-sm py-3 px-4 pr-11 focus:ring-[#D4AF37]"
+                                    placeholder="Min. 8 characters"
+                                    required>
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
+                                    <svg x-show="!show" xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    <svg x-show="show" x-cloak xmlns="http://www.w3.org/2000/svg" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {{-- 2px Progress Line --}}
+                            <div class="grid grid-cols-4 gap-1 h-[2px] w-full bg-slate-200 rounded-full overflow-hidden mt-1.5">
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 1 ? barColor : 'bg-transparent'"></div>
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 2 ? barColor : 'bg-transparent'"></div>
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 3 ? barColor : 'bg-transparent'"></div>
+                                <div class="h-full rounded-full transition-all duration-300" :class="score >= 4 ? barColor : 'bg-transparent'"></div>
+                            </div>
+
+                            {{-- Inline Requirements --}}
+                            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[8px] font-medium tracking-wide text-slate-500 pt-0.5">
+                                <span :class="minLength ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="transition-colors flex items-center gap-1">
+                                    <span class="size-1 rounded-full" :class="minLength ? 'bg-emerald-500' : 'bg-slate-300'"></span> 8+ chars
+                                </span>
+                                <span :class="(hasUpper && hasLower) ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="transition-colors flex items-center gap-1">
+                                    <span class="size-1 rounded-full" :class="(hasUpper && hasLower) ? 'bg-emerald-500' : 'bg-slate-300'"></span> Aa mixed
+                                </span>
+                                <span :class="hasNumber ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="transition-colors flex items-center gap-1">
+                                    <span class="size-1 rounded-full" :class="hasNumber ? 'bg-emerald-500' : 'bg-slate-300'"></span> 0-9 digit
+                                </span>
+                                <span :class="hasSpecial ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="transition-colors flex items-center gap-1">
+                                    <span class="size-1 rounded-full" :class="hasSpecial ? 'bg-emerald-500' : 'bg-slate-300'"></span> Symbol
+                                </span>
+                            </div>
+
                             @error('password') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
                         </div>
                     </div>
@@ -390,8 +483,36 @@
         </div>
     </div>
 
+    {{-- Error Toast Notification --}}
+    @if($errors->any())
+    <div id="error-toast" class="fixed bottom-4 right-4 sm:bottom-auto sm:top-6 sm:right-6 z-[150] max-w-sm sm:max-w-md w-[calc(100%-2rem)] sm:w-auto bg-slate-900 border border-rose-500 text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 transition-all duration-500 ease-out translate-y-0 opacity-100">
+        <div class="size-8 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0 mt-0.5">
+            <svg class="size-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        </div>
+        <div>
+            <h4 class="text-xs font-black uppercase tracking-widest text-rose-400">Enrollment Error</h4>
+            <p class="text-xs font-semibold text-slate-300 mt-0.5 leading-relaxed">
+                {{ $errors->first() }}
+            </p>
+        </div>
+    </div>
+
+    <script>
+        setTimeout(() => {
+            const toast = document.getElementById('error-toast');
+            if (toast) {
+                toast.classList.add('opacity-0', '-translate-y-4');
+                setTimeout(() => toast.remove(), 500);
+            }
+        }, 6000);
+    </script>
+    @endif
+
+    {{-- Success Toast Notification --}}
     @if(session('success'))
-    <div id="success-toast" class="fixed bottom-4 right-4 sm:bottom-auto sm:top-6 sm:right-6 z-50 max-w-sm sm:max-w-md w-[calc(100%-2rem)] sm:w-auto bg-slate-900 border border-[#D4AF37] text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 transition-all duration-500 ease-out translate-y-0 opacity-100">
+    <div id="success-toast" class="fixed bottom-4 right-4 sm:bottom-auto sm:top-6 sm:right-6 z-[150] max-w-sm sm:max-w-md w-[calc(100%-2rem)] sm:w-auto bg-slate-900 border border-[#D4AF37] text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 transition-all duration-500 ease-out translate-y-0 opacity-100">
         <div class="size-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 mt-0.5">
             <svg class="size-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />

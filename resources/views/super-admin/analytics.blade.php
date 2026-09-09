@@ -85,7 +85,7 @@
                         </label>
                         <div class="relative">
                             <select name="lab_id" onchange="this.form.submit()" class="w-full h-11 appearance-none pl-3.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all cursor-pointer truncate">
-                                <option value="">🌐 All Campus Laboratories</option>
+                                <option value="">All Campus Laboratories</option>
                                 @foreach($allLabs as $lab)
                                 <option value="{{ $lab->id }}" {{ ($selectedLabId == $lab->id) ? 'selected' : '' }}>
                                     {{ $lab->name }}

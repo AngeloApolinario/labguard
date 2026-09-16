@@ -366,7 +366,7 @@
                             </div>
 
                             {{-- Inline Requirements --}}
-                            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[8px] font-medium tracking-wide text-slate-500 pt-0.5">
+                            <div class="justify-between flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[8px] font-medium tracking-wide text-slate-500 pt-0.5">
                                 <span :class="minLength ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="transition-colors flex items-center gap-1">
                                     <span class="size-1 rounded-full" :class="minLength ? 'bg-emerald-500' : 'bg-slate-300'"></span> 8+ chars
                                 </span>

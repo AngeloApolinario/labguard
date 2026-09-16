@@ -26,12 +26,12 @@ return new class extends Migration
             $table->string('lab_name')->nullable();
 
             // Hardware checklist item booleans
+            $table->boolean('system_unit_ok')->default(true);
             $table->boolean('monitor_ok')->default(true);
-            $table->boolean('keyboard_ok')->default(true);
-            $table->boolean('mouse_ok')->default(true);
             $table->boolean('avr_ok')->default(true);
-            $table->boolean('pc_case_ok')->default(true);
-            $table->boolean('headset_ok')->default(true);
+            $table->boolean('mouse_ok')->default(true);
+            $table->boolean('keyboard_ok')->default(true);
+            $table->boolean('cables_ok')->default(true);
 
             // Audit status & raw payload
             $table->boolean('all_operational')->default(true);

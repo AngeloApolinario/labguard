@@ -6,7 +6,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h2 class="font-black text-2xl sm:text-4xl text-slate-800 tracking-tighter uppercase">
-                        Hardware & Lab <span class="text-[#D4AF37]">Telemetry</span>
+                        Hardware & Lab <span class="text-[#D4AF37]">Analytics</span>
                     </h2>
                     <div class="flex items-center space-x-2 mt-1">
                         <div class="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
@@ -16,12 +16,7 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-[#D4AF37] border border-slate-800 rounded-xl text-[10px] font-mono font-black uppercase shadow-sm">
-                        <span class="size-2 rounded-full bg-emerald-400 animate-ping"></span>
-                        Telemetry Active
-                    </span>
-                </div>
+
             </div>
         </x-slot>
 
@@ -75,7 +70,6 @@
 
             <form id="telemetryFilterForm" action="{{ url()->current() }}" method="GET" class="space-y-4">
 
-                {{-- Responsive Grid: Balanced on mobile (1 col), tablet (4+8 / 12 col), and desktop (3+5+4 col) --}}
                 <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
 
                     {{-- 1. Laboratory Zone Filter --}}
@@ -100,7 +94,7 @@
                         </div>
                     </div>
 
-                    {{-- 2. Calendar Pop-up Date Inputs (LOCKED: CANNOT EXCEED TODAY) --}}
+                    {{-- 2. Calendar Pop-up Date Inputs --}}
                     <div class="md:col-span-8 xl:col-span-5 w-full">
                         <div class="grid grid-cols-2 gap-2.5">
                             <div>
@@ -126,7 +120,7 @@
                         </div>
                     </div>
 
-                    {{-- 3. Action Group: Apply, Reset, and Dropdown (Aligned baseline with label spacer) --}}
+                    {{-- 3. Action Group --}}
                     <div class="md:col-span-12 xl:col-span-4 w-full">
                         <label class="hidden md:block xl:block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 select-none">
                             Actions
@@ -140,7 +134,7 @@
                                 Reset
                             </a>
 
-                            {{-- Export Dropdown (Standardized width, high z-index, escape handling) --}}
+                            {{-- Export Dropdown --}}
                             <div class="relative flex-1" @click.away="exportOpen = false" @keydown.escape.window="exportOpen = false">
                                 <button type="button"
                                     @click="exportOpen = !exportOpen"
@@ -150,11 +144,10 @@
                                     </svg>
                                     <span>Export Report</span>
                                     <svg class="size-3.5 shrink-0 transition-transform duration-200" :class="{'rotate-180': exportOpen}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </button>
 
-                                {{-- Dropdown Card (z-[9999] floating above all cards and canvases) --}}
                                 <div x-show="exportOpen"
                                     x-cloak
                                     x-transition:enter="transition ease-out duration-150"
@@ -165,7 +158,6 @@
                                     x-transition:leave-end="opacity-0 scale-95 -translate-y-2"
                                     class="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-2.5rem)] bg-white border border-slate-200 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] z-[9999] p-2 space-y-1 ring-1 ring-black/10">
 
-                                    {{-- Export 1: Terminal Check-ins --}}
                                     <a href="{{ route('super-admin.analytics.export', array_merge(request()->query(), ['type' => 'checklists'])) }}"
                                         class="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group">
                                         <div class="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
@@ -175,11 +167,10 @@
                                         </div>
                                         <div class="min-w-0">
                                             <span class="block text-xs font-black uppercase text-slate-900 tracking-tight">Hardware Check-ins</span>
-                                            <span class="block text-[11px] text-slate-500 font-medium mt-0.5 leading-snug">Audit inspection logs, peripheral states, student logins</span>
+                                            <span class="block text-[11px] text-slate-500 font-medium mt-0.5 leading-snug">Audit inspection logs, 6 peripheral states, student logins</span>
                                         </div>
                                     </a>
 
-                                    {{-- Export 2: Security & Hardware Alerts --}}
                                     <a href="{{ route('super-admin.analytics.export', array_merge(request()->query(), ['type' => 'alerts'])) }}"
                                         class="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group border-t border-slate-100">
                                         <div class="p-2 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-colors">
@@ -199,7 +190,7 @@
 
                 </div>
 
-                {{-- Quick Presets Pill Row (With Active State Feedback) --}}
+                {{-- Range Presets --}}
                 <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1 flex items-center gap-1">
@@ -243,7 +234,7 @@
                     <span class="text-[10px] font-black text-emerald-600 uppercase">Operational</span>
                 </div>
                 <div class="w-full bg-slate-100 h-2 rounded-full mt-3 overflow-hidden">
-                    <div class="bg-emerald-500 h-full rounded-full transition-all duration-700" style="width: {{ $hardwareIntegrityRate }}%"></div>
+                    <div class="bg-emerald-500 h-full rounded-full transition-all duration-1000" style="width: {{ $hardwareIntegrityRate }}%"></div>
                 </div>
             </div>
 
@@ -306,11 +297,11 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- SECTION 2: HARDWARE AUDIT MATRIX & WEAR-AND-TEAR RADAR --}}
+        {{-- SECTION 2: HARDWARE AUDIT MATRIX & WEAR-AND-TEAR RADAR (NEW 6 ITEMS)     --}}
         {{-- ========================================================================= --}}
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-8">
 
-            {{-- 1. Peripheral Defect Matrix --}}
+            {{-- 1. Peripheral Defect Matrix (Updated to 6 Configured Items) --}}
             <div class="lg:col-span-7 bg-white/95 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-xl shadow-slate-900/5 flex flex-col justify-between">
                 <div>
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
@@ -323,23 +314,51 @@
                         </span>
                     </div>
 
-                    {{-- Component Progress Matrix --}}
+                    {{-- Component Progress Matrix (Updated: system_unit, monitor, avr, mouse, keyboard, cables) --}}
                     <div class="space-y-3.5">
                         @php
-                        $maxFailures = max(max(array_values($peripheralFailures)), 1);
+                        $maxFailures = max(max(array_values($peripheralFailures ?? [1])), 1);
                         $peripheralMeta = [
-                        'monitor' => ['name' => 'Display Monitor', 'desc' => 'Cracks, Dead Pixels, No Signal', 'icon' => 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3'],
-                        'keyboard' => ['name' => 'Keyboard Unit', 'desc' => 'Missing Keys, Stuck Switches, USB Cable', 'icon' => 'M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6zM6 7.5h.008v.008H6V7.5zm3.75 0h.008v.008H9.75V7.5zm3.75 0h.008v.008H13.5V7.5zm3.75 0h.008v.008H17.25V7.5z'],
-                        'mouse' => ['name' => 'Optical Mouse', 'desc' => 'Sensor Tracking, Unresponsive Buttons', 'icon' => 'M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672z'],
-                        'avr' => ['name' => 'Power Regulator (AVR)', 'desc' => 'Grounded Power, Indicator Light Off', 'icon' => 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z'],
-                        'chassis' => ['name' => 'PC Chassis & Ports', 'desc' => 'Case Sealed, Loose Motherboard Cables', 'icon' => 'M5.25 14.25h13.5m-13.5 3h13.5m-9.75 3h6m3-16.5H4.5A1.5 1.5 0 003 5.25v13.5A1.5 1.5 0 004.5 20.25h15a1.5 1.5 0 001.5-1.5V5.25a1.5 1.5 0 00-1.5-1.5z'],
-                        'headset' => ['name' => 'Audio / Headset', 'desc' => 'Cushioning, Damaged Wire, Jack Fault', 'icon' => 'M19.114 5.636a9 9 0 00-14.228 0M12 3v9m0 0a3 3 0 106 0m-6 0a3 3 0 11-6 0'],
+                        'system_unit' => [
+                        'name' => 'System Unit',
+                        'desc' => 'Power Button, Chassis, Hardware Defects',
+                        'icon' => 'M5 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4zm7 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm0 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-3 5h6m-6 3h6'
+                        ],
+                        'monitor' => [
+                        'name' => 'Display Monitor',
+                        'desc' => 'Cracks, Dead Pixels, No Video Signal',
+                        'icon' => 'M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3'
+                        ],
+                        'avr' => [
+                        'name' => 'Power Regulator (AVR)',
+                        'desc' => 'Voltage Surge Active, Grounded Power',
+                        'icon' => 'M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z'
+                        ],
+                        'mouse' => [
+                        'name' => 'Optical Mouse',
+                        'desc' => 'Laser Tracking, Unresponsive Buttons',
+                        'icon' => 'M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672z'
+                        ],
+                        'keyboard' => [
+                        'name' => 'Keyboard Unit',
+                        'desc' => 'Missing Keys, Stuck Switches, Typing Response',
+                        'icon' => 'M3.75 6A2.25 2.25 0 016 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6zM6 7.5h.008v.008H6V7.5zm3.75 0h.008v.008H9.75V7.5zm3.75 0h.008v.008H13.5V7.5zm3.75 0h.008v.008H17.25V7.5z'
+                        ],
+                        'cables' => [
+                        'name' => 'Power & I/O Cables',
+                        'desc' => 'HDMI/VGA Display, Power, and USB Cords',
+                        'icon' => 'M9 3v4m6-4v4m-8 4h10a2 2 0 012 2v1a5 5 0 01-5 5H10a5 5 0 01-5-5v-1a2 2 0 012-2zm5 11v4'
+                        ],
                         ];
                         @endphp
 
-                        @foreach($peripheralFailures as $key => $failCount)
+                        @foreach($peripheralMeta as $key => $meta)
                         @php
-                        $meta = $peripheralMeta[$key] ?? ['name' => ucfirst($key), 'desc' => 'Hardware Component', 'icon' => 'M9 12.75L11.25 15 15 9.75'];
+                        // Fallbacks for backwards compatibility with legacy database records
+                        $failCount = $peripheralFailures[$key] ?? (
+                        $key === 'system_unit' ? ($peripheralFailures['chassis'] ?? 0) :
+                        ($key === 'cables' ? ($peripheralFailures['headset'] ?? 0) : 0)
+                        );
                         $pct = round(($failCount / $maxFailures) * 100);
                         @endphp
                         <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 hover:bg-slate-100/70 transition-colors">
@@ -450,7 +469,7 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- SECTION 4: TECHNICIAN ACTION QUEUE --}}
+        {{-- SECTION 4: TECHNICIAN ACTION QUEUE (FLAGGED STATIONS) --}}
         {{-- ========================================================================= --}}
         <div class="bg-white/95 backdrop-blur-xl p-6 sm:p-8 rounded-[2rem] border border-slate-200/80 shadow-xl shadow-slate-900/5">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
@@ -485,27 +504,32 @@
                         </span>
                     </div>
 
-                    {{-- Badges of failed components --}}
+                    {{-- Badges of failed components (Updated to the 6 items with backwards compatibility) --}}
                     <div>
                         <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">Failed Components</span>
                         <div class="flex flex-wrap gap-1.5">
+                            @if(isset($audit->system_unit_ok) ? !$audit->system_unit_ok : (isset($audit->pc_case_ok) && !$audit->pc_case_ok))
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">System Unit</span>
+                            @endif
+
                             @if(!$audit->monitor_ok)
                             <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Monitor</span>
                             @endif
-                            @if(!$audit->keyboard_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Keyboard</span>
-                            @endif
-                            @if(!$audit->mouse_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Mouse</span>
-                            @endif
+
                             @if(!$audit->avr_ok)
                             <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">AVR</span>
                             @endif
-                            @if(!$audit->pc_case_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Chassis</span>
+
+                            @if(!$audit->mouse_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Mouse</span>
                             @endif
-                            @if(!$audit->headset_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Headset</span>
+
+                            @if(!$audit->keyboard_ok)
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Keyboard</span>
+                            @endif
+
+                            @if(isset($audit->cables_ok) ? !$audit->cables_ok : (isset($audit->headset_ok) && !$audit->headset_ok))
+                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Cables</span>
                             @endif
                         </div>
                     </div>

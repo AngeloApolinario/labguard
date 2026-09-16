@@ -21,9 +21,24 @@ use Illuminate\Support\Facades\File;
 */
 
 Route::get('/', function () {
+    // If the user is already authenticated, send them straight to their dashboard
+    if (auth()->check()) {
+        $user = auth()->user();
+        $role = strtolower($user->role ?? '');
+
+        return match ($role) {
+            'super-admin' => redirect()->route('super-admin.index'),
+            'admin'       => redirect()->route('dashboard.index'),
+            'personnel'   => redirect()->route('personnel.index'),
+            default       => is_null($user->email_verified_at)
+                ? redirect()->route('verification.notice')
+                : redirect()->route('profile.show'),
+        };
+    }
+
+    // Otherwise, show login page to guests
     return view('auth.login');
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -132,6 +147,13 @@ Route::middleware([
     Route::post('/labs/{lab}/schedule', [LabController::class, 'storeSchedule'])->name('labs.schedule.store');
     Route::delete('/schedule/{schedule}', [LabController::class, 'destroySchedule'])->name('labs.schedule.destroy');
     Route::delete('/labs/{lab}/schedule/day', [LabController::class, 'destroyByDay'])->name('labs.schedule.destroyByDay');
+    Route::post('/labs/{lab}/schedule/check-conflict', [LabController::class, 'checkConflict'])
+        ->name('labs.schedule.checkConflict');
+
+    // Export Event Attendance CSV (No teacher required)
+    Route::get('/labs/schedule/event/{schedule}/attendance', [LabController::class, 'exportEventAttendance'])
+        ->name('labs.schedule.exportEvent');
+
 
     // INCIDENT ALERTS & NOTIFICATIONS
     Route::get('/alerts', [AlertController::class, 'index'])->name('alerts.index');

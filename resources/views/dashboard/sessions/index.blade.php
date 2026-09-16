@@ -94,17 +94,17 @@
                                 @if($session->checklist)
                                 <button type="button"
                                     @click="openAudit(@js([
-                                        'student_name' => $session->student_name,
-                                        'student_id' => $session->student_id_number,
-                                        'pc_number' => $session->computer->pc_number ?? ($session->checklist->pc_number ?? 'PC-??'),
-                                        'lab_name' => $session->checklist->lab_name ?? ($session->lab->name ?? 'Default Lab'),
-                                        'verified_at' => optional($session->checklist->verified_at)->format('M d, Y • h:i A') ?? optional($session->checklist->created_at)->format('M d, Y • h:i A'),
-                                        'monitor_ok' => (bool)$session->checklist->monitor_ok,
-                                        'keyboard_ok' => (bool)$session->checklist->keyboard_ok,
-                                        'mouse_ok' => (bool)$session->checklist->mouse_ok,
-                                        'avr_ok' => (bool)$session->checklist->avr_ok,
-                                        'pc_case_ok' => (bool)$session->checklist->pc_case_ok,
-                                        'headset_ok' => (bool)$session->checklist->headset_ok,
+                                        'student_name'    => $session->student_name,
+                                        'student_id'      => $session->student_id_number,
+                                        'pc_number'       => $session->computer->pc_number ?? ($session->checklist->pc_number ?? 'PC-??'),
+                                        'lab_name'        => $session->checklist->lab_name ?? ($session->lab->name ?? 'Default Lab'),
+                                        'verified_at'     => optional($session->checklist->verified_at)->format('M d, Y • h:i A') ?? optional($session->checklist->created_at)->format('M d, Y • h:i A'),
+                                        'system_unit_ok'  => (bool)($session->checklist->system_unit_ok ?? $session->checklist->pc_case_ok ?? true),
+                                        'monitor_ok'      => (bool)$session->checklist->monitor_ok,
+                                        'avr_ok'          => (bool)$session->checklist->avr_ok,
+                                        'mouse_ok'        => (bool)$session->checklist->mouse_ok,
+                                        'keyboard_ok'     => (bool)$session->checklist->keyboard_ok,
+                                        'cables_ok'       => (bool)($session->checklist->cables_ok ?? $session->checklist->headset_ok ?? true),
                                         'all_operational' => (bool)$session->checklist->all_operational,
                                     ]))"
                                     class="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 rounded-lg active:scale-95 transition-all flex items-center justify-center">
@@ -249,22 +249,22 @@
                                 @endif
                             </td>
 
-                            {{-- VECTOR HARDWARE AUDIT TRIGGER BUTTON --}}
+                            {{-- VECTOR HARDWARE AUDIT TRIGGER BUTTON (UPDATED) --}}
                             <td class="py-5 sm:py-6 px-4 text-center">
                                 @if($session->checklist)
                                 <button type="button"
                                     @click="openAudit(@js([
-                                        'student_name' => $session->student_name,
-                                        'student_id' => $session->student_id_number,
-                                        'pc_number' => $session->computer->pc_number ?? ($session->checklist->pc_number ?? 'PC-??'),
-                                        'lab_name' => $session->checklist->lab_name ?? ($session->lab->name ?? 'Default Lab'),
-                                        'verified_at' => optional($session->checklist->verified_at)->format('M d, Y • h:i A') ?? optional($session->checklist->created_at)->format('M d, Y • h:i A'),
-                                        'monitor_ok' => (bool)$session->checklist->monitor_ok,
-                                        'keyboard_ok' => (bool)$session->checklist->keyboard_ok,
-                                        'mouse_ok' => (bool)$session->checklist->mouse_ok,
-                                        'avr_ok' => (bool)$session->checklist->avr_ok,
-                                        'pc_case_ok' => (bool)$session->checklist->pc_case_ok,
-                                        'headset_ok' => (bool)$session->checklist->headset_ok,
+                                        'student_name'    => $session->student_name,
+                                        'student_id'      => $session->student_id_number,
+                                        'pc_number'       => $session->computer->pc_number ?? ($session->checklist->pc_number ?? 'PC-??'),
+                                        'lab_name'        => $session->checklist->lab_name ?? ($session->lab->name ?? 'Default Lab'),
+                                        'verified_at'     => optional($session->checklist->verified_at)->format('M d, Y • h:i A') ?? optional($session->checklist->created_at)->format('M d, Y • h:i A'),
+                                        'system_unit_ok'  => (bool)($session->checklist->system_unit_ok ?? $session->checklist->pc_case_ok ?? true),
+                                        'monitor_ok'      => (bool)$session->checklist->monitor_ok,
+                                        'avr_ok'          => (bool)$session->checklist->avr_ok,
+                                        'mouse_ok'        => (bool)$session->checklist->mouse_ok,
+                                        'keyboard_ok'     => (bool)$session->checklist->keyboard_ok,
+                                        'cables_ok'       => (bool)($session->checklist->cables_ok ?? $session->checklist->headset_ok ?? true),
                                         'all_operational' => (bool)$session->checklist->all_operational,
                                     ]))"
                                     class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent hover:from-emerald-500/20 hover:to-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-700 hover:text-emerald-800 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-emerald-500/10 active:scale-95 group/btn">
@@ -326,7 +326,7 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- GLASSMORPHIC HARDWARE CHECKLIST MODAL (VECTOR ICONS) --}}
+        {{-- GLASSMORPHIC HARDWARE CHECKLIST MODAL (6 UPDATED HARDWARE ITEMS) --}}
         {{-- ========================================================================= --}}
         <div x-cloak x-show="modalOpen" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
             {{-- Backdrop --}}
@@ -381,11 +381,35 @@
                         </div>
                     </div>
 
-                    {{-- 6-Item Inspection Grid with Vector Icons --}}
+                    {{-- 6-Item Inspection Grid (Updated Items) --}}
                     <div class="p-6 sm:p-8 space-y-4 bg-slate-900/90">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
 
-                            {{-- 1. Display Monitor --}}
+                            {{-- 1. System Unit --}}
+                            <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
+                                <div class="flex items-center gap-3.5">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                            <rect width="14" height="20" x="5" y="2" rx="2" />
+                                            <circle cx="12" cy="6" r="1" />
+                                            <circle cx="12" cy="10" r="1" />
+                                            <line x1="9" x2="15" y1="15" y2="15" />
+                                            <line x1="9" x2="15" y1="18" y2="18" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">System Unit</h4>
+                                        <p class="text-[9px] text-slate-400">Chassis, power & hardware</p>
+                                    </div>
+                                </div>
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider"
+                                    :class="audit.system_unit_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
+                                    <span class="size-1.5 rounded-full" :class="audit.system_unit_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
+                                    <span x-text="audit.system_unit_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
+                                </span>
+                            </div>
+
+                            {{-- 2. Display Monitor --}}
                             <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
                                 <div class="flex items-center gap-3.5">
                                     <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
@@ -397,7 +421,7 @@
                                     </div>
                                     <div>
                                         <h4 class="text-xs font-black text-white uppercase tracking-tight">Display Monitor</h4>
-                                        <p class="text-[9px] text-slate-400">Screen panel & video feed</p>
+                                        <p class="text-[9px] text-slate-400">Screen panel & video signal</p>
                                     </div>
                                 </div>
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider"
@@ -407,49 +431,7 @@
                                 </span>
                             </div>
 
-                            {{-- 2. Keyboard Unit --}}
-                            <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
-                                <div class="flex items-center gap-3.5">
-                                    <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                                            <rect width="20" height="16" x="2" y="4" rx="2" />
-                                            <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">Keyboard Unit</h4>
-                                        <p class="text-[9px] text-slate-400">Keycaps & USB connection</p>
-                                    </div>
-                                </div>
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider"
-                                    :class="audit.keyboard_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
-                                    <span class="size-1.5 rounded-full" :class="audit.keyboard_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
-                                    <span x-text="audit.keyboard_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
-                                </span>
-                            </div>
-
-                            {{-- 3. Optical Mouse --}}
-                            <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
-                                <div class="flex items-center gap-3.5">
-                                    <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                                            <rect width="14" height="20" x="5" y="2" rx="7" />
-                                            <path d="M12 6v4" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">Optical Mouse</h4>
-                                        <p class="text-[9px] text-slate-400">Sensor tracking & clicks</p>
-                                    </div>
-                                </div>
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider"
-                                    :class="audit.mouse_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
-                                    <span class="size-1.5 rounded-full" :class="audit.mouse_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
-                                    <span x-text="audit.mouse_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
-                                </span>
-                            </div>
-
-                            {{-- 4. Power Unit (AVR) --}}
+                            {{-- 3. Power Unit (AVR) --}}
                             <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
                                 <div class="flex items-center gap-3.5">
                                     <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
@@ -469,47 +451,65 @@
                                 </span>
                             </div>
 
-                            {{-- 5. PC Chassis / Tower --}}
+                            {{-- 4. Optical Mouse --}}
                             <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
                                 <div class="flex items-center gap-3.5">
                                     <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                                            <rect width="16" height="20" x="4" y="2" rx="2" />
-                                            <circle cx="12" cy="6" r="1" />
-                                            <circle cx="12" cy="10" r="1" />
-                                            <line x1="8" x2="16" y1="15" y2="15" />
-                                            <line x1="8" x2="16" y1="18" y2="18" />
+                                            <rect width="14" height="20" x="5" y="2" rx="7" />
+                                            <path d="M12 6v4" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">PC Chassis</h4>
-                                        <p class="text-[9px] text-slate-400">Enclosure intact & locked</p>
+                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">Optical Mouse</h4>
+                                        <p class="text-[9px] text-slate-400">Tracking sensor & clicks</p>
                                     </div>
                                 </div>
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider"
-                                    :class="audit.pc_case_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
-                                    <span class="size-1.5 rounded-full" :class="audit.pc_case_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
-                                    <span x-text="audit.pc_case_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
+                                    :class="audit.mouse_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
+                                    <span class="size-1.5 rounded-full" :class="audit.mouse_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
+                                    <span x-text="audit.mouse_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
                                 </span>
                             </div>
 
-                            {{-- 6. Headset / Audio --}}
+                            {{-- 5. Keyboard Unit --}}
                             <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
                                 <div class="flex items-center gap-3.5">
                                     <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />
+                                            <rect width="20" height="16" x="2" y="4" rx="2" />
+                                            <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">Audio Headset</h4>
-                                        <p class="text-[9px] text-slate-400">Wiring & audio cushions</p>
+                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">Keyboard Unit</h4>
+                                        <p class="text-[9px] text-slate-400">Keycaps & typing response</p>
                                     </div>
                                 </div>
                                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider"
-                                    :class="audit.headset_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
-                                    <span class="size-1.5 rounded-full" :class="audit.headset_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
-                                    <span x-text="audit.headset_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
+                                    :class="audit.keyboard_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
+                                    <span class="size-1.5 rounded-full" :class="audit.keyboard_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
+                                    <span x-text="audit.keyboard_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
+                                </span>
+                            </div>
+
+                            {{-- 6. Power & I/O Cables --}}
+                            <div class="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between hover:border-slate-600 transition-colors">
+                                <div class="flex items-center gap-3.5">
+                                    <div class="w-10 h-10 rounded-xl bg-slate-800/90 border border-slate-700/80 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v4m6-4v4m-8 4h10a2 2 0 012 2v1a5 5 0 01-5 5H10a5 5 0 01-5-5v-1a2 2 0 012-2zm5 11v4" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-black text-white uppercase tracking-tight">Power & I/O Cables</h4>
+                                        <p class="text-[9px] text-slate-400">Power, display & USB cords</p>
+                                    </div>
+                                </div>
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase font-mono tracking-wider"
+                                    :class="audit.cables_ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'">
+                                    <span class="size-1.5 rounded-full" :class="audit.cables_ok ? 'bg-emerald-400' : 'bg-red-400'"></span>
+                                    <span x-text="audit.cables_ok ? 'OPERATIONAL' : 'ISSUE'"></span>
                                 </span>
                             </div>
 

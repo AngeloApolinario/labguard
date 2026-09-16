@@ -208,7 +208,7 @@ def load_config():
 
 
 config = load_config()
-API_URL = config.get("server_url", "https://labguard.test/api/pc").rstrip('/')
+API_URL = config.get("server_url", "https://labguard.it.com/api/pc").rstrip('/')
 if not API_URL.endswith('/api/pc'):
     API_URL += '/api/pc'
 
@@ -441,7 +441,7 @@ def enable_wifi_adapter():
 
 
 # =====================================================================
-# 6. GLASSMORPHIC NOTIFICATION OVERLAY
+# 6. GLASSMORPHIC NOTIFICATION OVERLAY (UPGRADED READ TIME + DISMISS)
 # =====================================================================
 class CinematicNotify(tk.Toplevel):
     def __init__(self, parent, title, message, color="#D4AF37"):
@@ -453,26 +453,36 @@ class CinematicNotify(tk.Toplevel):
 
         p_w = parent.winfo_screenwidth()
         p_h = parent.winfo_screenheight()
-        width, height = 400, 160
+        width, height = 420, 170
         x = (p_w // 2) - (width // 2)
         y = (p_h // 2) - (height // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
 
-        tk.Label(self, text=title.upper(), fg=color, bg="#1e293b", font=("Arial Black", 14)).pack(pady=(25, 5))
-        tk.Label(self, text=message, fg="white", bg="#1e293b", font=("Arial", 10), wraplength=340).pack(pady=5)
+        # Click notification anywhere to dismiss instantly
+        self.bind("<Button-1>", lambda e: self.destroy())
+
+        tk.Label(self, text=title.upper(), fg=color, bg="#1e293b", font=("Arial Black", 14), cursor="hand2").pack(pady=(22, 4))
+        tk.Label(self, text=message, fg="white", bg="#1e293b", font=("Arial", 10), wraplength=360, cursor="hand2").pack(pady=4)
+
+        tk.Label(self, text="Click to dismiss", fg="#64748b", bg="#1e293b", font=("Arial", 8)).pack(pady=(2, 0))
 
         self.progress_bg = tk.Frame(self, bg="#0f172a", height=4)
         self.progress_bg.pack(side="bottom", fill="x")
-        self.after(4000, self.fade_out)
+
+        # Display for 6.5 seconds (gives ample time to read)
+        self.after(6500, self.fade_out)
 
     def fade_out(self):
-        alpha = self.attributes("-alpha")
-        if alpha > 0:
-            alpha -= 0.1
-            self.attributes("-alpha", alpha)
-            self.after(50, self.fade_out)
-        else:
-            self.destroy()
+        try:
+            alpha = float(self.attributes("-alpha"))
+            if alpha > 0.05:
+                alpha -= 0.05
+                self.attributes("-alpha", alpha)
+                self.after(40, self.fade_out)
+            else:
+                self.destroy()
+        except Exception:
+            pass
 
 
 # =====================================================================
@@ -497,7 +507,7 @@ class LabGuardClient:
             "session_id": None,
         }
 
-        # Apply system lockdowns
+        # Apply initial system lockdowns
         hide_taskbar()
         start_keyboard_hook()
 
@@ -599,7 +609,6 @@ class LabGuardClient:
             border=0,
         )
         self.entry_id.pack(ipady=10)
-        # Enforces numbers only like before
         self.entry_id.bind("<Key>", self._filter_student_id_key)
         self.entry_id.bind("<KeyRelease>", self._format_student_id_entry)
         self.entry_id.bind("<Return>", lambda e: self.entry_password.focus_set())
@@ -681,7 +690,6 @@ class LabGuardClient:
         threading.Thread(target=self.network_monitor_loop, daemon=True).start()
 
     def _filter_student_id_key(self, event):
-        """Allows only numeric keystrokes for ID numbers."""
         if event.keysym in {
             "BackSpace", "Delete", "Tab", "Return", "Left", "Right", "Up", "Down", "Home", "End"
         }:
@@ -740,7 +748,7 @@ class LabGuardClient:
             self.entry_id.focus_set()
 
     # =================================================================
-    # PAGE 2: BUILD HARDWARE CHECKLIST
+    # PAGE 2: BUILD HARDWARE CHECKLIST (6 SPECIFIED HARDWARE ITEMS)
     # =================================================================
     def show_checklist_screen(self, student_name):
         self.login_view.pack_forget()
@@ -772,7 +780,7 @@ class LabGuardClient:
 
         tk.Label(
             self.checklist_view,
-            text="Inspect all workstation peripherals. Check items that are functional, leave broken items unchecked.\nUnchecked items indicate non-operational equipment and will be recorded as such.",
+            text="Inspect all workstation peripherals. Check items that are operational, leave defective items unchecked.\nUnchecked components will be recorded as non-operational in your session report.",
             fg="#94a3b8",
             bg="#0f172a",
             font=("Arial", 10),
@@ -780,13 +788,14 @@ class LabGuardClient:
             wraplength=650,
         ).pack(pady=(0, 16))
 
+        # UPDATED 6 CHECKLIST ITEMS AS SPECIFIED:
         self.hardware_items = [
-            {"id": "monitor", "icon": "🖥️", "title": "Display Monitor", "desc": "Clean display panel, no cracks, lines, or flickering."},
-            {"id": "keyboard", "icon": "⌨️", "title": "Keyboard Unit", "desc": "All keycaps attached, cables intact, keys responsive."},
-            {"id": "mouse", "icon": "🖱️", "title": "Optical Mouse", "desc": "Smooth laser tracking, left & right clicks operational."},
-            {"id": "avr", "icon": "⚡", "title": "AVR / Power Regulator", "desc": "Power unit is present, intact, and indicator LED is active."},
-            {"id": "case", "icon": "🗄️", "title": "PC Chassis & Wiring", "desc": "Case cover is locked; power, video & USB cords firmly plugged."},
-            {"id": "headset", "icon": "🎧", "title": "Headset / Peripherals", "desc": "Clean sound, undamaged wiring, and intact cushions."},
+            {"id": "system_unit", "icon": "🖥️", "title": "System Unit", "desc": "Power button working, casing sealed, no abnormal fan noise."},
+            {"id": "monitor",     "icon": "🖥️", "title": "Display Monitor", "desc": "Screen clear, no cracks, lines, or video signal loss."},
+            {"id": "avr",         "icon": "⚡", "title": "Power Unit (AVR)", "desc": "Voltage regulator active, power indicator light on, grounded."},
+            {"id": "mouse",       "icon": "🖱️", "title": "Optical Mouse", "desc": "Laser tracking smooth, left & right click responsive."},
+            {"id": "keyboard",    "icon": "⌨️", "title": "Keyboard Unit", "desc": "All keycaps present, typing responsive, no sticky keys."},
+            {"id": "cables",      "icon": "🔌", "title": "Power & I/O Cables", "desc": "Display, power, and peripheral cords securely plugged in."},
         ]
 
         self.check_states = {}
@@ -871,7 +880,7 @@ class LabGuardClient:
         action_frame = tk.Frame(self.checklist_view, bg="#0f172a")
         action_frame.pack(pady=5)
 
-        # Always clickable: Proceed even if items are left unchecked
+        # Unrestricted: Can proceed even if some items are left unchecked
         self.btn_proceed = tk.Button(
             action_frame,
             text="CONFIRM & PROCEED TO DESKTOP",
@@ -930,7 +939,6 @@ class LabGuardClient:
         self._update_checklist_button_state()
 
     def _update_checklist_button_state(self):
-        """Updates text dynamically without disabling button."""
         checked_count = sum(1 for v in self.check_states.values() if v.get())
         if checked_count == len(self.check_states):
             self.btn_proceed.config(
@@ -957,7 +965,6 @@ class LabGuardClient:
     # SUBMIT CHECKLIST TO LARAVEL BACKEND & UNLOCK
     # =================================================================
     def complete_checklist_and_unlock(self):
-        """Sends verification states (checked=True, unchecked=False) and unlocks workstation."""
         self.btn_proceed.config(state="disabled", text="SAVING INSPECTION AUDIT...")
 
         checklist_payload = {
@@ -1052,11 +1059,10 @@ class LabGuardClient:
         y = (screen_h // 2) - (height // 2)
         self.wifi_modal.geometry(f"{width}x{height}+{x}+{y}")
         self.wifi_modal.attributes("-topmost", True)
-        self.wifi_modal.grab_set()
+        self.wifi_modal.transient(self.root)
 
         def close_wifi(event=None):
             if self.wifi_modal and self.wifi_modal.winfo_exists():
-                self.wifi_modal.grab_release()
                 self.wifi_modal.destroy()
                 self.wifi_modal = None
             self.root.attributes("-topmost", True)
@@ -1212,13 +1218,10 @@ class LabGuardClient:
         threading.Thread(target=execute_connection, daemon=True).start()
 
     # =================================================================
-    # RELOCATED & STREAMLINED ISSUE REPORT OVERLAY
+    # FIXED: RELOCATED & STREAMLINED ISSUE REPORT OVERLAY
+    # Uses ttk.Combobox (state=readonly) & modal transient to prevent auto-close
     # =================================================================
     def open_report_overlay(self, prefill=False):
-        """
-        Opens issue reporting modal.
-        When prefill=True, credentials fields are hidden visually and a verified account badge is shown instead.
-        """
         if self.overlay and self.overlay.winfo_exists():
             self.overlay.lift()
             return
@@ -1229,7 +1232,7 @@ class LabGuardClient:
         self.overlay.overrideredirect(True)
 
         width = 480
-        height = 470 if prefill else 640
+        height = 490 if prefill else 640
 
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
@@ -1237,7 +1240,9 @@ class LabGuardClient:
         y = (screen_h // 2) - (height // 2)
         self.overlay.geometry(f"{width}x{height}+{x}+{y}")
         self.overlay.attributes("-topmost", True)
-        self.overlay.grab_set()
+        
+        # Make modal transient without grab_set conflict (fixes dropdown closing bug)
+        self.overlay.transient(self.root)
 
         tk.Label(self.overlay, text="REPORT A PROBLEM", fg="#ef4444", bg="#1e293b", font=("Arial Black", 16)).pack(pady=(22, 2))
         tk.Label(
@@ -1248,12 +1253,10 @@ class LabGuardClient:
             font=("Arial", 9),
         ).pack(pady=(0, 8))
 
-        # Memory stores for credentials
         self.report_student_id = tk.Entry(self.overlay)
         self.report_password = tk.Entry(self.overlay)
 
         if prefill and self.current_student["id"]:
-            # Hidden visually: Credentials are inserted in memory and represented by a badge
             self.report_student_id.insert(0, self.current_student["id"])
             self.report_password.insert(0, self.current_student["password"])
 
@@ -1270,7 +1273,6 @@ class LabGuardClient:
                 pady=8,
             ).pack()
         else:
-            # Show standard input fields when not prefilled
             tk.Label(self.overlay, text="Student Number / ID", fg="white", bg="#1e293b", font=("Arial", 9, "bold")).pack(anchor="w", padx=50, pady=(10, 2))
             self.report_student_id = tk.Entry(self.overlay, font=("Arial", 11), bg="#0f172a", fg="white", border=0, insertbackground="white")
             self.report_student_id.pack(fill="x", padx=50, ipady=6)
@@ -1282,20 +1284,46 @@ class LabGuardClient:
             self.report_password.pack(fill="x", padx=50, ipady=6)
 
         tk.Label(self.overlay, text="Problem Category", fg="white", bg="#1e293b", font=("Arial", 9, "bold")).pack(anchor="w", padx=50, pady=(6, 2))
-        self.issue_var = tk.StringVar(value="Missing / Faulty Hardware")
 
-        dropdown = tk.OptionMenu(
-            self.overlay,
-            self.issue_var,
+        # Replaced tk.OptionMenu with ttk.Combobox (Fixes dropdown instantly closing!)
+        categories = [
             "Missing / Faulty Hardware",
-            "Monitor Defective",
-            "Keyboard / Mouse Issue",
-            "AVR / Power Issue",
-            "No Internet Access",
-            "Other Terminal Concern",
+            "System Unit / Tower Issue",
+            "Monitor Defective / Cracked",
+            "Power Unit / AVR Failure",
+            "Optical Mouse Unresponsive",
+            "Keyboard Damaged / Missing Keys",
+            "Loose / Damaged Cables",
+            "No Internet / Wi-Fi Problem",
+            "Other Terminal Concern"
+        ]
+        
+        self.issue_var = tk.StringVar(value=categories[0])
+        
+        # Configure dark styling for Combobox
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("Dark.TCombobox", 
+            fieldbackground="#0f172a",
+            background="#1e293b",
+            foreground="white",
+            darkcolor="#334155",
+            lightcolor="#334155",
+            bordercolor="#334155",
+            arrowcolor="#D4AF37",
+            selectbackground="#D4AF37",
+            selectforeground="black"
         )
-        dropdown.config(bg="#0f172a", fg="white", activebackground="#D4AF37", font=("Arial", 9), relief="flat", borderwidth=0)
-        dropdown.pack(fill="x", padx=50)
+        
+        self.combo_category = ttk.Combobox(
+            self.overlay,
+            textvariable=self.issue_var,
+            values=categories,
+            state="readonly",
+            style="Dark.TCombobox",
+            font=("Arial", 10)
+        )
+        self.combo_category.pack(fill="x", padx=50, ipady=4)
 
         tk.Label(self.overlay, text="Describe the Problem", fg="white", bg="#1e293b", font=("Arial", 9, "bold")).pack(anchor="w", padx=50, pady=(10, 2))
         self.remarks_box = tk.Text(self.overlay, height=4, font=("Arial", 10), bg="#0f172a", fg="white", border=0, padx=12, pady=8, insertbackground="white")
@@ -1303,7 +1331,6 @@ class LabGuardClient:
 
         def close_overlay():
             if self.overlay and self.overlay.winfo_exists():
-                self.overlay.grab_release()
                 self.overlay.destroy()
                 self.overlay = None
             self.root.attributes("-topmost", True)
@@ -1368,6 +1395,7 @@ class LabGuardClient:
                 self.wifi_modal.lift()
                 self.wifi_modal.attributes("-topmost", True)
             elif self.overlay and self.overlay.winfo_exists():
+                # Lift overlay without aggressive grabbing so dropdown menus stay open
                 self.overlay.lift()
                 self.overlay.attributes("-topmost", True)
             else:
@@ -1389,6 +1417,7 @@ class LabGuardClient:
         self.btn_unlock.config(state="disabled", text="VERIFYING...")
         payload = {
             "pc_number": PC_NUMBER,
+            "lab": LAB_ID,
             "student_id": login_credential,
             "password": password,
         }

@@ -575,14 +575,30 @@ class SuperAdminController extends Controller
             : 100.0;
 
         // Peripheral Wear Matrix
+        // 1. Updated Peripheral Defect Matrix (Queries exact DB columns)
         $peripheralFailures = [
-            'monitor'  => (clone $checklistQuery)->where('monitor_ok', false)->count(),
-            'keyboard' => (clone $checklistQuery)->where('keyboard_ok', false)->count(),
-            'mouse'    => (clone $checklistQuery)->where('mouse_ok', false)->count(),
-            'avr'      => (clone $checklistQuery)->where('avr_ok', false)->count(),
-            'chassis'  => (clone $checklistQuery)->where('pc_case_ok', false)->count(),
-            'headset'  => (clone $checklistQuery)->where('headset_ok', false)->count(),
+            'system_unit' => (clone $checklistQuery)->where('system_unit_ok', false)->count(),
+            'monitor'     => (clone $checklistQuery)->where('monitor_ok', false)->count(),
+            'avr'         => (clone $checklistQuery)->where('avr_ok', false)->count(),
+            'mouse'       => (clone $checklistQuery)->where('mouse_ok', false)->count(),
+            'keyboard'    => (clone $checklistQuery)->where('keyboard_ok', false)->count(),
+            'cables'      => (clone $checklistQuery)->where('cables_ok', false)->count(),
         ];
+
+        // 2. Updated Technician Action Queue
+        $recentIssues = (clone $checklistQuery)
+            ->where(function ($q) {
+                $q->where('all_operational', false)
+                    ->orWhere('system_unit_ok', false)
+                    ->orWhere('monitor_ok', false)
+                    ->orWhere('avr_ok', false)
+                    ->orWhere('mouse_ok', false)
+                    ->orWhere('keyboard_ok', false)
+                    ->orWhere('cables_ok', false);
+            })
+            ->latest('id')
+            ->take(6)
+            ->get();
 
         // 4. Live Computer Fleet State
         $computerFleet = Computer::when($selectedLabId, fn($q) => $q->where('lab_id', $selectedLabId));
@@ -596,20 +612,6 @@ class SuperAdminController extends Controller
         $resolvedAlerts  = (clone $alertQuery)->where('status', 'resolved')->count();
         $discardedAlerts = (clone $alertQuery)->where('status', 'discarded')->count();
 
-        // 6. Action Queue (Flagged Checklists)
-        $recentIssues = (clone $checklistQuery)
-            ->where(function ($q) {
-                $q->where('all_operational', false)
-                    ->orWhere('monitor_ok', false)
-                    ->orWhere('keyboard_ok', false)
-                    ->orWhere('mouse_ok', false)
-                    ->orWhere('avr_ok', false)
-                    ->orWhere('pc_case_ok', false)
-                    ->orWhere('headset_ok', false);
-            })
-            ->latest('id')
-            ->take(6)
-            ->get();
 
         // 7. Hourly Velocity
         $hourlyDistribution = (clone $sessionQuery)

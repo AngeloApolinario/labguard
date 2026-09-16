@@ -97,10 +97,10 @@ class TerminalController extends Controller
             $subjectCode = trim($activeSchedule->subject_code);
 
             // Check 4B: Allow if designated as Open Lab
-            $isOpenLab = str_contains(strtoupper($subjectCode), 'OPEN')
-                || str_contains(strtoupper($subjectCode), 'FREE')
-                || ($activeSchedule->is_open_lab ?? false);
-
+            $isEvent = $activeSchedule && ($activeSchedule->is_event ?? false);
+            $isOpenLab = $isEvent
+                || str_contains(strtoupper($activeSchedule->subject_code ?? ''), 'OPEN')
+                || str_contains(strtoupper($activeSchedule->subject_code ?? ''), 'FREE');
             if (!$isOpenLab) {
                 $studentEmail = strtolower(trim($user->email));
 
@@ -320,19 +320,27 @@ class TerminalController extends Controller
 
             $items = $validated['checklist'];
 
-            // 4. Create hardware inspection record directly
-            $record = new SessionChecklist();
+            // Direct assignment mapping to the 6 new hardware components
+            $record = new \App\Models\SessionChecklist();
             $record->lab_session_id    = $sessionId;
             $record->student_id_number = $studentIdNumber;
             $record->pc_number         = $pcNumber;
             $record->lab_name          = $validated['lab'] ?? null;
+            $record->system_unit_ok    = (bool)($items['system_unit'] ?? true);
             $record->monitor_ok        = (bool)($items['monitor'] ?? true);
-            $record->keyboard_ok       = (bool)($items['keyboard'] ?? true);
-            $record->mouse_ok          = (bool)($items['mouse'] ?? true);
             $record->avr_ok            = (bool)($items['avr'] ?? true);
-            $record->pc_case_ok        = (bool)($items['case'] ?? true);
-            $record->headset_ok        = (bool)($items['headset'] ?? true);
-            $record->all_operational   = true;
+            $record->mouse_ok          = (bool)($items['mouse'] ?? true);
+            $record->keyboard_ok       = (bool)($items['keyboard'] ?? true);
+            $record->cables_ok         = (bool)($items['cables'] ?? true);
+
+            // True only if all 6 items were checked operational
+            $record->all_operational   = $record->system_unit_ok
+                && $record->monitor_ok
+                && $record->avr_ok
+                && $record->mouse_ok
+                && $record->keyboard_ok
+                && $record->cables_ok;
+
             $record->items_payload     = $items;
             $record->verified_at       = now();
             $record->save();

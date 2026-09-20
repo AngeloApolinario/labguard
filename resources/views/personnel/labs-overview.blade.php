@@ -27,20 +27,54 @@
         </div>
     </x-slot>
 
-    {{-- Main Container with Reactive Alpine Store --}}
-    <div x-data="{ 
+    @php
+    // System-wide current time reference for schedule comparisons
+    $now = now();
+    $nowDay = $now->format('l');
+    $todayDate = $now->toDateString();
+    $nowTimestamp = strtotime($now->format('H:i:s'));
+
+    // Helper function to detect active schedule (both classes and one-time events)
+    $findActiveSchedule = function($lab) use ($nowDay, $todayDate, $nowTimestamp) {
+    return $lab->schedules?->first(function($s) use ($nowDay, $todayDate, $nowTimestamp) {
+    $isToday = false;
+    if (!empty($s->is_event) && !empty($s->event_date)) {
+    $isToday = \Carbon\Carbon::parse($s->event_date)->isSameDay($todayDate);
+    } elseif (!empty($s->day)) {
+    $isToday = strcasecmp($s->day, $nowDay) === 0;
+    }
+
+    if (!$isToday) return false;
+
+    $start = strtotime($s->start_time);
+    $end = strtotime($s->end_time);
+
+    return $start <= $nowTimestamp && $end>= $nowTimestamp;
+        });
+        };
+        @endphp
+
+        {{-- Main Container with Synchronized Alpine Store --}}
+        <div x-data="{ 
             search: '', 
             filter: 'all',
-            labs: @js($labs->map(function($l) {
+            labs: @js($labs->map(function($l) use ($findActiveSchedule) {
                 $isMaint = $l->isUnderMaintenance();
                 $occ = (int)($l->occupied ?? 0);
                 $tot = (int)($l->total ?? 0);
                 $pendingAlerts = $l->pending_alerts_count ?? ($l->alerts ? $l->alerts->where('status', 'pending')->count() : 0);
+                
+                $currentSched = $findActiveSchedule($l);
+                $hasSchedule = $currentSched !== null;
+                $inSession = !$isMaint && ($occ > 0 || $hasSchedule);
+
                 return [
                     'id' => $l->id,
                     'name' => (string)$l->name,
                     'location' => (string)($l->location ?? ''),
-                    'status' => $isMaint ? 'maintenance' : ($occ > 0 ? 'active' : 'free'),
+                    'status' => $isMaint ? 'maintenance' : ($inSession ? 'active' : 'free'),
+                    'in_session' => $inSession,
+                    'has_schedule' => $hasSchedule,
                     'occupied' => $occ,
                     'total' => $tot,
                     'hasAlerts' => $pendingAlerts > 0,
@@ -52,8 +86,8 @@
                 const text = (lab.name + ' ' + lab.location).toLowerCase();
                 if (query && !text.includes(query)) return false;
 
-                if (this.filter === 'active') return lab.occupied > 0 && lab.status !== 'maintenance';
-                if (this.filter === 'free') return lab.occupied === 0 && lab.status !== 'maintenance';
+                if (this.filter === 'active') return lab.in_session && lab.status !== 'maintenance';
+                if (this.filter === 'free') return !lab.in_session && lab.status !== 'maintenance';
                 if (this.filter === 'maintenance') return lab.status === 'maintenance';
                 if (this.filter === 'alerts') return lab.hasAlerts;
                 return true;
@@ -63,155 +97,158 @@
             },
             get emptyTitle() {
                 if (this.filter === 'free') return 'No Laboratory is Currently Vacant';
-                if (this.filter === 'active') return 'No Laboratory In-Session';
+                if (this.filter === 'active') return 'No Laboratory Currently In-Session';
                 if (this.filter === 'maintenance') return 'All Laboratories Operational';
                 if (this.filter === 'alerts') return 'Zero Discrepancies Reported';
                 if (this.search) return 'No Matching Facilities Found';
                 return 'No Facilities Match Filters';
             },
             get emptySubtitle() {
-                if (this.filter === 'free') return 'All computer laboratory workstations across the campus are currently in use or occupied by active sessions.';
-                if (this.filter === 'active') return 'There are currently no classes or active student sessions running at this time.';
+                if (this.filter === 'free') return 'All operational workstation rooms currently have active classes or student logins.';
+                if (this.filter === 'active') return 'There are currently no classes or events in progress and no active student terminal logins.';
                 if (this.filter === 'maintenance') return 'All laboratory equipment and rooms are healthy. No facilities are currently under quarantine.';
                 if (this.filter === 'alerts') return 'All workstations have passed inspection with no pending technical support alerts.';
                 if (this.search) return 'We couldn\'t find any laboratory matching “' + this.search + '”. Please check your spelling or search by room number.';
                 return 'Try resetting your active filters to display all laboratory facilities.';
             }
         }"
-        class="py-6 sm:py-8 md:py-12 px-4 sm:px-6 bg-[#F8FAFC] min-h-screen">
+            class="py-6 sm:py-8 md:py-12 px-4 sm:px-6 bg-[#F8FAFC] min-h-screen">
 
-        <div class="max-w-7xl mx-auto space-y-6 sm:space-y-8">
+            <div class="max-w-7xl mx-auto space-y-6 sm:space-y-8">
 
-            {{-- ========================================================================= --}}
-            {{-- 1. OPERATIONAL TELEMETRY METRICS --}}
-            {{-- ========================================================================= --}}
-            @php
-            $totalPcs = $labs->sum('total');
-            $occupiedPcs = $labs->sum('occupied');
-            $availablePcs = max(0, $totalPcs - $occupiedPcs);
-            $occupancyRate = $totalPcs > 0 ? round(($occupiedPcs / $totalPcs) * 100) : 0;
-            @endphp
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                {{-- Overall Occupancy --}}
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-[#D4AF37] transition-all">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Campus Occupancy</span>
-                        <span class="px-2 py-0.5 rounded-lg text-[9px] font-black font-mono {{ $occupancyRate > 80 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600' }}">
-                            {{ $occupancyRate }}%
-                        </span>
-                    </div>
-                    <div class="flex items-baseline gap-2">
-                        <h4 class="text-3xl font-black text-slate-900 tracking-tight font-mono">{{ $occupiedPcs }}</h4>
-                        <span class="text-xs font-bold text-slate-400">/ {{ $totalPcs }} Workstations</span>
-                    </div>
-                    <div class="w-full bg-slate-100 h-1.5 rounded-full mt-4 overflow-hidden">
-                        <div class="bg-slate-900 h-full rounded-full transition-all duration-700" style="width: {{ $occupancyRate }}%"></div>
-                    </div>
-                </div>
-
-                {{-- Available Free Workstations --}}
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-[#D4AF37] transition-all">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Available Terminals</span>
-                        <span class="size-2 rounded-full bg-[#D4AF37]"></span>
-                    </div>
-                    <h4 class="text-3xl font-black text-[#D4AF37] tracking-tight font-mono">{{ $availablePcs }}</h4>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-2">Ready for student walk-ins</p>
-                </div>
-
-                {{-- Active Rooms Ratio --}}
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-[#D4AF37] transition-all">
-                    @php
-                    $inUseLabsCount = $labs->filter(fn($l) => ($l->occupied ?? 0) > 0 && !$l->isUnderMaintenance())->count();
-                    @endphp
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rooms In-Session</span>
-                        <div class="size-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                    </div>
-                    <div class="flex items-baseline gap-2">
-                        <h4 class="text-3xl font-black text-slate-900 tracking-tight font-mono">{{ $inUseLabsCount }}</h4>
-                        <span class="text-xs font-bold text-slate-400">/ {{ $labs->count() }} Facilities</span>
-                    </div>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-2">Classes or open labs active</p>
-                </div>
-
-                {{-- Maintenance & Quarantine --}}
-                <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-rose-300 transition-all">
-                    @php
-                    $maintenanceLabsCount = $labs->filter(fn($l) => $l->isUnderMaintenance())->count();
-                    @endphp
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Under Maintenance</span>
-                        <span class="size-2 rounded-full {{ $maintenanceLabsCount > 0 ? 'bg-rose-500' : 'bg-slate-300' }}"></span>
-                    </div>
-                    <div class="flex items-baseline gap-2">
-                        <h4 class="text-3xl font-black {{ $maintenanceLabsCount > 0 ? 'text-rose-600' : 'text-slate-900' }} tracking-tight font-mono">{{ $maintenanceLabsCount }}</h4>
-                        <span class="text-xs font-bold text-slate-400">Rooms Locked</span>
-                    </div>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase mt-2">Quarantined for servicing</p>
-                </div>
-            </div>
-
-            {{-- ========================================================================= --}}
-            {{-- 2. COMMAND CONTROL & INSTANT FILTER BAR --}}
-            {{-- ========================================================================= --}}
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/90 backdrop-blur-xl p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs">
-                {{-- Live Search --}}
-                <div class="relative flex-1 max-w-md">
-                    <svg class="size-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                    </svg>
-                    <input type="text"
-                        x-model="search"
-                        placeholder="Filter facility by name or location (e.g. LAB 1, Building B)..."
-                        class="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37] transition-all">
-                </div>
-
-                {{-- Status Filter Chips --}}
-                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                    <button type="button" @click="filter = 'all'"
-                        :class="filter === 'all' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                        class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0">
-                        All Facilities
-                    </button>
-                    <button type="button" @click="filter = 'active'"
-                        :class="filter === 'active' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                        class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5">
-                        <span class="size-1.5 rounded-full bg-emerald-500"></span> In-Session
-                    </button>
-                    <button type="button" @click="filter = 'free'"
-                        :class="filter === 'free' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                        class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0">
-                        Vacant / Free
-                    </button>
-                    <button type="button" @click="filter = 'maintenance'"
-                        :class="filter === 'maintenance' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                        class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0">
-                        Maintenance
-                    </button>
-                </div>
-            </div>
-
-            {{-- ========================================================================= --}}
-            {{-- 3. DETAILED FACILITY COMMAND TILES --}}
-            {{-- ========================================================================= --}}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-                @foreach($labs as $lab)
+                {{-- ========================================================================= --}}
+                {{-- 1. OPERATIONAL TELEMETRY METRICS --}}
+                {{-- ========================================================================= --}}
                 @php
-                $isMaintenance = $lab->isUnderMaintenance();
-                $total = $lab->total ?? 0;
-                $occupied = $lab->occupied ?? 0;
-                $available = max(0, $total - $occupied);
-                $rate = $total > 0 ? round(($occupied / $total) * 100) : 0;
+                $totalPcs = $labs->sum('total');
+                $occupiedPcs = $labs->sum('occupied');
+                $availablePcs = max(0, $totalPcs - $occupiedPcs);
+                $occupancyRate = $totalPcs > 0 ? round(($occupiedPcs / $totalPcs) * 100) : 0;
 
-                $pendingAlertsCount = $lab->pending_alerts_count ?? ($lab->alerts ? $lab->alerts->where('status', 'pending')->count() : 0);
+                $inUseLabsCount = $labs->filter(function($l) use ($findActiveSchedule) {
+                if ($l->isUnderMaintenance()) return false;
+                return (($l->occupied ?? 0) > 0) || ($findActiveSchedule($l) !== null);
+                })->count();
+                @endphp
 
-                $nowTime = now()->format('H:i:s');
-                $nowDay = now()->format('l');
-                $currentSchedule = $lab->schedules?->first(function($s) use ($nowDay, $nowTime) {
-                return $s->day === $nowDay && $s->start_time <= $nowTime && $s->end_time >= $nowTime;
-                    });
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                    {{-- Overall Occupancy --}}
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-[#D4AF37] transition-all">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Campus Occupancy</span>
+                            <span class="px-2 py-0.5 rounded-lg text-[9px] font-black font-mono {{ $occupancyRate > 80 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600' }}">
+                                {{ $occupancyRate }}%
+                            </span>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <h4 class="text-3xl font-black text-slate-900 tracking-tight font-mono">{{ $occupiedPcs }}</h4>
+                            <span class="text-xs font-bold text-slate-400">/ {{ $totalPcs }} Workstations</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-1.5 rounded-full mt-4 overflow-hidden">
+                            <div class="bg-slate-900 h-full rounded-full transition-all duration-700" style="width: {{ $occupancyRate }}%"></div>
+                        </div>
+                    </div>
+
+                    {{-- Available Free Workstations --}}
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-[#D4AF37] transition-all">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Available Terminals</span>
+                            <span class="size-2 rounded-full bg-[#D4AF37]"></span>
+                        </div>
+                        <h4 class="text-3xl font-black text-[#D4AF37] tracking-tight font-mono">{{ $availablePcs }}</h4>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mt-2">Ready for student walk-ins</p>
+                    </div>
+
+                    {{-- Active Rooms Ratio --}}
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-[#D4AF37] transition-all">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rooms In-Session</span>
+                            <div class="size-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <h4 class="text-3xl font-black text-slate-900 tracking-tight font-mono">{{ $inUseLabsCount }}</h4>
+                            <span class="text-xs font-bold text-slate-400">/ {{ $labs->count() }} Facilities</span>
+                        </div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mt-2">Classes or active sessions running</p>
+                    </div>
+
+                    {{-- Maintenance & Quarantine --}}
+                    <div class="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs relative overflow-hidden group hover:border-rose-300 transition-all">
+                        @php
+                        $maintenanceLabsCount = $labs->filter(fn($l) => $l->isUnderMaintenance())->count();
+                        @endphp
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Under Maintenance</span>
+                            <span class="size-2 rounded-full {{ $maintenanceLabsCount > 0 ? 'bg-rose-500' : 'bg-slate-300' }}"></span>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <h4 class="text-3xl font-black {{ $maintenanceLabsCount > 0 ? 'text-rose-600' : 'text-slate-900' }} tracking-tight font-mono">{{ $maintenanceLabsCount }}</h4>
+                            <span class="text-xs font-bold text-slate-400">Rooms Locked</span>
+                        </div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mt-2">Quarantined for servicing</p>
+                    </div>
+                </div>
+
+                {{-- ========================================================================= --}}
+                {{-- 2. COMMAND CONTROL & SEARCH BAR (FIXED: NO ICON OVERLAPPING) --}}
+                {{-- ========================================================================= --}}
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/90 backdrop-blur-xl p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+
+                    {{-- Live Search with Dedicated Left Inset Wrapper --}}
+                    <div class="relative flex-1 max-w-md">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <svg class="size-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                        </div>
+                        <input type="text"
+                            x-model="search"
+                            placeholder="Filter facility by name or wing (e.g. LAB 1, Building B)..."
+                            class="w-full pl-10 sm:pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-[#D4AF37]/50 focus:border-[#D4AF37] transition-all">
+                    </div>
+
+                    {{-- Status Filter Chips --}}
+                    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                        <button type="button" @click="filter = 'all'"
+                            :class="filter === 'all' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                            class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0">
+                            All Facilities
+                        </button>
+                        <button type="button" @click="filter = 'active'"
+                            :class="filter === 'active' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                            class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0 flex items-center gap-1.5">
+                            <span class="size-1.5 rounded-full bg-emerald-500"></span> In-Session
+                        </button>
+                        <button type="button" @click="filter = 'free'"
+                            :class="filter === 'free' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                            class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0">
+                            Vacant / Free
+                        </button>
+                        <button type="button" @click="filter = 'maintenance'"
+                            :class="filter === 'maintenance' ? 'bg-slate-900 text-[#D4AF37] shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+                            class="px-3.5 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shrink-0">
+                            Maintenance
+                        </button>
+                    </div>
+                </div>
+
+                {{-- ========================================================================= --}}
+                {{-- 3. DETAILED FACILITY COMMAND TILES (FIXED: VECTOR WORKSTATION ICON) --}}
+                {{-- ========================================================================= --}}
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+                    @foreach($labs as $lab)
+                    @php
+                    $isMaintenance = $lab->isUnderMaintenance();
+                    $total = $lab->total ?? 0;
+                    $occupied = $lab->occupied ?? 0;
+                    $available = max(0, $total - $occupied);
+                    $rate = $total > 0 ? round(($occupied / $total) * 100) : 0;
+
+                    $pendingAlertsCount = $lab->pending_alerts_count ?? ($lab->alerts ? $lab->alerts->where('status', 'pending')->count() : 0);
+
+                    $currentSchedule = $findActiveSchedule($lab);
+                    $hasSchedule = $currentSchedule !== null;
+                    $inSession = !$isMaintenance && ($occupied > 0 || $hasSchedule);
 
                     $isOpenLab = $currentSchedule ? (str_contains(strtoupper($currentSchedule->subject_code), 'OPEN') || str_contains(strtoupper($currentSchedule->subject_code), 'FREE')) : false;
                     @endphp
@@ -224,8 +261,11 @@
                         <div>
                             <div class="flex items-start justify-between gap-4 pb-5 border-b border-slate-100">
                                 <div class="flex items-center gap-4">
-                                    <div class="size-14 rounded-2xl bg-slate-900 text-[#D4AF37] border border-slate-800 flex items-center justify-center font-mono font-black text-sm shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-                                        {{ substr($lab->name, 0, 4) }}
+                                    {{-- Fixed: Replaced cut-off "LAB " text with vector Workstation Icon --}}
+                                    <div class="size-13 sm:size-14 rounded-2xl bg-slate-900 border border-slate-800 text-[#D4AF37] flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 group-hover:border-[#D4AF37]/50 transition-all">
+                                        <svg class="size-6 sm:size-7 text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0H3" />
+                                        </svg>
                                     </div>
                                     <div>
                                         <h3 class="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tight group-hover:text-[#D4AF37] transition-colors">
@@ -246,7 +286,7 @@
                                         <span class="size-1.5 rounded-full bg-rose-500 animate-ping"></span>
                                         Locked
                                     </span>
-                                    @elseif($occupied > 0)
+                                    @elseif($inSession)
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-wider">
                                         <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                                         In-Session
@@ -274,7 +314,7 @@
                                 <div class="flex items-center justify-between">
                                     <div class="min-w-0">
                                         <p class="text-xs font-black text-slate-900 uppercase truncate">
-                                            {{ $currentSchedule->user->name ?? 'Instructor Assigned' }}
+                                            {{ $currentSchedule->user->name ?? ($currentSchedule->speaker_name ?? 'Instructor Assigned') }}
                                         </p>
                                         @if($isOpenLab)
                                         <span class="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 uppercase">
@@ -358,62 +398,62 @@
 
                     </div>
                     @endforeach
+                </div>
+
+                {{-- ========================================================================= --}}
+                {{-- 4. DYNAMIC CLIENT-SIDE EMPTY STATE (SMART FILTER FALLBACK) --}}
+                {{-- ========================================================================= --}}
+                <div x-show="visibleCount === 0"
+                    x-transition:enter="transition ease-out duration-300"
+                    x-transition:enter-start="opacity-0 translate-y-2"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    style="display: none;"
+                    class="py-16 sm:py-20 text-center bg-white rounded-3xl sm:rounded-[2.5rem] border border-slate-200/80 p-8 sm:p-12 shadow-xs max-w-2xl mx-auto space-y-4">
+
+                    {{-- Clean Status Icon --}}
+                    <div class="size-16 rounded-3xl bg-slate-50 border border-slate-200/80 text-[#D4AF37] flex items-center justify-center mx-auto shadow-2xs">
+                        <template x-if="filter === 'free'">
+                            <svg class="size-8 text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                            </svg>
+                        </template>
+                        <template x-if="filter === 'active'">
+                            <svg class="size-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </template>
+                        <template x-if="filter === 'maintenance'">
+                            <svg class="size-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </template>
+                        <template x-if="filter === 'all' || filter === 'alerts'">
+                            <svg class="size-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                        </template>
+                    </div>
+
+                    {{-- Dynamic Messages --}}
+                    <div class="space-y-1 max-w-md mx-auto">
+                        <h4 class="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight" x-text="emptyTitle"></h4>
+                        <p class="text-xs text-slate-500 font-medium leading-relaxed" x-text="emptySubtitle"></p>
+                    </div>
+
+                    {{-- Quick Action to Clear Filter --}}
+                    <div class="pt-2">
+                        <button @click="search = ''; filter = 'all'"
+                            type="button"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-[#D4AF37] hover:text-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-200 shadow-sm active:scale-95">
+                            <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                            <span>Reset All Filters</span>
+                        </button>
+                    </div>
+
+                </div>
+
             </div>
-
-            {{-- ========================================================================= --}}
-            {{-- 4. DYNAMIC CLIENT-SIDE EMPTY STATE (SMART FILTER FALLBACK) --}}
-            {{-- ========================================================================= --}}
-            <div x-show="visibleCount === 0"
-                x-transition:enter="transition ease-out duration-300"
-                x-transition:enter-start="opacity-0 translate-y-2"
-                x-transition:enter-end="opacity-100 translate-y-0"
-                style="display: none;"
-                class="py-16 sm:py-20 text-center bg-white rounded-3xl sm:rounded-[2.5rem] border border-slate-200/80 p-8 sm:p-12 shadow-xs max-w-2xl mx-auto space-y-4">
-
-                {{-- Clean Status Icon --}}
-                <div class="size-16 rounded-3xl bg-slate-50 border border-slate-200/80 text-[#D4AF37] flex items-center justify-center mx-auto shadow-2xs">
-                    <template x-if="filter === 'free'">
-                        <svg class="size-8 text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                        </svg>
-                    </template>
-                    <template x-if="filter === 'active'">
-                        <svg class="size-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </template>
-                    <template x-if="filter === 'maintenance'">
-                        <svg class="size-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </template>
-                    <template x-if="filter === 'all' || filter === 'alerts'">
-                        <svg class="size-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                        </svg>
-                    </template>
-                </div>
-
-                {{-- Dynamic Messages --}}
-                <div class="space-y-1 max-w-md mx-auto">
-                    <h4 class="text-base sm:text-lg font-black text-slate-900 uppercase tracking-tight" x-text="emptyTitle"></h4>
-                    <p class="text-xs text-slate-500 font-medium leading-relaxed" x-text="emptySubtitle"></p>
-                </div>
-
-                {{-- Quick Action to Clear Filter --}}
-                <div class="pt-2">
-                    <button @click="search = ''; filter = 'all'"
-                        type="button"
-                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-[#D4AF37] hover:text-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-200 shadow-sm active:scale-95">
-                        <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                        </svg>
-                        <span>Reset All Filters</span>
-                    </button>
-                </div>
-
-            </div>
-
         </div>
-    </div>
 </x-app-layout>

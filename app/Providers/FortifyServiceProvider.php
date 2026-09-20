@@ -7,7 +7,7 @@ use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
 use App\Http\Responses\LoginResponse;
-use App\Rules\Turnstile; // <-- 1. IMPORT YOUR TURNSTILE RULE HERE
+use App\Rules\Turnstile;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
+use Laravel\Fortify\Contracts\RegisterResponse as RegisterResponseContract; // <-- 1. IMPORTED
 use Laravel\Fortify\Fortify;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -30,6 +31,22 @@ class FortifyServiceProvider extends ServiceProvider
         // Bind custom LoginResponse for standard logins and 2FA completions
         $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
         $this->app->singleton(TwoFactorLoginResponseContract::class, LoginResponse::class);
+
+        // 2. BIND CUSTOM REGISTER RESPONSE (Forces verification notice on registration)
+        $this->app->singleton(RegisterResponseContract::class, function () {
+            return new class implements RegisterResponseContract {
+                public function toResponse($request)
+                {
+                    // Clear any leftover intended URL from session
+                    session()->forget('url.intended');
+
+                    // If API request, return standard 201; otherwise redirect to verification notice
+                    return $request->wantsJson()
+                        ? response()->json('', 201)
+                        : redirect()->route('verification.notice');
+                }
+            };
+        });
     }
 
     /**
@@ -54,7 +71,6 @@ class FortifyServiceProvider extends ServiceProvider
         });
 
         Fortify::authenticateUsing(function ($request) {
-            // <-- 2. ADD THIS VALIDATION BLOCK BEFORE QUERYING THE USER
             $request->validate([
                 'email' => ['required', 'email'],
                 'password' => ['required', 'string'],

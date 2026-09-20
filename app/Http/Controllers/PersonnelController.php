@@ -175,19 +175,48 @@ class PersonnelController extends Controller
      */
     public function sessionHistory(Request $request)
     {
-        $query = LabSession::with(['computer.lab', 'teacher'])
-            ->latest()
+        $query = LabSession::with(['computer.lab', 'teacher', 'checklist'])
+            ->latest('id')
             ->whereNotNull('time_out');
 
+        // Non-admins only see sessions for their classes
         if (auth()->user()->role !== 'admin') {
             $query->where('teacher_id', auth()->id());
         }
 
-        if ($request->has('date')) {
+        // 1. Filter by Student Name or Student ID Number
+        if ($request->filled('student_name')) {
+            $search = trim($request->student_name);
+            $query->where(function ($q) use ($search) {
+                $q->where('student_name', 'like', "%{$search}%")
+                    ->orWhere('student_id_number', 'like', "%{$search}%");
+            });
+        }
+
+        // 2. Filter by Terminal ID / PC Number (smart match handles PC-1 vs PC-01)
+        if ($request->filled('pc_number')) {
+            $pcInput = trim($request->pc_number);
+            $query->whereHas('computer', function ($q) use ($pcInput) {
+                $cleanNum = preg_replace('/\D/', '', $pcInput);
+                $q->where('pc_number', 'like', "%{$pcInput}%");
+
+                if (!empty($cleanNum)) {
+                    $num = (int)$cleanNum;
+                    $q->orWhere('pc_number', 'like', "%PC-{$num}%")
+                        ->orWhere('pc_number', 'like', "%PC-0{$num}%")
+                        ->orWhere('pc_number', 'like', "%PC {$num}%")
+                        ->orWhere('pc_number', 'like', "%PC 0{$num}%");
+                }
+            });
+        }
+
+        // 3. Filter by Date (MUST use filled() so empty inputs are ignored)
+        if ($request->filled('date')) {
             $query->whereDate('time_in', $request->date);
         }
 
-        $sessions = $query->paginate(15);
+        // 4. Retain filters across pagination pages
+        $sessions = $query->paginate(15)->withQueryString();
 
         return view('personnel.sessions', compact('sessions'));
     }

@@ -26,10 +26,10 @@
         }
     }" @keydown.escape.window="modalOpen = false" class="py-6 sm:py-8 md:py-12 px-4 sm:px-6 max-w-7xl mx-auto min-h-screen">
 
-        {{-- Cinematic Filter Bar --}}
+        {{-- Cinematic Filter Bar (Submits to url()->current() to stay on the same page) --}}
         <div class="mb-6 sm:mb-10">
             <div class="bg-white border border-slate-100 p-4 sm:p-6 md:p-8 rounded-3xl sm:rounded-[2.5rem] shadow-xl shadow-slate-500/5">
-                <form action="{{ route('dashboard.sessions.index') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-end">
+                <form action="{{ url()->current() }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 items-end">
 
                     <div class="w-full">
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Student Name</label>
@@ -46,14 +46,14 @@
                     <div class="w-full">
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Activity Date</label>
                         <input type="date" name="date" value="{{ request('date') }}"
-                            class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs focus:ring-[#D4AF37] focus:border-[#D4AF37] py-3">
+                            class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs focus:ring-[#D4AF37] focus:border-[#D4AF37] [color-scheme:light] py-3">
                     </div>
 
                     <div class="flex gap-2 sm:gap-3 w-full">
-                        <button type="submit" class="flex-1 bg-slate-900 text-white font-black uppercase text-[10px] px-4 sm:px-8 py-3.5 rounded-2xl hover:bg-[#D4AF37] transition-all transform hover:scale-105 active:scale-95 shadow-lg text-center">
+                        <button type="submit" class="flex-1 bg-slate-900 text-white font-black uppercase text-[10px] px-4 sm:px-8 py-3.5 rounded-2xl hover:bg-[#D4AF37] hover:text-slate-950 transition-all transform hover:scale-105 active:scale-95 shadow-lg text-center cursor-pointer">
                             Apply Filter
                         </button>
-                        <a href="{{ route('dashboard.sessions.index') }}" class="flex-1 justify-center bg-slate-100 text-slate-400 font-black uppercase text-[10px] px-4 sm:px-6 py-3.5 rounded-2xl hover:bg-slate-200 transition-all flex items-center text-center">
+                        <a href="{{ url()->current() }}" class="flex-1 justify-center bg-slate-100 text-slate-400 font-black uppercase text-[10px] px-4 sm:px-6 py-3.5 rounded-2xl hover:bg-slate-200 hover:text-slate-700 transition-all flex items-center text-center">
                             Reset
                         </a>
                     </div>
@@ -100,8 +100,8 @@
                         {{-- Time In --}}
                         <td class="py-8 px-4 whitespace-nowrap">
                             <div class="text-[10px] font-black uppercase tracking-tighter text-slate-900">
-                                {{ $session->time_in->format('M d, Y') }}<br>
-                                <span class="text-slate-400">{{ $session->time_in->format('h:i A') }}</span>
+                                {{ $session->time_in ? $session->time_in->format('M d, Y') : 'N/A' }}<br>
+                                <span class="text-slate-400">{{ $session->time_in ? $session->time_in->format('h:i A') : '--:--' }}</span>
                             </div>
                         </td>
 
@@ -131,7 +131,7 @@
                                     'cables_ok'       => (bool)($session->checklist->cables_ok ?? $session->checklist->headset_ok ?? true),
                                     'all_operational' => (bool)$session->checklist->all_operational,
                                 ]))"
-                                class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent hover:from-emerald-500/20 hover:to-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-700 hover:text-emerald-800 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-emerald-500/10 active:scale-95 group/btn">
+                                class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent hover:from-emerald-500/20 hover:to-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60 text-emerald-700 hover:text-emerald-800 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-emerald-500/10 active:scale-95 group/btn cursor-pointer">
                                 <svg class="w-3.5 h-3.5 text-emerald-500 group-hover/btn:scale-110 transition-transform" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                                 </svg>
@@ -226,8 +226,8 @@
                     <div>
                         <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Time In</span>
                         <div class="text-[10px] font-black uppercase text-slate-900">
-                            {{ $session->time_in->format('M d, Y') }}
-                            <span class="text-slate-400 block">{{ $session->time_in->format('h:i A') }}</span>
+                            {{ $session->time_in ? $session->time_in->format('M d, Y') : 'N/A' }}
+                            <span class="text-slate-400 block">{{ $session->time_in ? $session->time_in->format('h:i A') : '--:--' }}</span>
                         </div>
                     </div>
                     <div>
@@ -269,10 +269,9 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- GLASSMORPHIC HARDWARE CHECKLIST MODAL (6 UPDATED HARDWARE ITEMS) --}}
+        {{-- GLASSMORPHIC HARDWARE CHECKLIST MODAL (6 HARDWARE ITEMS) --}}
         {{-- ========================================================================= --}}
         <div x-cloak x-show="modalOpen" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-            {{-- Backdrop --}}
             <div x-show="modalOpen"
                 x-transition:enter="ease-out duration-300"
                 x-transition:enter-start="opacity-0"
@@ -284,7 +283,6 @@
                 class="fixed inset-0 bg-slate-950/75 backdrop-blur-md transition-opacity">
             </div>
 
-            {{-- Dialog Container --}}
             <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
                 <div x-show="modalOpen"
                     x-transition:enter="ease-out duration-300"
@@ -324,7 +322,7 @@
                         </div>
                     </div>
 
-                    {{-- 6-Item Inspection Grid (Updated to match Python Client & DB Migration) --}}
+                    {{-- 6-Item Inspection Grid --}}
                     <div class="p-6 sm:p-8 space-y-4 bg-slate-900/90">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
 

@@ -4,14 +4,18 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\LabSession;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class SessionController extends Controller
+class SessionApiController extends Controller
 {
-    public function index(Request $request)
+    /**
+     * Display archived/completed lab sessions with filtering and pagination.
+     */
+    public function index(Request $request): JsonResponse
     {
         // 1. Only show sessions that have ended (Archive Mode)
-        $query = LabSession::with(['computer.lab', 'teacher'])
+        $query = LabSession::with(['computer.lab', 'checklist'])
             ->whereNotNull('time_out')
             ->latest('time_out');
 

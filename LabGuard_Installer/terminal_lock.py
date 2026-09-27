@@ -750,6 +750,9 @@ class LabGuardClient:
     # =================================================================
     # PAGE 2: BUILD HARDWARE CHECKLIST (6 SPECIFIED HARDWARE ITEMS)
     # =================================================================
+    # =================================================================
+    # PAGE 2: BUILD HARDWARE CHECKLIST
+    # =================================================================
     def show_checklist_screen(self, student_name):
         self.login_view.pack_forget()
         for widget in self.checklist_view.winfo_children():
@@ -788,7 +791,6 @@ class LabGuardClient:
             wraplength=650,
         ).pack(pady=(0, 16))
 
-        # UPDATED 6 CHECKLIST ITEMS AS SPECIFIED:
         self.hardware_items = [
             {"id": "system_unit", "icon": "🖥️", "title": "System Unit", "desc": "Power button working, casing sealed, no abnormal fan noise."},
             {"id": "monitor",     "icon": "🖥️", "title": "Display Monitor", "desc": "Screen clear, no cracks, lines, or video signal loss."},
@@ -799,6 +801,8 @@ class LabGuardClient:
         ]
 
         self.check_states = {}
+        self.checklist_widgets = {}  # Stores widget references for instant updates
+
         cards_container = tk.Frame(self.checklist_view, bg="#0f172a")
         cards_container.pack(pady=4)
 
@@ -841,22 +845,20 @@ class LabGuardClient:
             )
             desc_lbl.pack(anchor="w")
 
-            def toggle_item(v=var, lbl=lbl_check, crd=card):
-                new_val = not v.get()
-                v.set(new_val)
-                if new_val:
-                    lbl.config(text="[ ✔ ]", fg="#10b981")
-                    crd.config(highlightbackground="#10b981")
-                else:
-                    lbl.config(text="[ ✕ ]", fg="#ef4444")
-                    crd.config(highlightbackground="#ef4444")
+            # Store references so Select All can update text and border immediately
+            self.checklist_widgets[item["id"]] = {
+                "var": var,
+                "lbl": lbl_check,
+                "card": card
+            }
+
+            def toggle_item(item_id=item["id"]):
+                current_val = self.checklist_widgets[item_id]["var"].get()
+                self._set_checklist_item_state(item_id, not current_val)
                 self._update_checklist_button_state()
 
-            card.bind("<Button-1>", lambda e, func=toggle_item: func())
-            lbl_check.bind("<Button-1>", lambda e, func=toggle_item: func())
-            content.bind("<Button-1>", lambda e, func=toggle_item: func())
-            title_lbl.bind("<Button-1>", lambda e, func=toggle_item: func())
-            desc_lbl.bind("<Button-1>", lambda e, func=toggle_item: func())
+            for w in (card, lbl_check, content, title_lbl, desc_lbl):
+                w.bind("<Button-1>", lambda e, func=toggle_item: func())
 
         quick_select_frame = tk.Frame(self.checklist_view, bg="#0f172a")
         quick_select_frame.pack(pady=(8, 12))
@@ -880,7 +882,6 @@ class LabGuardClient:
         action_frame = tk.Frame(self.checklist_view, bg="#0f172a")
         action_frame.pack(pady=5)
 
-        # Unrestricted: Can proceed even if some items are left unchecked
         self.btn_proceed = tk.Button(
             action_frame,
             text="CONFIRM & PROCEED TO DESKTOP",
@@ -912,7 +913,6 @@ class LabGuardClient:
         )
         btn_cancel.pack(side="left", padx=8)
 
-        # Relocated report trigger
         report_pill = tk.Frame(self.checklist_view, bg="#1e293b", cursor="hand2")
         report_pill.pack(pady=(18, 0))
 
@@ -932,11 +932,24 @@ class LabGuardClient:
         for w in (report_pill, lbl_warn_icon, lbl_warn_text):
             w.bind("<Button-1>", lambda e: self.open_report_overlay(prefill=True))
 
+    def _set_checklist_item_state(self, item_id, is_checked):
+        """Sets both the boolean state and the visual checkmark/border color."""
+        if item_id in self.checklist_widgets:
+            widget_data = self.checklist_widgets[item_id]
+            widget_data["var"].set(is_checked)
+            if is_checked:
+                widget_data["lbl"].config(text="[ ✔ ]", fg="#10b981")
+                widget_data["card"].config(highlightbackground="#10b981")
+            else:
+                widget_data["lbl"].config(text="[ ✕ ]", fg="#ef4444")
+                widget_data["card"].config(highlightbackground="#ef4444")
+
     def select_all_checklist_items(self):
-        self.show_checklist_screen(self.current_student["name"])
-        for item_id, var in self.check_states.items():
-            var.set(True)
+        """Marks all items operational without destroying the DOM."""
+        for item_id in self.checklist_widgets.keys():
+            self._set_checklist_item_state(item_id, True)
         self._update_checklist_button_state()
+    
 
     def _update_checklist_button_state(self):
         checked_count = sum(1 for v in self.check_states.values() if v.get())
@@ -1217,9 +1230,8 @@ class LabGuardClient:
 
         threading.Thread(target=execute_connection, daemon=True).start()
 
-    # =================================================================
-    # FIXED: RELOCATED & STREAMLINED ISSUE REPORT OVERLAY
-    # Uses ttk.Combobox (state=readonly) & modal transient to prevent auto-close
+   # =================================================================
+    # RELOCATED & STREAMLINED ISSUE REPORT OVERLAY
     # =================================================================
     def open_report_overlay(self, prefill=False):
         if self.overlay and self.overlay.winfo_exists():
@@ -1232,7 +1244,7 @@ class LabGuardClient:
         self.overlay.overrideredirect(True)
 
         width = 480
-        height = 490 if prefill else 640
+        height = 540 if prefill else 660
 
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
@@ -1240,8 +1252,6 @@ class LabGuardClient:
         y = (screen_h // 2) - (height // 2)
         self.overlay.geometry(f"{width}x{height}+{x}+{y}")
         self.overlay.attributes("-topmost", True)
-        
-        # Make modal transient without grab_set conflict (fixes dropdown closing bug)
         self.overlay.transient(self.root)
 
         tk.Label(self.overlay, text="REPORT A PROBLEM", fg="#ef4444", bg="#1e293b", font=("Arial Black", 16)).pack(pady=(22, 2))
@@ -1285,7 +1295,7 @@ class LabGuardClient:
 
         tk.Label(self.overlay, text="Problem Category", fg="white", bg="#1e293b", font=("Arial", 9, "bold")).pack(anchor="w", padx=50, pady=(6, 2))
 
-        # Replaced tk.OptionMenu with ttk.Combobox (Fixes dropdown instantly closing!)
+        # --- CUSTOM IN-FRAME DROPDOWN (IMMUNE TO FOCUS-OUT DISMISSAL) ---
         categories = [
             "Missing / Faulty Hardware",
             "System Unit / Tower Issue",
@@ -1297,33 +1307,57 @@ class LabGuardClient:
             "No Internet / Wi-Fi Problem",
             "Other Terminal Concern"
         ]
-        
         self.issue_var = tk.StringVar(value=categories[0])
-        
-        # Configure dark styling for Combobox
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure("Dark.TCombobox", 
-            fieldbackground="#0f172a",
-            background="#1e293b",
-            foreground="white",
-            darkcolor="#334155",
-            lightcolor="#334155",
-            bordercolor="#334155",
-            arrowcolor="#D4AF37",
-            selectbackground="#D4AF37",
-            selectforeground="black"
-        )
-        
-        self.combo_category = ttk.Combobox(
-            self.overlay,
-            textvariable=self.issue_var,
-            values=categories,
-            state="readonly",
-            style="Dark.TCombobox",
-            font=("Arial", 10)
-        )
-        self.combo_category.pack(fill="x", padx=50, ipady=4)
+
+        dropdown_btn = tk.Frame(self.overlay, bg="#0f172a", cursor="hand2", highlightthickness=1, highlightbackground="#334155")
+        dropdown_btn.pack(fill="x", padx=50, ipady=6)
+
+        lbl_selected = tk.Label(dropdown_btn, textvariable=self.issue_var, fg="white", bg="#0f172a", font=("Arial", 10), cursor="hand2")
+        lbl_selected.pack(side="left", padx=10)
+
+        lbl_arrow = tk.Label(dropdown_btn, text="▼", fg="#D4AF37", bg="#0f172a", font=("Arial", 9), cursor="hand2")
+        lbl_arrow.pack(side="right", padx=10)
+
+        # Popup frame placed directly on top of remarks box when opened
+        options_frame = tk.Frame(self.overlay, bg="#1e293b", highlightthickness=1, highlightbackground="#D4AF37")
+
+        for cat in categories:
+            row = tk.Label(
+                options_frame, text=cat, fg="white", bg="#1e293b",
+                font=("Arial", 9), anchor="w", padx=10, pady=4, cursor="hand2"
+            )
+            row.pack(fill="x")
+
+            def make_hover(r=row):
+                r.bind("<Enter>", lambda e: r.config(bg="#334155", fg="#D4AF37"))
+                r.bind("<Leave>", lambda e: r.config(bg="#1e293b", fg="white"))
+            make_hover()
+
+            def pick_option(c=cat):
+                self.issue_var.set(c)
+                options_frame.place_forget()
+                lbl_arrow.config(text="▼")
+
+            row.bind("<Button-1>", lambda e, func=pick_option: func())
+
+        def toggle_dropdown(e=None):
+            if options_frame.winfo_ismapped():
+                options_frame.place_forget()
+                lbl_arrow.config(text="▼")
+            else:
+                # Dynamically position options directly beneath the selector button
+                dropdown_btn.update_idletasks()
+                bx = dropdown_btn.winfo_x()
+                by = dropdown_btn.winfo_y() + dropdown_btn.winfo_height()
+                bw = dropdown_btn.winfo_width()
+                options_frame.place(x=bx, y=by, width=bw)
+                options_frame.lift()
+                lbl_arrow.config(text="▲")
+
+        dropdown_btn.bind("<Button-1>", toggle_dropdown)
+        lbl_selected.bind("<Button-1>", toggle_dropdown)
+        lbl_arrow.bind("<Button-1>", toggle_dropdown)
+        # --- END CUSTOM DROPDOWN ---
 
         tk.Label(self.overlay, text="Describe the Problem", fg="white", bg="#1e293b", font=("Arial", 9, "bold")).pack(anchor="w", padx=50, pady=(10, 2))
         self.remarks_box = tk.Text(self.overlay, height=4, font=("Arial", 10), bg="#0f172a", fg="white", border=0, padx=12, pady=8, insertbackground="white")

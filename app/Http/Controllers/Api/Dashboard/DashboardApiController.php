@@ -7,14 +7,18 @@ use App\Models\Computer;
 use App\Models\Lab;
 use App\Models\LabSession;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
+use Illuminate\Validation\Rules\Password;
 
-class DashboardController extends Controller
+class DashboardApiController extends Controller
 {
-    public function index()
+    /**
+     * Dashboard home stats and listings.
+     */
+    public function index(): JsonResponse
     {
         Computer::cleanupStaleSessions();
 
@@ -34,13 +38,16 @@ class DashboardController extends Controller
         return response()->json([
             'totalComputers' => $totalComputers,
             'activeStations' => $activeStations,
-            'labs' => $labs,
-            'computers' => $computers,
-            'alertsToday' => $alertsToday,
+            'labs'           => $labs,
+            'computers'      => $computers,
+            'alertsToday'    => $alertsToday,
         ]);
     }
 
-    public function userManagement()
+    /**
+     * User management listing with pagination.
+     */
+    public function userManagement(): JsonResponse
     {
         $users = User::where('role', '!=', 'super-admin')
             ->orderBy('created_at', 'desc')
@@ -49,52 +56,68 @@ class DashboardController extends Controller
         return response()->json($users);
     }
 
-    public function storeUser(Request $request)
+    /**
+     * Store a new user.
+     */
+    public function storeUser(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', Rules\Password::defaults()],
-            'role' => ['required', 'in:student,personnel'],
+            'name'           => ['required', 'string', 'max:255'],
+            'email'          => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'password'       => [
+                'required',
+                'string',
+                Password::min(8)
+                    ->mixedCase()
+                    ->numbers()
+                    ->symbols(),
+            ],
+            'role'           => ['required', 'in:student,personnel'],
             'student_number' => ['required', 'string', 'unique:users', 'regex:/^01-[0-9]{4}-[0-9]{6}$/'],
-            'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
+            'phone'          => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
         ]);
 
         $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
-            'student_number' => $validated['student_number'],
-            'phone' => $validated['phone'],
+            'name'              => $validated['name'],
+            'email'             => $validated['email'],
+            'password'          => Hash::make($validated['password']),
+            'role'              => $validated['role'],
+            'student_number'    => $validated['student_number'],
+            'phone'             => $validated['phone'],
             'email_verified_at' => now(),
         ]);
 
         return response()->json([
             'message' => 'User successfully enrolled in LabGuard.',
-            'user' => $user,
+            'user'    => $user,
         ], 201);
     }
 
-    public function updateUser(Request $request, User $user)
+    /**
+     * Update user details.
+     */
+    public function updateUser(Request $request, User $user): JsonResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'name'           => ['required', 'string', 'max:255'],
+            'email'          => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
             'student_number' => ['required', 'string', 'unique:users,student_number,' . $user->id],
-            'phone' => ['required', 'string', 'max:20'],
-            'role' => ['required', 'in:student,personnel,admin'],
+            'phone'          => ['required', 'string', 'max:20'],
+            'role'           => ['required', 'in:student,personnel,admin'],
         ]);
 
         $user->update($validated);
 
         return response()->json([
             'message' => "Profile for {$user->name} has been updated.",
-            'user' => $user,
+            'user'    => $user,
         ]);
     }
 
-    public function destroyUser(User $user)
+    /**
+     * Delete user record.
+     */
+    public function destroyUser(User $user): JsonResponse
     {
         if ($user->role === 'super-admin' || $user->id === auth()->id()) {
             return response()->json([
@@ -109,7 +132,10 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function terminateSession(Request $request, LabSession $session)
+    /**
+     * Terminate an active session.
+     */
+    public function terminateSession(LabSession $session): JsonResponse
     {
         $session->update([
             'logout_at' => now(),
@@ -126,10 +152,13 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function storeNewLaboratory(Request $request)
+    /**
+     * Store new lab and generate computers.
+     */
+    public function storeNewLaboratory(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:labs,name',
+            'name'     => 'required|string|max:255|unique:labs,name',
             'location' => 'required|string|max:255',
             'pc_count' => 'required|integer|min:1|max:100',
         ]);
@@ -138,7 +167,7 @@ class DashboardController extends Controller
             DB::beginTransaction();
 
             $lab = Lab::create([
-                'name' => $validated['name'],
+                'name'     => $validated['name'],
                 'location' => $validated['location'],
             ]);
 
@@ -146,14 +175,14 @@ class DashboardController extends Controller
 
             for ($i = 1; $i <= $validated['pc_count']; $i++) {
                 $paddedIndex = str_pad($i, 2, '0', STR_PAD_LEFT);
-                $pcNumber = 'PC-' . $paddedIndex;
-                $assetTag = "AST-{$labPrefix}-PC{$paddedIndex}";
+                $pcNumber    = 'PC-' . $paddedIndex;
+                $assetTag    = "AST-{$labPrefix}-PC{$paddedIndex}";
 
                 $lab->computers()->create([
-                    'pc_number' => $pcNumber,
-                    'asset_tag' => $assetTag,
-                    'serial_number' => null,
-                    'status' => 'available',
+                    'pc_number'       => $pcNumber,
+                    'asset_tag'       => $assetTag,
+                    'serial_number'   => null,
+                    'status'          => 'available',
                     'current_student' => null,
                 ]);
             }
@@ -162,20 +191,22 @@ class DashboardController extends Controller
 
             return response()->json([
                 'message' => "Facility {$lab->name} initialized with {$validated['pc_count']} active computers.",
-                'lab' => $lab->load('computers'),
+                'lab'     => $lab->load('computers'),
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json([
-                'message' => 'Critical System Error: Could not initialize facility nodes.',
-                'error' => $e->getMessage(),
+                'message' => 'Critical System Error: Could not initialize facility nodes. ' . $e->getMessage(),
             ], 500);
         }
     }
 
-    public function import(Request $request)
-    {   
+    /**
+     * Import users from CSV.
+     */
+    public function import(Request $request): JsonResponse
+    {
         $request->validate([
             'file' => 'required|mimes:csv,txt|max:5120',
         ]);
@@ -199,18 +230,18 @@ class DashboardController extends Controller
         }, $rawHeader);
 
         $requiredColumns = ['name', 'email', 'student_number', 'phone', 'role', 'password'];
-        $missingColumns = array_diff($requiredColumns, $header);
+        $missingColumns  = array_diff($requiredColumns, $header);
 
         if (!empty($missingColumns)) {
             fclose($handle);
+            $missingStr = implode(', ', $missingColumns);
             return response()->json([
-                'message' => 'Missing required columns.',
-                'missing' => array_values($missingColumns)
+                'message' => "Missing required columns: {$missingStr}",
             ], 422);
         }
 
         $importedCount = 0;
-        $skippedCount = 0;
+        $skippedCount  = 0;
 
         DB::beginTransaction();
 
@@ -225,9 +256,8 @@ class DashboardController extends Controller
                     continue;
                 }
 
-                $data = array_combine($header, $row);
-
-                $email = trim($data['email'] ?? '');
+                $data          = array_combine($header, $row);
+                $email         = trim($data['email'] ?? '');
                 $studentNumber = trim($data['student_number'] ?? '');
 
                 if (empty($email) || User::where('email', $email)->orWhere('student_number', $studentNumber)->exists()) {
@@ -236,12 +266,12 @@ class DashboardController extends Controller
                 }
 
                 User::create([
-                    'name' => trim($data['name']),
-                    'email' => $email,
+                    'name'           => trim($data['name']),
+                    'email'          => $email,
                     'student_number' => $studentNumber,
-                    'phone' => trim($data['phone']),
-                    'role' => in_array(strtolower(trim($data['role'])), ['student', 'personnel', 'admin']) ? strtolower(trim($data['role'])) : 'student',
-                    'password' => Hash::make(trim($data['password'])),
+                    'phone'          => trim($data['phone']),
+                    'role'           => in_array(strtolower(trim($data['role'])), ['student', 'personnel', 'admin']) ? strtolower(trim($data['role'])) : 'student',
+                    'password'       => Hash::make(trim($data['password'])),
                 ]);
 
                 $importedCount++;
@@ -250,22 +280,28 @@ class DashboardController extends Controller
             DB::commit();
             fclose($handle);
 
+            if ($importedCount === 0) {
+                return response()->json([
+                    'type'    => 'warning',
+                    'message' => "No new users were imported. ({$skippedCount} duplicate or invalid records skipped).",
+                ]);
+            }
+
             $message = "Successfully enrolled {$importedCount} new user(s).";
             if ($skippedCount > 0) {
                 $message .= " ({$skippedCount} duplicate/invalid records were skipped).";
             }
 
             return response()->json([
+                'type'    => 'success',
                 'message' => $message,
-                'imported_count' => $importedCount,
-                'skipped_count' => $skippedCount,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
             fclose($handle);
 
             return response()->json([
-                'message' => 'Import failed: ' . $e->getMessage(),
+                'message' => 'Critical System Error: ' . $e->getMessage(),
             ], 500);
         }
     }

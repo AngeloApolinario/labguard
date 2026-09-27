@@ -78,15 +78,30 @@
         @endif
     </div>
 
-    {{-- Main Container (Includes Archive Modal & Overlap Interceptor) --}}
+    {{-- Main Container --}}
     <div x-data="{ 
             mode: '{{ old('schedule_type', 'class') }}',
             subjectCode: '{{ old('subject_code', '') }}',
             checkingOverlap: false,
             conflictModal: false,
             archiveModal: false,
+            purgeModal: false,
+            purgeType: 'day',
             conflict: null,
             confirmOverlap: false,
+            activeDay: new URLSearchParams(window.location.search).get('day') || 'All',
+
+            setDay(day) {
+                this.activeDay = day;
+                const url = new URL(window.location);
+                url.searchParams.set('day', day);
+                window.history.replaceState({}, '', url);
+            },
+
+            openPurgeModal(type) {
+                this.purgeType = type;
+                this.purgeModal = true;
+            },
 
             async handleFormSubmit(event) {
                 if (this.confirmOverlap) {
@@ -131,7 +146,7 @@
                 });
             }
         }"
-        @keydown.escape.window="conflictModal = false; archiveModal = false"
+        @keydown.escape.window="conflictModal = false; archiveModal = false; purgeModal = false"
         class="py-6 sm:py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen bg-[#F8FAFC]">
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-10 items-start">
@@ -216,14 +231,14 @@
                             <span class="text-[8px] font-black text-slate-400 uppercase tracking-wider">Presets:</span>
                             <template x-if="mode === 'class'">
                                 <div class="flex items-center gap-1.5">
-                                    <button type="button" @click="subjectCode = 'OPEN LAB'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-[#D4AF37]/20 hover:text-[#D4AF37] border border-slate-200">OPEN LAB</button>
-                                    <button type="button" @click="subjectCode = 'FREE LAB'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-[#D4AF37]/20 hover:text-[#D4AF37] border border-slate-200">FREE LAB</button>
+                                    <button type="button" @click="subjectCode = 'OPEN LAB'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-[#D4AF37]/20 hover:text-[#D4AF37] border border-slate-200 cursor-pointer">OPEN LAB</button>
+                                    <button type="button" @click="subjectCode = 'FREE LAB'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-[#D4AF37]/20 hover:text-[#D4AF37] border border-slate-200 cursor-pointer">FREE LAB</button>
                                 </div>
                             </template>
                             <template x-if="mode === 'event'">
                                 <div class="flex items-center gap-1.5">
-                                    <button type="button" @click="subjectCode = 'WORKSHOP: AI 101'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-purple-100 hover:text-purple-700 border border-slate-200">WORKSHOP</button>
-                                    <button type="button" @click="subjectCode = 'HACKATHON'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-purple-100 hover:text-purple-700 border border-slate-200">HACKATHON</button>
+                                    <button type="button" @click="subjectCode = 'WORKSHOP: AI 101'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-purple-100 hover:text-purple-700 border border-slate-200 cursor-pointer">WORKSHOP</button>
+                                    <button type="button" @click="subjectCode = 'HACKATHON'" class="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[8px] font-black uppercase tracking-wider hover:bg-purple-100 hover:text-purple-700 border border-slate-200 cursor-pointer">HACKATHON</button>
                                 </div>
                             </template>
                         </div>
@@ -250,9 +265,7 @@
                     </button>
                 </form>
 
-                {{-- ========================================================================= --}}
-                {{-- CONFLICT OVERRIDE MODAL --}}
-                {{-- ========================================================================= --}}
+                {{-- Conflict Override Modal --}}
                 <div x-cloak x-show="conflictModal" class="fixed inset-0 z-[150] overflow-y-auto" role="dialog" aria-modal="true">
                     <div x-show="conflictModal" x-transition class="fixed inset-0 bg-slate-950/80 backdrop-blur-md"></div>
                     <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
@@ -283,10 +296,10 @@
                             </p>
 
                             <div class="flex gap-2.5">
-                                <button type="button" @click="forceProceed()" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-[#D4AF37] text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95 transition">
+                                <button type="button" @click="forceProceed()" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-[#D4AF37] text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95 transition cursor-pointer">
                                     Confirm & Override
                                 </button>
-                                <button type="button" @click="conflictModal = false" class="flex-1 py-3 bg-slate-800 text-slate-300 font-bold text-xs uppercase rounded-xl border border-slate-700 hover:bg-slate-700 transition">
+                                <button type="button" @click="conflictModal = false" class="flex-1 py-3 bg-slate-800 text-slate-300 font-bold text-xs uppercase rounded-xl border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
                                     Cancel
                                 </button>
                             </div>
@@ -297,34 +310,53 @@
             </div>
 
             {{-- 2. ACTIVE ROSTER & ATTENDANCE EXPORT DISPLAY --}}
-            <div class="lg:col-span-2 bg-slate-900 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl flex flex-col border border-slate-800/80 overflow-hidden"
-                x-data="{ 
-                    activeDay: new URLSearchParams(window.location.search).get('day') || 'All',
-                    setDay(day) {
-                        this.activeDay = day;
-                        const url = new URL(window.location);
-                        url.searchParams.set('day', day);
-                        window.history.replaceState({}, '', url);
-                    }
-                 }">
+            <div class="lg:col-span-2 bg-slate-900 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl flex flex-col border border-slate-800/80 overflow-hidden">
 
-                {{-- Header & Archive Modal Trigger --}}
+                {{-- Header & Batch Purge Controls --}}
                 <div class="mb-6 pb-6 border-b border-slate-800/80 flex flex-col gap-4">
-                    <div class="flex items-center justify-between">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
                             <h4 class="text-white font-black uppercase tracking-tighter text-lg sm:text-xl">Active <span class="text-[#D4AF37]">Roster</span></h4>
                             <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Filtering by: <span class="text-[#D4AF37]" x-text="activeDay"></span></p>
                         </div>
 
-                        {{-- Event Archive & Past Attendance Trigger --}}
-                        <button type="button"
-                            @click="archiveModal = true"
-                            class="px-4 py-2 bg-[#D4AF37]/10 hover:bg-[#D4AF37] text-[#D4AF37] hover:text-slate-950 border border-[#D4AF37]/30 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer">
-                            <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                            </svg>
-                            <span>Past Events & Attendance ({{ count($pastEvents) }})</span>
-                        </button>
+                        {{-- Action Controls Group --}}
+                        <div class="flex items-center flex-wrap gap-2">
+
+                            {{-- Event Archive & Past Attendance Trigger --}}
+                            <button type="button"
+                                @click="archiveModal = true"
+                                class="px-3.5 py-2 bg-[#D4AF37]/10 hover:bg-[#D4AF37] text-[#D4AF37] hover:text-slate-950 border border-[#D4AF37]/30 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer">
+                                <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                                </svg>
+                                <span>Archive ({{ count($pastEvents) }})</span>
+                            </button>
+
+                            {{-- Dynamic "Revoke Day" Button (Adapts to Active Day Filter) --}}
+                            <template x-if="activeDay !== 'All'">
+                                <button type="button"
+                                    x-transition
+                                    @click="openPurgeModal('day')"
+                                    class="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer group">
+                                    <svg class="size-3.5 text-rose-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    <span>Revoke <span x-text="activeDay"></span></span>
+                                </button>
+                            </template>
+
+                            {{-- Global "Revoke All" Button --}}
+                            <button type="button"
+                                @click="openPurgeModal('all')"
+                                class="px-3.5 py-2 bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-700/80 hover:border-rose-500/40 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer">
+                                <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <span>Revoke All</span>
+                            </button>
+
+                        </div>
                     </div>
 
                     {{-- Day Filter Chips --}}
@@ -410,7 +442,6 @@
                                 {{-- Action / Event Attendance Export --}}
                                 <td class="py-4 text-right">
                                     <div class="flex items-center justify-end gap-2">
-                                        {{-- If Event: Show High-Visibility Attendance Download Button --}}
                                         @if($isEvent)
                                         <a href="{{ route('dashboard.labs.schedule.exportEvent', $entry->id) }}"
                                             title="Download Event Attendance CSV"
@@ -425,7 +456,7 @@
                                         <form action="{{ route('dashboard.labs.schedule.destroy', $entry->id) }}" method="POST" onsubmit="return confirm('Revoke this slot?')">
                                             @csrf @method('DELETE')
                                             <input type="hidden" name="day" :value="activeDay">
-                                            <button class="text-rose-400 hover:text-rose-300 text-[9px] font-black uppercase tracking-widest border border-rose-500/20 px-3 py-1.5 rounded-xl hover:bg-rose-500/10 active:scale-95 transition-all">
+                                            <button class="text-rose-400 hover:text-rose-300 text-[9px] font-black uppercase tracking-widest border border-rose-500/20 px-3 py-1.5 rounded-xl hover:bg-rose-500/10 active:scale-95 transition-all cursor-pointer">
                                                 Revoke
                                             </button>
                                         </form>
@@ -499,7 +530,70 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- 3. PAST EVENTS ARCHIVE & ATTENDANCE DOWNLOAD MODAL --}}
+        {{-- 3. BATCH PURGE / REVOCATION CONFIRMATION MODAL --}}
+        {{-- ========================================================================= --}}
+        <div x-cloak x-show="purgeModal" class="fixed inset-0 z-[170] overflow-y-auto" role="dialog" aria-modal="true">
+            <div x-show="purgeModal" x-transition class="fixed inset-0 bg-slate-950/85 backdrop-blur-xl" @click="purgeModal = false"></div>
+            <div class="flex min-h-screen items-center justify-center p-4 text-center sm:p-0">
+                <div x-show="purgeModal" x-transition class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-rose-500/30 shadow-2xl shadow-rose-950/50 p-6 sm:p-8 text-left text-white max-w-md w-full">
+
+                    {{-- Alert Header --}}
+                    <div class="flex items-center gap-3.5 mb-5">
+                        <div class="size-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <div>
+                            <span class="text-[9px] font-mono uppercase tracking-widest text-rose-400 font-bold">Destructive Protocol</span>
+                            <h3 class="text-base sm:text-lg font-black uppercase text-white" x-text="purgeType === 'all' ? 'Purge Entire Roster' : 'Revoke ' + activeDay + ' Slots'"></h3>
+                        </div>
+                    </div>
+
+                    {{-- Target Details Box --}}
+                    <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/60 mb-5 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[8px] font-black uppercase text-slate-400">Target Laboratory</span>
+                            <span class="text-xs font-black text-[#D4AF37]">{{ $lab->name }}</span>
+                        </div>
+                        <div class="flex items-center justify-between border-t border-slate-700/50 pt-2">
+                            <span class="text-[8px] font-black uppercase text-slate-400">Purge Scope</span>
+                            <span class="text-xs font-mono font-bold text-white" x-text="purgeType === 'all' ? 'All Days (Mon — Sat)' : activeDay + ' Allocations'"></span>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
+                        <template x-if="purgeType === 'all'">
+                            <span>This will <strong class="text-rose-400">permanently delete every recurring schedule and event</strong> across all days for this facility. This action is irreversible.</span>
+                        </template>
+                        <template x-if="purgeType === 'day'">
+                            <span>This will <strong class="text-rose-400">remove all slots assigned on <span x-text="activeDay"></span></strong>. Allocations for other days will remain untouched.</span>
+                        </template>
+                    </p>
+
+                    <form action="{{ route('dashboard.labs.schedule.destroyByDay', $lab->id) }}" method="POST">
+                        @csrf
+                        @method('DELETE')
+                        <input type="hidden" name="day" :value="purgeType === 'all' ? 'All' : activeDay">
+
+                        <div class="flex gap-2.5">
+                            <button type="submit" class="flex-1 py-3 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs uppercase rounded-xl active:scale-95 transition shadow-lg shadow-rose-900/40 cursor-pointer flex items-center justify-center gap-1.5">
+                                <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                <span>Confirm & Revoke</span>
+                            </button>
+                            <button type="button" @click="purgeModal = false" class="flex-1 py-3 bg-slate-800 text-slate-300 font-bold text-xs uppercase rounded-xl border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
+                                Abort
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {{-- ========================================================================= --}}
+        {{-- 4. PAST EVENTS ARCHIVE & ATTENDANCE DOWNLOAD MODAL --}}
         {{-- ========================================================================= --}}
         <div x-cloak x-show="archiveModal" class="fixed inset-0 z-[160] overflow-y-auto" role="dialog" aria-modal="true">
             <div x-show="archiveModal" x-transition class="fixed inset-0 bg-slate-950/80 backdrop-blur-md" @click="archiveModal = false"></div>
@@ -511,7 +605,7 @@
                             <h3 class="text-lg font-black uppercase tracking-tight text-white">Event Attendance Archive</h3>
                             <p class="text-[9px] font-mono uppercase tracking-widest text-slate-400">Download attendance reports for completed events</p>
                         </div>
-                        <button type="button" @click="archiveModal = false" class="text-slate-400 hover:text-white p-1">✕</button>
+                        <button type="button" @click="archiveModal = false" class="text-slate-400 hover:text-white p-1 cursor-pointer">✕</button>
                     </div>
 
                     <div class="max-h-96 overflow-y-auto space-y-3 custom-scroll pr-1">
@@ -544,7 +638,7 @@
                     </div>
 
                     <div class="mt-6 pt-4 border-t border-slate-800 text-right">
-                        <button type="button" @click="archiveModal = false" class="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase rounded-xl">
+                        <button type="button" @click="archiveModal = false" class="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase rounded-xl cursor-pointer">
                             Close Archive
                         </button>
                     </div>

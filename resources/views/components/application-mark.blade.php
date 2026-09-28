@@ -1,9 +1,16 @@
-<div {{ $attributes->merge(['class' => 'relative inline-flex items-center justify-center w-9 h-9 rounded-lg bg-slate-900 border border-amber-500/40 shadow-sm']) }}>
-  <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    <rect x="8.5" y="8" width="7" height="5" rx="1" fill="currentColor" fill-opacity="0.25" stroke="currentColor" stroke-width="1.5" />
-    <path d="M10 16h4" stroke-width="1.5" />
-  </svg>
-  <!-- Green status indicator -->
-  <span class="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-slate-900"></span>
-</div>
+<svg {{ $attributes->merge(['class' => 'h-9 w-9 shrink-0']) }} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark Container Background with Gold Border -->
+  <rect width="36" height="36" rx="9" fill="#0f172a" />
+  <rect width="36" height="36" rx="9" stroke="#D4AF37" stroke-opacity="0.4" stroke-width="1.5" />
+
+  <!-- Gold Security Shield -->
+  <path d="M18 29s8-4 8-10.5V11L18 8l-8 3v7.5C10 25 18 29 18 29z" fill="#D4AF37" fill-opacity="0.15" stroke="#D4AF37" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Workstation Terminal Screen -->
+  <rect x="13.5" y="13" width="9" height="6" rx="1" fill="#D4AF37" fill-opacity="0.3" stroke="#D4AF37" stroke-width="1.4" />
+  <path d="M15.5 22h5" stroke="#D4AF37" stroke-width="1.4" stroke-linecap="round" />
+  <path d="M18 19v3" stroke="#D4AF37" stroke-width="1.4" />
+
+  <!-- Crisp Vector Green Online Indicator (Cannot expand or distort) -->
+  <circle cx="28" cy="8" r="3.5" fill="#10b981" stroke="#0f172a" stroke-width="1.5" />
+</svg>

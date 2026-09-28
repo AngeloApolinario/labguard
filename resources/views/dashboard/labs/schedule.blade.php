@@ -82,6 +82,7 @@
     <div x-data="{ 
             mode: '{{ old('schedule_type', 'class') }}',
             subjectCode: '{{ old('subject_code', '') }}',
+            eventDate: '{{ old('event_date', now()->toDateString()) }}',
             checkingOverlap: false,
             conflictModal: false,
             archiveModal: false,
@@ -90,6 +91,15 @@
             conflict: null,
             confirmOverlap: false,
             activeDay: new URLSearchParams(window.location.search).get('day') || 'All',
+
+            get calculatedDay() {
+                if (!this.eventDate) return 'Monday';
+                const parts = this.eventDate.split('-');
+                if (parts.length !== 3) return 'Monday';
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                return days[d.getDay()] || 'Monday';
+            },
 
             setDay(day) {
                 this.activeDay = day;
@@ -173,13 +183,16 @@
 
                 <form id="scheduleEntryForm" action="{{ route('dashboard.labs.schedule.store', $lab->id) }}" method="POST" @submit.prevent="handleFormSubmit" class="space-y-4">
                     @csrf
+                    {{-- Hidden control inputs --}}
                     <input type="hidden" name="schedule_type" :value="mode">
                     <input type="hidden" name="confirm_overlap" :value="confirmOverlap ? 1 : 0">
+                    {{-- Explicitly send is_event = 1 when mode is 'event', 0 when 'class' --}}
+                    <input type="hidden" name="is_event" :value="mode === 'event' ? 1 : 0">
 
                     {{-- Class: Instructor Selection --}}
                     <div x-show="mode === 'class'">
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Authorized Teacher</label>
-                        <select name="user_id" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                        <select name="user_id" :disabled="mode === 'event'" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                             <option value="" disabled selected>Select Instructor...</option>
                             @foreach($teachers as $teacher)
                             <option value="{{ $teacher->id }}" {{ old('user_id') == $teacher->id ? 'selected' : '' }}>{{ $teacher->name }}</option>
@@ -192,6 +205,7 @@
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Speaker / Host (No Teacher Required)</label>
                         <input type="text"
                             name="speaker_name"
+                            :disabled="mode === 'class'"
                             value="{{ old('speaker_name') }}"
                             placeholder="E.g. Engr. Maria Santos (Keynote Speaker)"
                             class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-bold text-slate-800 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
@@ -200,21 +214,25 @@
                     {{-- Class: Day Selection --}}
                     <div x-show="mode === 'class'">
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Recurring Day</label>
-                        <select name="day" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                        <select name="day" :disabled="mode === 'event'" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                             @foreach(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $day)
                             <option value="{{ $day }}" {{ old('day') == $day ? 'selected' : '' }}>Every {{ $day }}</option>
                             @endforeach
                         </select>
                     </div>
 
-                    {{-- Event: Calendar Date Input --}}
+                    {{-- Event: Calendar Date Input & Automatic Day Name --}}
                     <div x-show="mode === 'event'" style="display: none;">
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Event Date (Masks Class on this Day)</label>
                         <input type="date"
                             name="event_date"
-                            value="{{ old('event_date', now()->toDateString()) }}"
+                            x-model="eventDate"
+                            :disabled="mode === 'class'"
                             min="{{ now()->toDateString() }}"
                             class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-mono font-bold text-slate-800 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all [color-scheme:light]">
+
+                        {{-- Automatically sends the correct Day name (e.g. Wednesday) calculated from event_date --}}
+                        <input type="hidden" name="day" :value="calculatedDay" :disabled="mode !== 'event'">
                     </div>
 
                     {{-- Subject / Title Input --}}

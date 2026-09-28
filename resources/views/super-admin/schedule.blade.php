@@ -33,11 +33,6 @@
         }
     </style>
 
-    @php
-    // Dynamically detects if accessed from super-admin or dashboard
-    $routePrefix = request()->is('super-admin*') ? 'super-admin' : 'dashboard';
-    @endphp
-
     <x-slot name="header">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -47,7 +42,7 @@
                 <div class="flex items-center space-x-2 mt-1">
                     <div class="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
                     <p class="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] sm:tracking-[0.3em]">
-                        Super Admin Master Schedule & Event Allocation
+                        Scheduling & Laboratory Allocation
                     </p>
                 </div>
             </div>
@@ -57,7 +52,7 @@
                     <p class="text-[9px] font-black text-[#D4AF37] uppercase tracking-widest">System Date</p>
                     <p class="text-xs sm:text-sm font-black text-slate-700 uppercase">{{ now()->format('D, M d, Y') }}</p>
                 </div>
-                <a href="{{ Route::has($routePrefix . '.labs') ? route($routePrefix . '.labs') : route('dashboard.labs') }}" class="px-5 py-2.5 bg-slate-800 text-white text-[10px] font-black uppercase rounded-xl hover:bg-slate-700 active:scale-95 transition-all shadow-sm">
+                <a href="{{ route('dashboard.labs') }}" class="px-5 py-2.5 bg-slate-800 text-white text-[10px] font-black uppercase rounded-xl hover:bg-slate-700 active:scale-95 transition-all shadow-sm">
                     Back
                 </a>
             </div>
@@ -81,30 +76,13 @@
             </div>
         </div>
         @endif
-
-        @if(session('error') || $errors->any())
-        <div x-data="{ show: true }" x-init="setTimeout(() => show = false, 8000)" x-show="show"
-            x-transition
-            class="pointer-events-auto bg-slate-900/95 backdrop-blur-xl border border-rose-500/30 shadow-2xl p-4 rounded-2xl flex items-start space-x-3 text-white">
-            <div class="bg-rose-500/20 border border-rose-500/30 p-2 rounded-xl shrink-0">
-                <svg class="size-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-            </div>
-            <div class="min-w-0 flex-1">
-                <p class="text-[10px] font-black uppercase tracking-widest text-rose-400">System Conflict</p>
-                <p class="text-[11px] font-medium text-slate-200 leading-tight mt-0.5 break-words">
-                    {{ session('error') ?? $errors->first() }}
-                </p>
-            </div>
-        </div>
-        @endif
     </div>
 
-    {{-- Main Container with Conflict Detector, Archive Modal, and Batch Purge State --}}
+    {{-- Main Container --}}
     <div x-data="{ 
             mode: '{{ old('schedule_type', 'class') }}',
             subjectCode: '{{ old('subject_code', '') }}',
+            eventDate: '{{ old('event_date', now()->toDateString()) }}',
             checkingOverlap: false,
             conflictModal: false,
             archiveModal: false,
@@ -113,6 +91,15 @@
             conflict: null,
             confirmOverlap: false,
             activeDay: new URLSearchParams(window.location.search).get('day') || 'All',
+
+            get calculatedDay() {
+                if (!this.eventDate) return 'Monday';
+                const parts = this.eventDate.split('-');
+                if (parts.length !== 3) return 'Monday';
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                return days[d.getDay()] || 'Monday';
+            },
 
             setDay(day) {
                 this.activeDay = day;
@@ -137,8 +124,7 @@
                 const formData = new FormData(form);
 
                 try {
-                    const checkUrl = '{{ Route::has($routePrefix . '.labs.schedule.checkConflict') ? route($routePrefix . '.labs.schedule.checkConflict', $lab->id) : route('dashboard.labs.schedule.checkConflict', $lab->id) }}';
-                    const response = await fetch(checkUrl, {
+                    const response = await fetch('{{ route('dashboard.labs.schedule.checkConflict', $lab->id) }}', {
                         method: 'POST',
                         headers: {
                             'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -195,19 +181,18 @@
                     </button>
                 </div>
 
-                <form id="scheduleEntryForm"
-                    action="{{ Route::has($routePrefix . '.labs.schedule.store') ? route($routePrefix . '.labs.schedule.store', $lab->id) : route('dashboard.labs.schedule.store', $lab->id) }}"
-                    method="POST"
-                    @submit.prevent="handleFormSubmit"
-                    class="space-y-4">
+                <form id="scheduleEntryForm" action="{{ route('dashboard.labs.schedule.store', $lab->id) }}" method="POST" @submit.prevent="handleFormSubmit" class="space-y-4">
                     @csrf
+                    {{-- Hidden control inputs --}}
                     <input type="hidden" name="schedule_type" :value="mode">
                     <input type="hidden" name="confirm_overlap" :value="confirmOverlap ? 1 : 0">
+                    {{-- Explicitly send is_event = 1 when mode is 'event', 0 when 'class' --}}
+                    <input type="hidden" name="is_event" :value="mode === 'event' ? 1 : 0">
 
                     {{-- Class: Instructor Selection --}}
                     <div x-show="mode === 'class'">
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Authorized Teacher</label>
-                        <select name="user_id" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                        <select name="user_id" :disabled="mode === 'event'" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                             <option value="" disabled selected>Select Instructor...</option>
                             @foreach($teachers as $teacher)
                             <option value="{{ $teacher->id }}" {{ old('user_id') == $teacher->id ? 'selected' : '' }}>{{ $teacher->name }}</option>
@@ -220,6 +205,7 @@
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Speaker / Host (No Teacher Required)</label>
                         <input type="text"
                             name="speaker_name"
+                            :disabled="mode === 'class'"
                             value="{{ old('speaker_name') }}"
                             placeholder="E.g. Engr. Maria Santos (Keynote Speaker)"
                             class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-bold text-slate-800 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
@@ -228,21 +214,25 @@
                     {{-- Class: Day Selection --}}
                     <div x-show="mode === 'class'">
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Recurring Day</label>
-                        <select name="day" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
+                        <select name="day" :disabled="mode === 'event'" class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all">
                             @foreach(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $day)
                             <option value="{{ $day }}" {{ old('day') == $day ? 'selected' : '' }}>Every {{ $day }}</option>
                             @endforeach
                         </select>
                     </div>
 
-                    {{-- Event: Calendar Date Input --}}
+                    {{-- Event: Calendar Date Input & Automatic Day Name --}}
                     <div x-show="mode === 'event'" style="display: none;">
                         <label class="text-[8px] font-black text-slate-400 uppercase ml-2 mb-1 block">Event Date (Masks Class on this Day)</label>
                         <input type="date"
                             name="event_date"
-                            value="{{ old('event_date', now()->toDateString()) }}"
+                            x-model="eventDate"
+                            :disabled="mode === 'class'"
                             min="{{ now()->toDateString() }}"
                             class="w-full rounded-2xl border-slate-200/80 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-mono font-bold text-slate-800 focus:ring-[#D4AF37] focus:border-[#D4AF37] transition-all [color-scheme:light]">
+
+                        {{-- Automatically sends the correct Day name (e.g. Wednesday) calculated from event_date --}}
+                        <input type="hidden" name="day" :value="calculatedDay" :disabled="mode !== 'event'">
                     </div>
 
                     {{-- Subject / Title Input --}}
@@ -358,7 +348,7 @@
                                 <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                                 </svg>
-                                <span>Archive ({{ count($pastEvents ?? []) }})</span>
+                                <span>Archive ({{ count($pastEvents) }})</span>
                             </button>
 
                             {{-- Dynamic "Revoke Day" Button (Adapts to Active Day Filter) --}}
@@ -471,7 +461,7 @@
                                 <td class="py-4 text-right">
                                     <div class="flex items-center justify-end gap-2">
                                         @if($isEvent)
-                                        <a href="{{ Route::has($routePrefix . '.labs.schedule.exportEvent') ? route($routePrefix . '.labs.schedule.exportEvent', $entry->id) : route('dashboard.labs.schedule.exportEvent', $entry->id) }}"
+                                        <a href="{{ route('dashboard.labs.schedule.exportEvent', $entry->id) }}"
                                             title="Download Event Attendance CSV"
                                             class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#D4AF37] to-amber-600 hover:brightness-110 text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-wider shadow-sm transition active:scale-95">
                                             <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -481,10 +471,10 @@
                                         </a>
                                         @endif
 
-                                        <form action="{{ Route::has($routePrefix . '.labs.schedule.destroy') ? route($routePrefix . '.labs.schedule.destroy', $entry->id) : route('dashboard.labs.schedule.destroy', $entry->id) }}" method="POST" onsubmit="return confirm('Revoke this slot?')">
+                                        <form action="{{ route('dashboard.labs.schedule.destroy', $entry->id) }}" method="POST" onsubmit="return confirm('Revoke this slot?')">
                                             @csrf @method('DELETE')
                                             <input type="hidden" name="day" :value="activeDay">
-                                            <button class="text-rose-400 hover:text-rose-300 text-[9px] font-black uppercase tracking-widest border border-rose-500/20 px-3.5 py-1.5 rounded-xl hover:bg-rose-500/10 active:scale-95 transition-all cursor-pointer">
+                                            <button class="text-rose-400 hover:text-rose-300 text-[9px] font-black uppercase tracking-widest border border-rose-500/20 px-3 py-1.5 rounded-xl hover:bg-rose-500/10 active:scale-95 transition-all cursor-pointer">
                                                 Revoke
                                             </button>
                                         </form>
@@ -521,17 +511,9 @@
                                 @endif
                             </div>
 
-                            <div class="text-right">
-                                @if($isEvent && $entry->event_date)
-                                <span class="px-2.5 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-lg text-[9px] font-black uppercase tracking-wider block">
-                                    {{ \Carbon\Carbon::parse($entry->event_date)->format('M d') }}
-                                </span>
-                                @else
-                                <span class="px-2.5 py-1 bg-slate-700/80 rounded-lg text-[9px] font-black uppercase text-slate-300 tracking-wider block">
-                                    {{ $entry->day }}
-                                </span>
-                                @endif
-                            </div>
+                            <span class="px-2.5 py-1 bg-slate-700/80 rounded-lg text-[9px] font-black uppercase text-slate-300">
+                                {{ $isEvent ? \Carbon\Carbon::parse($entry->event_date)->format('M d') : $entry->day }}
+                            </span>
                         </div>
 
                         <div class="flex items-center justify-between pt-2 border-t border-slate-700/40">
@@ -541,11 +523,11 @@
 
                             <div class="flex items-center gap-1.5">
                                 @if($isEvent)
-                                <a href="{{ Route::has($routePrefix . '.labs.schedule.exportEvent') ? route($routePrefix . '.labs.schedule.exportEvent', $entry->id) : route('dashboard.labs.schedule.exportEvent', $entry->id) }}" class="px-2.5 py-1 bg-[#D4AF37] text-slate-950 text-[8px] font-black uppercase rounded-lg">
+                                <a href="{{ route('dashboard.labs.schedule.exportEvent', $entry->id) }}" class="px-2.5 py-1 bg-[#D4AF37] text-slate-950 text-[8px] font-black uppercase rounded-lg">
                                     CSV ({{ $entry->attendees_count ?? 0 }})
                                 </a>
                                 @endif
-                                <form action="{{ Route::has($routePrefix . '.labs.schedule.destroy') ? route($routePrefix . '.labs.schedule.destroy', $entry->id) : route('dashboard.labs.schedule.destroy', $entry->id) }}" method="POST" onsubmit="return confirm('Revoke this slot?')">
+                                <form action="{{ route('dashboard.labs.schedule.destroy', $entry->id) }}" method="POST" onsubmit="return confirm('Revoke this slot?')">
                                     @csrf @method('DELETE')
                                     <input type="hidden" name="day" :value="activeDay">
                                     <button class="text-rose-400 text-[8px] font-black uppercase border border-rose-500/30 px-2.5 py-1 rounded-lg">
@@ -607,7 +589,7 @@
                         </template>
                     </p>
 
-                    <form action="{{ Route::has($routePrefix . '.labs.schedule.destroyByDay') ? route($routePrefix . '.labs.schedule.destroyByDay', $lab->id) : route('dashboard.labs.schedule.destroyByDay', $lab->id) }}" method="POST">
+                    <form action="{{ route('dashboard.labs.schedule.destroyByDay', $lab->id) }}" method="POST">
                         @csrf
                         @method('DELETE')
                         <input type="hidden" name="day" :value="purgeType === 'all' ? 'All' : activeDay">
@@ -645,7 +627,7 @@
                     </div>
 
                     <div class="max-h-96 overflow-y-auto space-y-3 custom-scroll pr-1">
-                        @forelse($pastEvents ?? [] as $pe)
+                        @forelse($pastEvents as $pe)
                         <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-between gap-4">
                             <div>
                                 <div class="flex items-center gap-2">
@@ -658,12 +640,12 @@
                                 <p class="text-[9px] font-mono text-slate-500 mt-0.5">{{ date('h:i A', strtotime($pe->start_time)) }} — {{ date('h:i A', strtotime($pe->end_time)) }}</p>
                             </div>
 
-                            <a href="{{ Route::has($routePrefix . '.labs.schedule.exportEvent') ? route($routePrefix . '.labs.schedule.exportEvent', $pe->id) : route('dashboard.labs.schedule.exportEvent', $pe->id) }}"
+                            <a href="{{ route('dashboard.labs.schedule.exportEvent', $pe->id) }}"
                                 class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#D4AF37] to-amber-600 hover:brightness-110 text-slate-950 font-black text-[9px] uppercase tracking-wider rounded-xl shadow-sm shrink-0 active:scale-95 transition">
                                 <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                                 </svg>
-                                <span>Export CSV ({{ $pe->attendees_count ?? 0 }})</span>
+                                <span>Export CSV ({{ $pe->attendees_count }})</span>
                             </a>
                         </div>
                         @empty

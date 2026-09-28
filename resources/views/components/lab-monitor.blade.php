@@ -1,4 +1,4 @@
-<div class="max-w-7xl mx-auto px-6 py-8" wire:poll.5s>
+<div class="max-w-7xl mx-auto px-6 py-8">
 
     {{-- COMMAND CENTER HEADER --}}
     <div class="relative mb-12 overflow-hidden rounded-[2.5rem] bg-white border border-slate-100 shadow-2xl shadow-slate-200/50">
@@ -13,26 +13,46 @@
                 </div>
                 <div>
                     <h2 class="text-3xl font-black text-slate-900 uppercase tracking-tighter leading-none">
-                        {{ $labName }}
+                        {{ $labName ?? ($lab->name ?? 'Laboratory') }}
                     </h2>
                     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-1">Realtime Surveillance</p>
                 </div>
             </div>
 
-            <div class="mt-6 md:mt-0 flex gap-4">
-                <div class="px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center min-w-[100px]">
+            <div class="mt-6 md:mt-0 flex flex-wrap items-center gap-3">
+                {{-- Active PCs Counter --}}
+                <div class="px-5 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center min-w-[90px]">
                     <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Active</span>
                     <span class="text-xl font-black text-rose-500">{{ $computers->where('status', 'active')->count() }}</span>
                 </div>
-                <div class="px-6 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center min-w-[100px]">
+
+                {{-- Clock --}}
+                <div class="px-5 py-3 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center min-w-[90px]">
                     <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Time</span>
                     <span class="text-xl font-black text-slate-800 font-mono">{{ now()->format('h:i A') }}</span>
                 </div>
+
+                {{-- TERMINATE ALL ACTIVE WORKSTATIONS --}}
+                @php
+                $targetLabId = $lab->id ?? ($computers->first()->lab_id ?? 0);
+                $activeCount = $computers->where('status', 'active')->count();
+                @endphp
+
+                @if($activeCount > 0)
+                <button type="button"
+                    onclick="confirmTerminateAll({{ $targetLabId }})"
+                    class="px-5 py-3.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-2xl border border-rose-600 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-rose-500/20 cursor-pointer">
+                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                    <span>Terminate All ({{ $activeCount }})</span>
+                </button>
+                @endif
             </div>
         </div>
     </div>
 
-    {{-- THE GRID --}}
+    {{-- SURVEILLANCE GRID --}}
     <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
         @foreach($computers as $pc)
         @php
@@ -76,26 +96,27 @@
                 <div class="w-full text-center pb-2">
                     @if($hasData)
                     <p class="text-[11px] font-black text-slate-800 truncate uppercase">{{ $name }}</p>
-                    <p class="text-[9px] font-bold text-slate-400 font-mono mt-0.5">{{ $session->student_number }}</p>
+                    <p class="text-[9px] font-bold text-slate-400 font-mono mt-0.5">{{ $session->student_id_number ?? $session->student_number }}</p>
                     @else
                     <p class="text-[9px] font-bold text-slate-300 uppercase tracking-widest">Available</p>
                     @endif
                 </div>
             </div>
 
+            {{-- HOVER DRAWER FOR ACTIVE SESSIONS --}}
             @if($hasData)
             <div class="absolute inset-x-0 bottom-0 bg-slate-900/95 backdrop-blur-md p-5 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-20">
                 <div class="space-y-3 mb-5 text-left">
                     <div>
                         <p class="text-[8px] font-bold text-slate-500 uppercase tracking-widest">In-Time</p>
-                        <p class="text-xs font-mono text-[#D4AF37]">{{ $session->time_in->format('h:i A') }}</p>
+                        <p class="text-xs font-mono text-[#D4AF37]">{{ \Carbon\Carbon::parse($session->time_in)->format('h:i A') }}</p>
                     </div>
                 </div>
 
-                {{-- UPDATED BUTTON: Removed Form, Added JS Action --}}
+                {{-- SINGLE FORCE RELEASE BUTTON --}}
                 <button type="button"
-                    onclick="handleForceRelease({{ $pc->id }}, '{{ $pc->pc_number }}')"
-                    class="w-full py-3 bg-white text-slate-900 text-[10px] font-black uppercase rounded-xl hover:bg-rose-500 hover:text-white transition-all">
+                    onclick="confirmForceRelease({{ $pc->id }}, '{{ $pc->pc_number }}', '{{ addslashes($name) }}')"
+                    class="w-full py-3 bg-white text-slate-900 text-[10px] font-black uppercase rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-md active:scale-95 cursor-pointer">
                     Force Release
                 </button>
             </div>
@@ -104,27 +125,80 @@
         @endforeach
     </div>
 
-    {{-- SCRIPTS FOR TOAST LOGIC --}}
+    {{-- SWEETALERT2 & FETCH CONTROLS --}}
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Setup the cinematic toast
         const LabGuardToast = Swal.mixin({
             toast: true,
             position: 'top-end',
             showConfirmButton: false,
-            timer: 3000,
+            timer: 2500,
             timerProgressBar: true,
             background: '#1e293b',
             color: '#ffffff',
             iconColor: '#D4AF37',
         });
 
-        async function handleForceRelease(pcId, pcNumber) {
-            try {
-                // Change cursor to waiting
-                document.body.style.cursor = 'wait';
+        let isModalOpen = false;
 
-                const response = await fetch(`/terminal/release/${pcId}`, {
+        // Auto-refresh surveillance grid every 10 seconds (pauses when modal is active)
+        setInterval(() => {
+            if (!isModalOpen) {
+                location.reload();
+            }
+        }, 10000);
+
+        // 1. Single PC Release Dialog
+        function confirmForceRelease(pcId, pcNumber, studentName) {
+            isModalOpen = true;
+            Swal.fire({
+                title: `TERMINATE ${pcNumber}?`,
+                html: `This will immediately disconnect <strong class="text-amber-400">${studentName}</strong> and lock workstation <strong class="text-white">${pcNumber}</strong>.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#334155',
+                confirmButtonText: 'Yes, Release',
+                cancelButtonText: 'Cancel',
+                background: '#0f172a',
+                color: '#ffffff',
+                iconColor: '#ef4444'
+            }).then(async (result) => {
+                isModalOpen = false;
+                if (result.isConfirmed) {
+                    await executeRequest(`/terminal/release/${pcId}`);
+                }
+            });
+        }
+
+        // 2. Terminate All PCs Dialog
+        function confirmTerminateAll(labId) {
+            isModalOpen = true;
+            Swal.fire({
+                title: 'TERMINATE ALL ACTIVE SESSIONS?',
+                text: 'EMERGENCY PROTOCOL: This will immediately disconnect all students in this laboratory and lock every workstation.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#334155',
+                confirmButtonText: 'Yes, Terminate All',
+                cancelButtonText: 'Abort',
+                background: '#0f172a',
+                color: '#ffffff',
+                iconColor: '#ef4444'
+            }).then(async (result) => {
+                isModalOpen = false;
+                if (result.isConfirmed) {
+                    await executeRequest(`/terminal/terminate-all/${labId}`);
+                }
+            });
+        }
+
+        // 3. Centralized Fetch Execution
+        async function executeRequest(endpoint) {
+            document.body.style.cursor = 'wait';
+            try {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -135,17 +209,19 @@
 
                 const data = await response.json();
 
-                if (data.status === 'success' || data.status === 'warning') {
+                if (response.ok && (data.status === 'success' || data.status === 'warning')) {
                     LabGuardToast.fire({
                         icon: data.status === 'success' ? 'success' : 'warning',
                         title: data.message
                     });
 
-                    // Since we are using wire:poll, the UI will update naturally 
-                    // within 5 seconds, but let's refresh manually for instant feedback.
-                    if (window.Livewire) {
-                        window.Livewire.dispatch('$refresh');
-                    }
+                    // Fast refresh so the PC card immediately turns available
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    LabGuardToast.fire({
+                        icon: data.status === 'info' ? 'info' : 'error',
+                        title: data.message || 'Operation could not be processed.'
+                    });
                 }
             } catch (error) {
                 LabGuardToast.fire({

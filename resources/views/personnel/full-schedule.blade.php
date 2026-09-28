@@ -146,126 +146,188 @@
                             <div class="grid grid-cols-7">
                                 @foreach($days as $day)
                                 @php
-                                $daySchedules = $lab->schedules->where('day', $day)->sortBy('start_time');
-                                @endphp
+                                // Filter logic: Purge finished events immediately
+                                $daySchedules = $lab->schedules->where('day', $day)
+                                ->filter(function ($sched) use ($day, $currentDay, $currentDate, $currentTime) {
+                                $isEvent = (bool)($sched->is_event ?? false);
+                                if (!$isEvent) {
+                                return true;
+                                }
 
-                                <div class="min-h-[280px] border-r border-slate-200/60 bg-white p-3 last:border-r-0 {{ $currentDay == $day ? 'bg-[#D4AF37]/[0.02]' : '' }}">
-                                    <div class="space-y-3">
-                                        @forelse($daySchedules as $sched)
-                                        @php
-                                        $startTime = \Carbon\Carbon::parse($sched->start_time)->format('H:i:s');
-                                        $endTime = \Carbon\Carbon::parse($sched->end_time)->format('H:i:s');
-                                        $isNow = ($currentDay == $day) && ($currentTime >= $startTime) && ($currentTime <= $endTime);
-                                            $targetDate=$currentDay==$day ? $currentDate : now()->startOfWeek(\Carbon\CarbonInterface::MONDAY)->modify("next {$day}")->toDateString();
+                                $endTime = \Carbon\Carbon::parse($sched->end_time)->format('H:i:s');
+                                $eventDate = $sched->event_date ? \Carbon\Carbon::parse($sched->event_date)->toDateString() : null;
 
-                                            $logCount = \App\Models\LabSession::where('lab_id', $lab->id)
-                                            ->where('teacher_id', $sched->user_id)
-                                            ->whereDate('time_in', $targetDate)
-                                            ->whereTime('time_in', '>=', $startTime)
-                                            ->whereTime('time_in', '<=', $endTime)
-                                                ->count();
+                                if ($eventDate) {
+                                if ($eventDate < $currentDate) {
+                                    return false;
+                                    }
+                                    if ($eventDate===$currentDate && $currentTime>= $endTime) {
+                                    return false;
+                                    }
+                                    $targetDate = $currentDay == $day
+                                    ? $currentDate
+                                    : now()->startOfWeek(\Carbon\CarbonInterface::MONDAY)->modify("next {$day}")->toDateString();
 
-                                                $enrolledStudents = \App\Models\SubjectEnrollment::where('subject_code', $sched->subject_code)->get();
-                                                $enrolledCount = $enrolledStudents->count();
-                                                $isOpenLab = str_contains(strtoupper($sched->subject_code), 'OPEN') || str_contains(strtoupper($sched->subject_code), 'FREE');
-                                                $canManageThisClass = ($currentUserId == $sched->user_id) || $isAdmin;
-                                                @endphp
+                                    return $eventDate === $targetDate;
+                                    }
 
-                                                <div class="rounded-2xl border p-3.5 transition-all duration-200 {{ $isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md shadow-[#D4AF37]/10' : 'border-slate-200/80 bg-slate-50/70 hover:border-slate-300 hover:bg-white' }}">
+                                    if ($currentDay == $day && $currentTime >= $endTime) {
+                                    return false;
+                                    }
 
-                                                    {{-- Time & Active Tag --}}
-                                                    <div class="mb-2 flex items-start justify-between gap-1">
-                                                        <span class="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-400">
-                                                            {{ \Carbon\Carbon::parse($sched->start_time)->format('h:i A') }} - {{ \Carbon\Carbon::parse($sched->end_time)->format('h:i A') }}
-                                                        </span>
+                                    return true;
+                                    })
+                                    ->sortBy('start_time');
+                                    @endphp
 
-                                                        @if($isNow)
-                                                        <span class="inline-flex items-center gap-1 rounded-md bg-[#D4AF37] px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-slate-950 shadow-xs">
-                                                            <span class="size-1 rounded-full bg-slate-950 animate-ping"></span> Live
-                                                        </span>
-                                                        @endif
-                                                    </div>
+                                    <div class="min-h-[280px] border-r border-slate-200/60 bg-white p-3 last:border-r-0 {{ $currentDay == $day ? 'bg-[#D4AF37]/[0.02]' : '' }}">
+                                        <div class="space-y-3">
+                                            @forelse($daySchedules as $sched)
+                                            @php
+                                            $isEvent = (bool)($sched->is_event ?? false);
+                                            $startTime = \Carbon\Carbon::parse($sched->start_time)->format('H:i:s');
+                                            $endTime = \Carbon\Carbon::parse($sched->end_time)->format('H:i:s');
+                                            $isNow = ($currentDay == $day) && ($currentTime >= $startTime) && ($currentTime <= $endTime);
+                                                $targetDate=$isEvent && $sched->event_date
+                                                ? \Carbon\Carbon::parse($sched->event_date)->toDateString()
+                                                : ($currentDay == $day ? $currentDate : now()->startOfWeek(\Carbon\CarbonInterface::MONDAY)->modify("next {$day}")->toDateString());
 
-                                                    {{-- Subject Code & Open Lab Badge --}}
-                                                    <div class="flex items-center justify-between gap-1">
-                                                        <p class="text-xs font-black uppercase leading-tight text-slate-900">
-                                                            {{ $sched->subject_code }}
-                                                        </p>
-                                                        @if($isOpenLab)
-                                                        <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-emerald-100 text-emerald-800">
-                                                            Open Access
-                                                        </span>
-                                                        @endif
-                                                    </div>
+                                                $logQuery = \App\Models\LabSession::where('lab_id', $lab->id)
+                                                ->whereDate('time_in', $targetDate)
+                                                ->whereTime('time_in', '>=', $startTime)
+                                                ->whereTime('time_in', '<=', $endTime);
 
-                                                    <p class="mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 truncate">
-                                                        {{ $sched->user->name ?? 'Unassigned' }}
-                                                    </p>
+                                                    if (!$isEvent && $sched->user_id) {
+                                                    $logQuery->where('teacher_id', $sched->user_id);
+                                                    }
+                                                    $logCount = $logQuery->count();
 
-                                                    {{-- Enrolled Students Badge (Only for Structured Classes) --}}
-                                                    @if(!$isOpenLab)
-                                                    <div class="mt-2.5">
-                                                        <button type="button"
-                                                            @click="openRoster('{{ $sched->subject_code }}', @js($enrolledStudents), {{ $canManageThisClass ? 'true' : 'false' }})"
-                                                            class="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200/80 px-2 py-1 text-[8px] font-black uppercase text-slate-700 hover:border-[#D4AF37] hover:text-[#D4AF37] transition cursor-pointer shadow-2xs">
-                                                            <svg class="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                                            </svg>
-                                                            {{ $enrolledCount }} Enrolled
-                                                        </button>
-                                                    </div>
-                                                    @else
-                                                    <div class="mt-2.5">
-                                                        <span class="inline-flex items-center gap-1 text-[8px] font-bold uppercase text-slate-400">
-                                                            <span class="size-1.5 rounded-full bg-emerald-400"></span> No Enrollment Required
-                                                        </span>
-                                                    </div>
-                                                    @endif
+                                                    $enrolledStudents = \App\Models\SubjectEnrollment::where('subject_code', $sched->subject_code)->get();
+                                                    $enrolledCount = $enrolledStudents->count();
+                                                    $isOpenLab = $isEvent
+                                                    || str_contains(strtoupper($sched->subject_code), 'OPEN')
+                                                    || str_contains(strtoupper($sched->subject_code), 'FREE');
+                                                    $canManageThisClass = $isEvent || ($currentUserId == $sched->user_id) || $isAdmin;
+                                                    @endphp
 
-                                                    {{-- Controls --}}
-                                                    @if($canManageThisClass)
-                                                    <div class="mt-3 flex items-center justify-between border-t border-slate-200/70 pt-2.5">
-                                                        <div>
-                                                            <p class="text-[7px] font-black uppercase tracking-widest text-slate-400">Attendance</p>
-                                                            <p class="text-xs font-black font-mono {{ $logCount > 0 ? 'text-slate-900' : 'text-slate-400' }}">
-                                                                {{ $logCount }}
+                                                    {{-- CARD CONTAINER --}}
+                                                    <div class="rounded-2xl border p-3.5 transition-all duration-200 
+                                            {{ $isEvent ? ($isNow ? 'border-purple-500 bg-purple-50/70 shadow-md shadow-purple-500/10' : 'border-purple-200/90 bg-purple-50/30 hover:border-purple-300') : ($isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md shadow-[#D4AF37]/10' : 'border-slate-200/80 bg-slate-50/70 hover:border-slate-300 hover:bg-white') }}">
+
+                                                        {{-- Time & Live Tag --}}
+                                                        <div class="mb-2 flex items-start justify-between gap-1">
+                                                            <span class="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                                                                {{ \Carbon\Carbon::parse($sched->start_time)->format('h:i A') }} - {{ \Carbon\Carbon::parse($sched->end_time)->format('h:i A') }}
+                                                            </span>
+
+                                                            @if($isNow)
+                                                            <span class="inline-flex items-center gap-1 rounded-md {{ $isEvent ? 'bg-purple-600 text-white' : 'bg-[#D4AF37] text-slate-950' }} px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider shadow-xs">
+                                                                <span class="size-1 rounded-full {{ $isEvent ? 'bg-white' : 'bg-slate-950' }} animate-ping"></span> Live
+                                                            </span>
+                                                            @endif
+                                                        </div>
+
+                                                        {{-- Event Badge or Class Type --}}
+                                                        <div class="flex items-center justify-between gap-1">
+                                                            <p class="text-xs font-black uppercase leading-tight {{ $isEvent ? 'text-purple-950' : 'text-slate-900' }}">
+                                                                {{ $sched->subject_code }}
                                                             </p>
+                                                            @if($isEvent)
+                                                            <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-purple-100 text-purple-700 border border-purple-200 shrink-0">
+                                                                🎙️ Event
+                                                            </span>
+                                                            @elseif($isOpenLab)
+                                                            <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-emerald-100 text-emerald-800 shrink-0">
+                                                                Open Access
+                                                            </span>
+                                                            @endif
                                                         </div>
 
-                                                        <div class="flex items-center gap-1.5">
-                                                            {{-- + Enroll Button (Hidden if Open Lab) --}}
-                                                            @if(!$isOpenLab)
+                                                        {{-- Host / Speaker / Teacher --}}
+                                                        @if($isEvent)
+                                                        <p class="mt-1 text-[9px] font-bold uppercase tracking-wider text-purple-700 truncate flex items-center gap-1">
+                                                            <span>Speaker:</span>
+                                                            <strong class="text-purple-900">{{ $sched->speaker_name ?? 'Guest Speaker' }}</strong>
+                                                        </p>
+                                                        @if($sched->event_date)
+                                                        <p class="text-[8px] font-mono text-purple-500 font-bold mt-0.5">
+                                                            Date: {{ \Carbon\Carbon::parse($sched->event_date)->format('M d, Y') }}
+                                                        </p>
+                                                        @endif
+                                                        @else
+                                                        <p class="mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 truncate">
+                                                            {{ $sched->user->name ?? 'Unassigned' }}
+                                                        </p>
+                                                        @endif
+
+                                                        {{-- Enrolled Students Badge vs Event Open Access --}}
+                                                        @if($isEvent)
+                                                        <div class="mt-2.5">
+                                                            <span class="inline-flex items-center gap-1 text-[8px] font-black uppercase text-purple-600 bg-purple-100/70 border border-purple-200 px-2 py-0.5 rounded-lg">
+                                                                ⚡ Open to All Students
+                                                            </span>
+                                                        </div>
+                                                        @elseif(!$isOpenLab)
+                                                        <div class="mt-2.5">
                                                             <button type="button"
-                                                                @click="openEnroll('{{ $sched->subject_code }}', '{{ $sched->user->name ?? '' }}')"
-                                                                class="inline-flex items-center gap-1 rounded-lg border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1 text-[8px] font-black uppercase tracking-wider text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-slate-950 cursor-pointer shadow-xs active:scale-95">
-                                                                + Enroll
-                                                            </button>
-                                                            @endif
-
-                                                            {{-- CSV Export --}}
-                                                            @if($logCount > 0)
-                                                            <a href="{{ route('personnel.export', ['schedule' => $sched->id, 'date' => $targetDate]) }}"
-                                                                class="rounded-lg bg-slate-900 p-1.5 text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-slate-950 shadow-xs"
-                                                                title="Download Attendance CSV">
-                                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                @click="openRoster('{{ $sched->subject_code }}', @js($enrolledStudents), {{ $canManageThisClass ? 'true' : 'false' }})"
+                                                                class="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200/80 px-2 py-1 text-[8px] font-black uppercase text-slate-700 hover:border-[#D4AF37] hover:text-[#D4AF37] transition cursor-pointer shadow-2xs">
+                                                                <svg class="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                                                 </svg>
-                                                            </a>
-                                                            @endif
+                                                                {{ $enrolledCount }} Enrolled
+                                                            </button>
                                                         </div>
+                                                        @else
+                                                        <div class="mt-2.5">
+                                                            <span class="inline-flex items-center gap-1 text-[8px] font-bold uppercase text-slate-400">
+                                                                <span class="size-1.5 rounded-full bg-emerald-400"></span> No Enrollment Required
+                                                            </span>
+                                                        </div>
+                                                        @endif
+
+                                                        {{-- Attendance & Controls --}}
+                                                        @if($canManageThisClass)
+                                                        <div class="mt-3 flex items-center justify-between border-t {{ $isEvent ? 'border-purple-200/60' : 'border-slate-200/70' }} pt-2.5">
+                                                            <div>
+                                                                <p class="text-[7px] font-black uppercase tracking-widest text-slate-400">Attendance</p>
+                                                                <p class="text-xs font-black font-mono {{ $logCount > 0 ? ($isEvent ? 'text-purple-900' : 'text-slate-900') : 'text-slate-400' }}">
+                                                                    {{ $logCount }}
+                                                                </p>
+                                                            </div>
+
+                                                            <div class="flex items-center gap-1.5">
+                                                                @if(!$isEvent && !$isOpenLab)
+                                                                <button type="button"
+                                                                    @click="openEnroll('{{ $sched->subject_code }}', '{{ $sched->user->name ?? '' }}')"
+                                                                    class="inline-flex items-center gap-1 rounded-lg border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1 text-[8px] font-black uppercase tracking-wider text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-slate-950 cursor-pointer shadow-xs active:scale-95">
+                                                                    + Enroll
+                                                                </button>
+                                                                @endif
+
+                                                                @if($logCount > 0)
+                                                                <a href="{{ route('personnel.export', ['schedule' => $sched->id, 'date' => $targetDate]) }}"
+                                                                    class="rounded-lg bg-slate-900 p-1.5 text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-slate-950 shadow-xs"
+                                                                    title="Download Attendance CSV">
+                                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                    </svg>
+                                                                </a>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                        @endif
                                                     </div>
-                                                    @endif
-                                                </div>
-                                                @empty
-                                                <div class="flex min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200/80 bg-slate-50/50 p-3 text-center">
-                                                    <p class="text-[8px] font-black uppercase tracking-[0.2em] text-slate-300">
-                                                        No Class Slots
-                                                    </p>
-                                                </div>
-                                                @endforelse
+                                                    @empty
+                                                    <div class="flex min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200/80 bg-slate-50/50 p-3 text-center">
+                                                        <p class="text-[8px] font-black uppercase tracking-[0.2em] text-slate-300">
+                                                            No Class Slots
+                                                        </p>
+                                                    </div>
+                                                    @endforelse
+                                        </div>
                                     </div>
-                                </div>
-                                @endforeach
+                                    @endforeach
                             </div>
                         </div>
                     </div>
@@ -274,128 +336,178 @@
                     <div class="block xl:hidden divide-y divide-slate-100">
                         @foreach($days as $day)
                         @php
-                        $daySchedules = $lab->schedules->where('day', $day)->sortBy('start_time');
-                        $isToday = $currentDay == $day;
-                        @endphp
+                        // Mobile Filter Logic: Same event expiration & cleanup
+                        $daySchedules = $lab->schedules->where('day', $day)
+                        ->filter(function ($sched) use ($day, $currentDay, $currentDate, $currentTime) {
+                        $isEvent = (bool)($sched->is_event ?? false);
+                        if (!$isEvent) return true;
 
-                        <div class="p-4 sm:p-5 {{ $isToday ? 'bg-[#D4AF37]/[0.02]' : '' }}">
-                            <div class="mb-3 flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-black uppercase tracking-[0.25em] {{ $isToday ? 'text-[#D4AF37]' : 'text-slate-800' }}">
-                                        {{ $day }}
+                        $endTime = \Carbon\Carbon::parse($sched->end_time)->format('H:i:s');
+                        $eventDate = $sched->event_date ? \Carbon\Carbon::parse($sched->event_date)->toDateString() : null;
+
+                        if ($eventDate) {
+                        if ($eventDate < $currentDate) return false;
+                            if ($eventDate===$currentDate && $currentTime>= $endTime) return false;
+                            $targetDate = $currentDay == $day ? $currentDate : now()->startOfWeek(\Carbon\CarbonInterface::MONDAY)->modify("next {$day}")->toDateString();
+                            return $eventDate === $targetDate;
+                            }
+
+                            if ($currentDay == $day && $currentTime >= $endTime) return false;
+                            return true;
+                            })
+                            ->sortBy('start_time');
+                            $isToday = $currentDay == $day;
+                            @endphp
+
+                            <div class="p-4 sm:p-5 {{ $isToday ? 'bg-[#D4AF37]/[0.02]' : '' }}">
+                                <div class="mb-3 flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-black uppercase tracking-[0.25em] {{ $isToday ? 'text-[#D4AF37]' : 'text-slate-800' }}">
+                                            {{ $day }}
+                                        </span>
+                                        @if($isToday)
+                                        <span class="rounded-full bg-[#D4AF37]/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-[#D4AF37]">
+                                            Today
+                                        </span>
+                                        @endif
+                                    </div>
+                                    <span class="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                                        {{ $daySchedules->count() }} {{ Str::plural('session', $daySchedules->count()) }}
                                     </span>
-                                    @if($isToday)
-                                    <span class="rounded-full bg-[#D4AF37]/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-[#D4AF37]">
-                                        Today
-                                    </span>
-                                    @endif
                                 </div>
-                                <span class="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400">
-                                    {{ $daySchedules->count() }} {{ Str::plural('session', $daySchedules->count()) }}
-                                </span>
-                            </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                @forelse($daySchedules as $sched)
-                                @php
-                                $startTime = \Carbon\Carbon::parse($sched->start_time)->format('H:i:s');
-                                $endTime = \Carbon\Carbon::parse($sched->end_time)->format('H:i:s');
-                                $isNow = ($currentDay == $day) && ($currentTime >= $startTime) && ($currentTime <= $endTime);
-                                    $targetDate=$currentDay==$day ? $currentDate : now()->startOfWeek(\Carbon\CarbonInterface::MONDAY)->modify("next {$day}")->toDateString();
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    @forelse($daySchedules as $sched)
+                                    @php
+                                    $isEvent = (bool)($sched->is_event ?? false);
+                                    $startTime = \Carbon\Carbon::parse($sched->start_time)->format('H:i:s');
+                                    $endTime = \Carbon\Carbon::parse($sched->end_time)->format('H:i:s');
+                                    $isNow = ($currentDay == $day) && ($currentTime >= $startTime) && ($currentTime <= $endTime);
+                                        $targetDate=$isEvent && $sched->event_date
+                                        ? \Carbon\Carbon::parse($sched->event_date)->toDateString()
+                                        : ($currentDay == $day ? $currentDate : now()->startOfWeek(\Carbon\CarbonInterface::MONDAY)->modify("next {$day}")->toDateString());
 
-                                    $logCount = \App\Models\LabSession::where('lab_id', $lab->id)
-                                    ->where('teacher_id', $sched->user_id)
-                                    ->whereDate('time_in', $targetDate)
-                                    ->whereTime('time_in', '>=', $startTime)
-                                    ->whereTime('time_in', '<=', $endTime)
-                                        ->count();
+                                        $logQuery = \App\Models\LabSession::where('lab_id', $lab->id)
+                                        ->whereDate('time_in', $targetDate)
+                                        ->whereTime('time_in', '>=', $startTime)
+                                        ->whereTime('time_in', '<=', $endTime);
 
-                                        $enrolledStudents = \App\Models\SubjectEnrollment::where('subject_code', $sched->subject_code)->get();
-                                        $enrolledCount = $enrolledStudents->count();
-                                        $isOpenLab = str_contains(strtoupper($sched->subject_code), 'OPEN') || str_contains(strtoupper($sched->subject_code), 'FREE');
-                                        $canManageThisClass = ($currentUserId == $sched->user_id) || $isAdmin;
-                                        @endphp
+                                            if (!$isEvent && $sched->user_id) {
+                                            $logQuery->where('teacher_id', $sched->user_id);
+                                            }
+                                            $logCount = $logQuery->count();
 
-                                        <div class="rounded-2xl border p-4 transition-all {{ $isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md' : 'border-slate-200 bg-slate-50/70' }}">
-                                            <div class="mb-2 flex items-center justify-between">
-                                                <span class="text-[9px] font-mono font-bold uppercase tracking-[0.2em] text-slate-400">
-                                                    {{ \Carbon\Carbon::parse($sched->start_time)->format('h:i A') }} - {{ \Carbon\Carbon::parse($sched->end_time)->format('h:i A') }}
-                                                </span>
-                                                @if($isNow)
-                                                <span class="rounded-full bg-[#D4AF37] px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-slate-950">
-                                                    Live Now
-                                                </span>
+                                            $enrolledStudents = \App\Models\SubjectEnrollment::where('subject_code', $sched->subject_code)->get();
+                                            $enrolledCount = $enrolledStudents->count();
+                                            $isOpenLab = $isEvent
+                                            || str_contains(strtoupper($sched->subject_code), 'OPEN')
+                                            || str_contains(strtoupper($sched->subject_code), 'FREE');
+                                            $canManageThisClass = $isEvent || ($currentUserId == $sched->user_id) || $isAdmin;
+                                            @endphp
+
+                                            <div class="rounded-2xl border p-4 transition-all 
+                                    {{ $isEvent ? ($isNow ? 'border-purple-500 bg-purple-50/70 shadow-md' : 'border-purple-200 bg-purple-50/30') : ($isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md' : 'border-slate-200 bg-slate-50/70') }}">
+
+                                                <div class="mb-2 flex items-center justify-between">
+                                                    <span class="text-[9px] font-mono font-bold uppercase tracking-[0.2em] text-slate-400">
+                                                        {{ \Carbon\Carbon::parse($sched->start_time)->format('h:i A') }} - {{ \Carbon\Carbon::parse($sched->end_time)->format('h:i A') }}
+                                                    </span>
+                                                    @if($isNow)
+                                                    <span class="rounded-full {{ $isEvent ? 'bg-purple-600 text-white' : 'bg-[#D4AF37] text-slate-950' }} px-2 py-0.5 text-[8px] font-black uppercase tracking-widest">
+                                                        Live Now
+                                                    </span>
+                                                    @endif
+                                                </div>
+
+                                                <div class="flex items-center justify-between gap-1">
+                                                    <h4 class="text-sm font-black uppercase {{ $isEvent ? 'text-purple-950' : 'text-slate-900' }} leading-snug">
+                                                        {{ $sched->subject_code }}
+                                                    </h4>
+                                                    @if($isEvent)
+                                                    <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-purple-100 text-purple-700 border border-purple-200">
+                                                        🎙️ Event
+                                                    </span>
+                                                    @elseif($isOpenLab)
+                                                    <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-emerald-100 text-emerald-800">
+                                                        Open Access
+                                                    </span>
+                                                    @endif
+                                                </div>
+
+                                                @if($isEvent)
+                                                <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                                                    Speaker: <strong class="text-purple-900">{{ $sched->speaker_name ?? 'Guest Speaker' }}</strong>
+                                                </p>
+                                                @if($sched->event_date)
+                                                <p class="text-[9px] font-mono text-purple-500 font-bold">
+                                                    {{ \Carbon\Carbon::parse($sched->event_date)->format('M d, Y') }}
+                                                </p>
                                                 @endif
-                                            </div>
-
-                                            <div class="flex items-center justify-between gap-1">
-                                                <h4 class="text-sm font-black uppercase text-slate-900 leading-snug">
-                                                    {{ $sched->subject_code }}
-                                                </h4>
-                                                @if($isOpenLab)
-                                                <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-emerald-100 text-emerald-800">
-                                                    Open Access
-                                                </span>
+                                                @else
+                                                <p class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                                                    {{ $sched->user->name ?? 'Unassigned' }}
+                                                </p>
                                                 @endif
-                                            </div>
 
-                                            <p class="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                                                {{ $sched->user->name ?? 'Unassigned' }}
-                                            </p>
-
-                                            {{-- Enrolled Students Badge Mobile --}}
-                                            @if(!$isOpenLab)
-                                            <div class="mt-2.5">
-                                                <button type="button"
-                                                    @click="openRoster('{{ $sched->subject_code }}', @js($enrolledStudents), {{ $canManageThisClass ? 'true' : 'false' }})"
-                                                    class="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200/80 px-2.5 py-1 text-[8px] font-black uppercase text-slate-700 cursor-pointer">
-                                                    👥 {{ $enrolledCount }} Enrolled
-                                                </button>
-                                            </div>
-                                            @else
-                                            <div class="mt-2.5">
-                                                <span class="text-[8px] font-bold uppercase text-slate-400">
-                                                    Open Access Station
-                                                </span>
-                                            </div>
-                                            @endif
-
-                                            @if($canManageThisClass)
-                                            <div class="mt-3 flex items-center justify-between border-t border-slate-200/80 pt-2.5">
-                                                <div class="flex items-center gap-1.5">
-                                                    <span class="text-[9px] font-black uppercase tracking-wider text-slate-400">Logs:</span>
-                                                    <span class="text-xs font-mono font-black {{ $logCount > 0 ? 'text-slate-900' : 'text-slate-400' }}">
-                                                        {{ $logCount }}
+                                                {{-- Badges --}}
+                                                @if($isEvent)
+                                                <div class="mt-2.5">
+                                                    <span class="text-[8px] font-black uppercase text-purple-600 bg-purple-100/70 border border-purple-200 px-2 py-0.5 rounded-lg">
+                                                        ⚡ Open to All Students
                                                     </span>
                                                 </div>
-
-                                                <div class="flex items-center gap-1.5">
-                                                    @if(!$isOpenLab)
+                                                @elseif(!$isOpenLab)
+                                                <div class="mt-2.5">
                                                     <button type="button"
-                                                        @click="openEnroll('{{ $sched->subject_code }}', '{{ $sched->user->name ?? '' }}')"
-                                                        class="inline-flex items-center gap-1 rounded-lg border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2.5 py-1 text-[9px] font-black uppercase text-[#D4AF37] hover:bg-[#D4AF37] hover:text-slate-950 transition cursor-pointer">
-                                                        + Enroll
+                                                        @click="openRoster('{{ $sched->subject_code }}', @js($enrolledStudents), {{ $canManageThisClass ? 'true' : 'false' }})"
+                                                        class="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200/80 px-2.5 py-1 text-[8px] font-black uppercase text-slate-700 cursor-pointer">
+                                                        👥 {{ $enrolledCount }} Enrolled
                                                     </button>
-                                                    @endif
-
-                                                    @if($logCount > 0)
-                                                    <a href="{{ route('personnel.export', ['schedule' => $sched->id, 'date' => $targetDate]) }}"
-                                                        class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[9px] font-black uppercase text-[#D4AF37] hover:bg-[#D4AF37] hover:text-slate-950 transition">
-                                                        Export
-                                                    </a>
-                                                    @endif
                                                 </div>
+                                                @else
+                                                <div class="mt-2.5">
+                                                    <span class="text-[8px] font-bold uppercase text-slate-400">
+                                                        Open Access Station
+                                                    </span>
+                                                </div>
+                                                @endif
+
+                                                @if($canManageThisClass)
+                                                <div class="mt-3 flex items-center justify-between border-t {{ $isEvent ? 'border-purple-200/60' : 'border-slate-200/80' }} pt-2.5">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <span class="text-[9px] font-black uppercase tracking-wider text-slate-400">Logs:</span>
+                                                        <span class="text-xs font-mono font-black {{ $logCount > 0 ? ($isEvent ? 'text-purple-900' : 'text-slate-900') : 'text-slate-400' }}">
+                                                            {{ $logCount }}
+                                                        </span>
+                                                    </div>
+
+                                                    <div class="flex items-center gap-1.5">
+                                                        @if(!$isEvent && !$isOpenLab)
+                                                        <button type="button"
+                                                            @click="openEnroll('{{ $sched->subject_code }}', '{{ $sched->user->name ?? '' }}')"
+                                                            class="inline-flex items-center gap-1 rounded-lg border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2.5 py-1 text-[9px] font-black uppercase text-[#D4AF37] hover:bg-[#D4AF37] hover:text-slate-950 transition cursor-pointer">
+                                                            + Enroll
+                                                        </button>
+                                                        @endif
+
+                                                        @if($logCount > 0)
+                                                        <a href="{{ route('personnel.export', ['schedule' => $sched->id, 'date' => $targetDate]) }}"
+                                                            class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[9px] font-black uppercase text-[#D4AF37] hover:bg-[#D4AF37] hover:text-slate-950 transition">
+                                                            Export
+                                                        </a>
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                @endif
                                             </div>
-                                            @endif
-                                        </div>
-                                        @empty
-                                        <div class="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-4 text-center">
-                                            <p class="text-[9px] font-bold uppercase tracking-wider text-slate-400">No scheduled sessions for {{ $day }}.</p>
-                                        </div>
-                                        @endforelse
+                                            @empty
+                                            <div class="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-4 text-center">
+                                                <p class="text-[9px] font-bold uppercase tracking-wider text-slate-400">No scheduled sessions for {{ $day }}.</p>
+                                            </div>
+                                            @endforelse
+                                </div>
                             </div>
-                        </div>
-                        @endforeach
+                            @endforeach
                     </div>
                 </div>
                 @endforeach
@@ -570,7 +682,7 @@
                                 <span class="text-xs font-mono font-bold text-slate-800 truncate" x-text="item.email"></span>
                             </div>
 
-                            {{-- Revoke Action: Only allowed if instructor owns class or is Admin --}}
+                            {{-- Revoke Action --}}
                             <template x-if="canManageRoster">
                                 <form :action="'/terminal/unenroll/' + item.id" method="POST" onsubmit="return confirm('Remove authorization for this student?')">
                                     @csrf @method('DELETE')
@@ -589,7 +701,6 @@
                 </div>
 
                 <div class="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
-                    {{-- Bulk Clear Roster: Only allowed if instructor owns class or is Admin --}}
                     <div>
                         <template x-if="canManageRoster && currentRoster.length > 0">
                             <form action="{{ route('personnel.clear-roster') }}" method="POST" onsubmit="return confirm('Clear ALL enrolled students for this subject?')">

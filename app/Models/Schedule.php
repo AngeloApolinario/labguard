@@ -16,6 +16,14 @@ class Schedule extends Model
         'day',
         'start_time',
         'end_time',
+        'is_event',
+        'event_date',
+        'speaker_name',
+    ];
+
+    protected $casts = [
+        'is_event'   => 'boolean',
+        'event_date' => 'date',
     ];
 
     /**

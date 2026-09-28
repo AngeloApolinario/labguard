@@ -87,24 +87,29 @@ class TerminalController extends Controller
 
         // 4. STRICT SUBJECT ENROLLMENT & SCHEDULE RESTRICTION (Students Only)
         if (strtolower($user->role) === 'student') {
-            // Check 4A: Block if there is no class or schedule active in this lab
+            // Check 4A: Block if there is no active schedule at all in this lab
             if (!$activeSchedule) {
                 return response()->json([
-                    'message' => 'Access Denied: No active class or open lab scheduled for this laboratory.'
+                    'message' => 'Access Denied: No active class or event scheduled for this laboratory.'
                 ], 403);
             }
 
-            $subjectCode = trim($activeSchedule->subject_code);
+            // Check 4B: Detect if the active schedule is an EVENT or OPEN LAB
+            $isEvent = filter_var($activeSchedule->is_event ?? false, FILTER_VALIDATE_BOOLEAN)
+                || (isset($activeSchedule->is_event) && (int)$activeSchedule->is_event === 1)
+                || strtolower($activeSchedule->type ?? '') === 'event'
+                || str_contains(strtoupper($activeSchedule->subject_code ?? ''), 'EVENT')
+                || str_contains(strtoupper($activeSchedule->title ?? ''), 'EVENT');
 
-            // Check 4B: Allow if designated as Open Lab
-            $isEvent = $activeSchedule && ($activeSchedule->is_event ?? false);
             $isOpenLab = $isEvent
                 || str_contains(strtoupper($activeSchedule->subject_code ?? ''), 'OPEN')
                 || str_contains(strtoupper($activeSchedule->subject_code ?? ''), 'FREE');
+
+            // Check 4C: If it's a regular class (NOT an event or open lab), verify enrollment
             if (!$isOpenLab) {
+                $subjectCode = trim($activeSchedule->subject_code ?? '');
                 $studentEmail = strtolower(trim($user->email));
 
-                // Check 4C: Direct check against enrollment table
                 $isEnrolled = SubjectEnrollment::whereRaw('LOWER(TRIM(subject_code)) = ?', [strtolower($subjectCode)])
                     ->whereRaw('LOWER(TRIM(email)) = ?', [$studentEmail])
                     ->exists();
@@ -146,10 +151,9 @@ class TerminalController extends Controller
             'message' => 'Access Granted',
             'name'    => $user->name,
             'role'    => $user->role,
-            'teacher' => $activeSchedule?->user?->name ?? 'No active class'
+            'teacher' => $activeSchedule?->user?->name ?? ($isEvent ? 'Special Event' : 'No active class')
         ], 200);
     }
-
     /**
      * Heartbeat check for Python background thread
      */

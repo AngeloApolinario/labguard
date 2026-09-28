@@ -115,36 +115,86 @@ class PersonnelController extends Controller
                 'time_out' => now(),
             ]);
 
-            $computer->update(['status' => 'available']);
+            // Set to 'released' so the Python script triggers self.lock_ui_again()
+            $computer->update([
+                'status'       => 'released',
+                'last_ping_at' => now(),
+            ]);
 
             $this->flashToast('success', 'PC Released', "PC {$computer->pc_number} released successfully.");
 
             return response()->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => "PC {$computer->pc_number} released successfully.",
-                'toast' => [
-                    'type' => 'success',
-                    'title' => 'PC Released',
+                'toast'   => [
+                    'type'    => 'success',
+                    'title'   => 'PC Released',
                     'message' => "PC {$computer->pc_number} released successfully.",
                 ],
             ]);
         }
 
-        $computer->update(['status' => 'available']);
+        // Even if no session was found, set to 'released' to force-lock the terminal
+        $computer->update([
+            'status'       => 'released',
+            'last_ping_at' => now(),
+        ]);
 
-        $this->flashToast('warning', 'No Active Session', 'PC status reset, but no active session record was found.');
+        $this->flashToast('warning', 'No Active Session', 'PC status reset to released, but no active session record was found.');
 
         return response()->json([
-            'status' => 'warning',
-            'message' => 'PC status reset, but no active session record was found.',
-            'toast' => [
-                'type' => 'warning',
-                'title' => 'No Active Session',
-                'message' => 'PC status reset, but no active session record was found.',
+            'status'  => 'warning',
+            'message' => 'PC status reset to released, but no active session record was found.',
+            'toast'   => [
+                'type'    => 'warning',
+                'title'   => 'No Active Session',
+                'message' => 'PC status reset to released, but no active session record was found.',
             ],
         ]);
     }
 
+    /**
+     * Terminate ALL active PCs in a laboratory
+     */
+    public function terminateAll($labId)
+    {
+        $activePcs = Computer::where('lab_id', $labId)
+            ->where('status', 'active')
+            ->get();
+
+        if ($activePcs->isEmpty()) {
+            return response()->json([
+                'status'  => 'info',
+                'message' => 'No active workstations to terminate.'
+            ]);
+        }
+
+        // 1. Set all active computers to 'released'
+        Computer::where('lab_id', $labId)
+            ->where('status', 'active')
+            ->update([
+                'status'       => 'released',
+                'last_ping_at' => now(),
+            ]);
+
+        // 2. Close all active sessions in this lab
+        LabSession::where('lab_id', $labId)
+            ->whereNull('time_out')
+            ->update(['time_out' => now()]);
+
+        $message = "Terminated {$activePcs->count()} active workstation(s).";
+        $this->flashToast('success', 'All Terminals Released', $message);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => $message,
+            'toast'   => [
+                'type'    => 'success',
+                'title'   => 'All Terminals Released',
+                'message' => $message,
+            ]
+        ]);
+    }
     /**
      * Duplicate of index for "Labs Overview" page
      */

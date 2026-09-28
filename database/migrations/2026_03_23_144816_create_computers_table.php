@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('asset_tag')->nullable()->unique();
 
             // Status Logic
-            $table->enum('status', ['available', 'active', 'maintenance'])->default('available');
+            $table->enum('status', ['available', 'active', 'maintenance', 'released'])->default('available');
 
             $table->timestamp('last_ping_at')->nullable();
 

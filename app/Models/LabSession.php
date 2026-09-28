@@ -14,7 +14,7 @@ class LabSession extends Model
         'computer_id',
         'lab_id',
         'student_name',
-        'student_id_number', // Ensure this matches your field #4 exactly
+        'student_id_number',
         'time_in',
         'time_out',
         'teacher_id',
@@ -51,5 +51,9 @@ class LabSession extends Model
     {
 
         return $this->hasOne(SessionChecklist::class, 'lab_session_id');
+    }
+    public function lab()
+    {
+        return $this->belongsTo(Lab::class, 'lab_id');
     }
 }

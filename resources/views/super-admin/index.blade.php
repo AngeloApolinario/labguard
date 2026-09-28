@@ -368,14 +368,23 @@
                                     </span>
                                 </div>
 
-                                {{-- Fixed: Displays Terminal ID and Resolved Lab Name --}}
+                                {{-- Fixed: Displays Terminal ID, Resolved Lab Name, and Safe Reporter Name --}}
                                 <p class="text-xs font-bold text-slate-500 flex items-center gap-1.5">
                                     <span class="text-slate-900 font-mono font-black">{{ $resolvedPcNumber }}</span>
                                     <span class="text-slate-300">•</span>
                                     <span>{{ $resolvedLabName }}</span>
-                                    @if(!empty($alert->reporter->name ?? $alert->reportedBy->name))
+
+                                    @php
+                                    $reporterName = $alert->reporter?->name
+                                    ?? $alert->reportedBy?->name
+                                    ?? $alert->user?->name
+                                    ?? $alert->student_id
+                                    ?? null;
+                                    @endphp
+
+                                    @if($reporterName)
                                     <span class="text-slate-300">•</span>
-                                    <span class="text-slate-400 font-medium">Reported by {{ $alert->reporter->name ?? $alert->reportedBy->name }}</span>
+                                    <span class="text-slate-600">{{ $reporterName }}</span>
                                     @endif
                                 </p>
 

@@ -128,17 +128,6 @@
     {{-- SWEETALERT2 & FETCH CONTROLS --}}
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        const LabGuardToast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 2500,
-            timerProgressBar: true,
-            background: '#1e293b',
-            color: '#ffffff',
-            iconColor: '#D4AF37',
-        });
-
         let isModalOpen = false;
 
         // Auto-refresh surveillance grid every 10 seconds (pauses when modal is active)
@@ -210,23 +199,27 @@
                 const data = await response.json();
 
                 if (response.ok && (data.status === 'success' || data.status === 'warning')) {
-                    LabGuardToast.fire({
-                        icon: data.status === 'success' ? 'success' : 'warning',
-                        title: data.message
-                    });
-
-                    // Fast refresh so the PC card immediately turns available
-                    setTimeout(() => location.reload(), 1000);
+                    // Controller already flashed your application's native <x-toast /> to the session.
+                    // Immediately reload so your native toast displays cleanly without duplicate popups.
+                    location.reload();
                 } else {
-                    LabGuardToast.fire({
-                        icon: data.status === 'info' ? 'info' : 'error',
-                        title: data.message || 'Operation could not be processed.'
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Operation Failed',
+                        text: data.message || 'Could not process request.',
+                        background: '#0f172a',
+                        color: '#ffffff',
+                        confirmButtonColor: '#ef4444'
                     });
                 }
             } catch (error) {
-                LabGuardToast.fire({
+                Swal.fire({
                     icon: 'error',
-                    title: 'System Communication Error'
+                    title: 'System Error',
+                    text: 'Unable to communicate with the server.',
+                    background: '#0f172a',
+                    color: '#ffffff',
+                    confirmButtonColor: '#ef4444'
                 });
             } finally {
                 document.body.style.cursor = 'default';

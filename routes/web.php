@@ -189,7 +189,7 @@ Route::middleware([
     Route::post('/assign/{computer}', [PersonnelController::class, 'assign'])->name('assign');
     Route::post('/release/{computer}', [PersonnelController::class, 'release'])->name('release');
     // Terminate All PCs in Lab
-    Route::post('/terminal/terminate-all/{labId}', [PersonnelController::class, 'terminateAll'])->name('terminal.terminateAll');
+    Route::post('/terminate-all/{labId}', [PersonnelController::class, 'terminateAll'])->name('terminateAll');
 
     // SCHEDULES & REPORT EXPORTS
     Route::get('/schedule-overview', [PersonnelController::class, 'fullSchedule'])->name('full-schedule');

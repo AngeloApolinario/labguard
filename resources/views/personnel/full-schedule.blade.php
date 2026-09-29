@@ -127,7 +127,7 @@
 
                     {{-- Desktop 7-Day Grid View (XL+) --}}
                     <div class="hidden xl:block overflow-x-auto custom-scrollbar">
-                        <div class="min-w-[1100px] border-b border-slate-100">
+                        <div class="min-w-[1200px] border-b border-slate-100">
                             {{-- Day Headers --}}
                             <div class="grid grid-cols-7 bg-slate-50 border-b border-slate-200/60">
                                 @foreach($days as $day)
@@ -212,7 +212,7 @@
 
                                                     {{-- CARD CONTAINER --}}
                                                     <div class="rounded-2xl border p-3.5 transition-all duration-200 
-                                            {{ $isEvent ? ($isNow ? 'border-purple-500 bg-purple-50/70 shadow-md shadow-purple-500/10' : 'border-purple-200/90 bg-purple-50/30 hover:border-purple-300') : ($isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md shadow-[#D4AF37]/10' : 'border-slate-200/80 bg-slate-50/70 hover:border-slate-300 hover:bg-white') }}">
+                                            {{ $isEvent ? ($isNow ? 'border-[#D4AF37] bg-amber-50/60 shadow-md shadow-amber-500/10' : 'border-amber-200/90 bg-amber-50/20 hover:border-amber-300 hover:bg-white') : ($isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md shadow-[#D4AF37]/10' : 'border-slate-200/80 bg-slate-50/70 hover:border-slate-300 hover:bg-white') }}">
 
                                                         {{-- Time & Live Tag --}}
                                                         <div class="mb-2 flex items-start justify-between gap-1">
@@ -221,19 +221,19 @@
                                                             </span>
 
                                                             @if($isNow)
-                                                            <span class="inline-flex items-center gap-1 rounded-md {{ $isEvent ? 'bg-purple-600 text-white' : 'bg-[#D4AF37] text-slate-950' }} px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider shadow-xs">
-                                                                <span class="size-1 rounded-full {{ $isEvent ? 'bg-white' : 'bg-slate-950' }} animate-ping"></span> Live
+                                                            <span class="inline-flex items-center gap-1 rounded-md bg-[#D4AF37] text-slate-950 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider shadow-xs">
+                                                                <span class="size-1 rounded-full bg-slate-950 animate-ping"></span> Live
                                                             </span>
                                                             @endif
                                                         </div>
 
                                                         {{-- Event Badge or Class Type --}}
                                                         <div class="flex items-center justify-between gap-1">
-                                                            <p class="text-xs font-black uppercase leading-tight {{ $isEvent ? 'text-purple-950' : 'text-slate-900' }}">
+                                                            <p class="text-xs font-black uppercase leading-tight text-slate-900">
                                                                 {{ $sched->subject_code }}
                                                             </p>
                                                             @if($isEvent)
-                                                            <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-purple-100 text-purple-700 border border-purple-200 shrink-0">
+                                                            <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-[#D4AF37]/20 text-[#B89024] border border-[#D4AF37]/30 shrink-0">
                                                                 🎙️ Event
                                                             </span>
                                                             @elseif($isOpenLab)
@@ -245,12 +245,12 @@
 
                                                         {{-- Host / Speaker / Teacher --}}
                                                         @if($isEvent)
-                                                        <p class="mt-1 text-[9px] font-bold uppercase tracking-wider text-purple-700 truncate flex items-center gap-1">
+                                                        <p class="mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-700 truncate flex items-center gap-1">
                                                             <span>Speaker:</span>
-                                                            <strong class="text-purple-900">{{ $sched->speaker_name ?? 'Guest Speaker' }}</strong>
+                                                            <strong class="text-slate-900">{{ $sched->speaker_name ?? 'Guest Speaker' }}</strong>
                                                         </p>
                                                         @if($sched->event_date)
-                                                        <p class="text-[8px] font-mono text-purple-500 font-bold mt-0.5">
+                                                        <p class="text-[8px] font-mono text-[#B89024] font-bold mt-0.5">
                                                             Date: {{ \Carbon\Carbon::parse($sched->event_date)->format('M d, Y') }}
                                                         </p>
                                                         @endif
@@ -260,10 +260,10 @@
                                                         </p>
                                                         @endif
 
-                                                        {{-- Enrolled Students Badge vs Event Open Access --}}
+                                                        {{-- Full-Width Roster Pill --}}
                                                         @if($isEvent)
                                                         <div class="mt-2.5">
-                                                            <span class="inline-flex items-center gap-1 text-[8px] font-black uppercase text-purple-600 bg-purple-100/70 border border-purple-200 px-2 py-0.5 rounded-lg">
+                                                            <span class="w-full flex items-center justify-center gap-1 text-[8px] font-black uppercase text-[#B89024] bg-[#D4AF37]/10 border border-[#D4AF37]/30 py-1.5 rounded-xl">
                                                                 ⚡ Open to All Students
                                                             </span>
                                                         </div>
@@ -271,47 +271,59 @@
                                                         <div class="mt-2.5">
                                                             <button type="button"
                                                                 @click="openRoster('{{ $sched->subject_code }}', @js($enrolledStudents), {{ $canManageThisClass ? 'true' : 'false' }})"
-                                                                class="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200/80 px-2 py-1 text-[8px] font-black uppercase text-slate-700 hover:border-[#D4AF37] hover:text-[#D4AF37] transition cursor-pointer shadow-2xs">
-                                                                <svg class="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                                                </svg>
-                                                                {{ $enrolledCount }} Enrolled
+                                                                class="w-full flex items-center justify-between rounded-xl bg-white border border-slate-200/90 hover:border-[#D4AF37] px-2.5 py-1.5 text-[9px] font-black uppercase text-slate-700 hover:text-[#B89024] transition shadow-2xs group cursor-pointer">
+                                                                <span class="flex items-center gap-1.5">
+                                                                    <svg class="h-3 w-3 text-slate-400 group-hover:text-[#B89024]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                                                    </svg>
+                                                                    <span>Roster</span>
+                                                                </span>
+                                                                <span class="rounded-md bg-slate-100 group-hover:bg-[#D4AF37]/20 px-1.5 py-0.2 font-mono text-[8px] text-slate-800">
+                                                                    {{ $enrolledCount }}
+                                                                </span>
                                                             </button>
                                                         </div>
                                                         @else
                                                         <div class="mt-2.5">
-                                                            <span class="inline-flex items-center gap-1 text-[8px] font-bold uppercase text-slate-400">
-                                                                <span class="size-1.5 rounded-full bg-emerald-400"></span> No Enrollment Required
+                                                            <span class="w-full inline-flex items-center justify-center gap-1 text-[8px] font-bold uppercase text-slate-400 py-1">
+                                                                <span class="size-1.5 rounded-full bg-emerald-400"></span> No Enrollment Needed
                                                             </span>
                                                         </div>
                                                         @endif
 
-                                                        {{-- Attendance & Controls --}}
+                                                        {{-- UN-SQUEEZED 2-TIER ACTION AREA --}}
                                                         @if($canManageThisClass)
-                                                        <div class="mt-3 flex items-center justify-between border-t {{ $isEvent ? 'border-purple-200/60' : 'border-slate-200/70' }} pt-2.5">
-                                                            <div>
-                                                                <p class="text-[7px] font-black uppercase tracking-widest text-slate-400">Attendance</p>
-                                                                <p class="text-xs font-black font-mono {{ $logCount > 0 ? ($isEvent ? 'text-purple-900' : 'text-slate-900') : 'text-slate-400' }}">
-                                                                    {{ $logCount }}
-                                                                </p>
+                                                        <div class="mt-3 pt-2.5 border-t border-slate-200/70 flex flex-col gap-2">
+
+                                                            {{-- Row 1: Attendance Metric --}}
+                                                            <div class="flex items-center justify-between text-[8px]">
+                                                                <span class="font-black uppercase tracking-wider text-slate-400">Attendance</span>
+                                                                <span class="font-mono font-black px-2 py-0.5 rounded-md text-[9px] {{ $logCount > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70' : 'bg-slate-100 text-slate-400' }}">
+                                                                    {{ $logCount }} {{ Str::plural('Log', $logCount) }}
+                                                                </span>
                                                             </div>
 
-                                                            <div class="flex items-center gap-1.5">
+                                                            {{-- Row 2: Un-squeezed Action Buttons --}}
+                                                            <div class="flex items-center gap-1.5 w-full">
                                                                 @if(!$isEvent && !$isOpenLab)
                                                                 <button type="button"
                                                                     @click="openEnroll('{{ $sched->subject_code }}', '{{ $sched->user->name ?? '' }}')"
-                                                                    class="inline-flex items-center gap-1 rounded-lg border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1 text-[8px] font-black uppercase tracking-wider text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-slate-950 cursor-pointer shadow-xs active:scale-95">
-                                                                    + Enroll
+                                                                    class="flex-1 inline-flex items-center justify-center gap-1 rounded-xl border border-[#D4AF37]/50 bg-[#D4AF37]/10 hover:bg-[#D4AF37] text-[#B89024] hover:text-slate-950 py-1.5 px-2 text-[9px] font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 cursor-pointer">
+                                                                    <svg class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                                                                    </svg>
+                                                                    <span>Enroll</span>
                                                                 </button>
                                                                 @endif
 
                                                                 @if($logCount > 0)
                                                                 <a href="{{ route('personnel.export', ['schedule' => $sched->id, 'date' => $targetDate]) }}"
-                                                                    class="rounded-lg bg-slate-900 p-1.5 text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-slate-950 shadow-xs"
+                                                                    class="{{ (!$isEvent && !$isOpenLab) ? 'shrink-0 px-2.5' : 'flex-1 justify-center' }} inline-flex items-center gap-1.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-[#D4AF37] text-[9px] font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer"
                                                                     title="Download Attendance CSV">
-                                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                                     </svg>
+                                                                    <span>Export</span>
                                                                 </a>
                                                                 @endif
                                                             </div>
@@ -406,25 +418,25 @@
                                             @endphp
 
                                             <div class="rounded-2xl border p-4 transition-all 
-                                    {{ $isEvent ? ($isNow ? 'border-purple-500 bg-purple-50/70 shadow-md' : 'border-purple-200 bg-purple-50/30') : ($isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md' : 'border-slate-200 bg-slate-50/70') }}">
+                                    {{ $isEvent ? ($isNow ? 'border-[#D4AF37] bg-amber-50/60 shadow-md' : 'border-amber-200 bg-amber-50/20') : ($isNow ? 'border-[#D4AF37] bg-[#FFFDF5] shadow-md' : 'border-slate-200 bg-slate-50/70') }}">
 
                                                 <div class="mb-2 flex items-center justify-between">
                                                     <span class="text-[9px] font-mono font-bold uppercase tracking-[0.2em] text-slate-400">
                                                         {{ \Carbon\Carbon::parse($sched->start_time)->format('h:i A') }} - {{ \Carbon\Carbon::parse($sched->end_time)->format('h:i A') }}
                                                     </span>
                                                     @if($isNow)
-                                                    <span class="rounded-full {{ $isEvent ? 'bg-purple-600 text-white' : 'bg-[#D4AF37] text-slate-950' }} px-2 py-0.5 text-[8px] font-black uppercase tracking-widest">
+                                                    <span class="rounded-full bg-[#D4AF37] text-slate-950 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest">
                                                         Live Now
                                                     </span>
                                                     @endif
                                                 </div>
 
                                                 <div class="flex items-center justify-between gap-1">
-                                                    <h4 class="text-sm font-black uppercase {{ $isEvent ? 'text-purple-950' : 'text-slate-900' }} leading-snug">
+                                                    <h4 class="text-sm font-black uppercase text-slate-900 leading-snug">
                                                         {{ $sched->subject_code }}
                                                     </h4>
                                                     @if($isEvent)
-                                                    <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-purple-100 text-purple-700 border border-purple-200">
+                                                    <span class="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-[#D4AF37]/20 text-[#B89024] border border-[#D4AF37]/30">
                                                         🎙️ Event
                                                     </span>
                                                     @elseif($isOpenLab)
@@ -435,11 +447,11 @@
                                                 </div>
 
                                                 @if($isEvent)
-                                                <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-purple-700">
-                                                    Speaker: <strong class="text-purple-900">{{ $sched->speaker_name ?? 'Guest Speaker' }}</strong>
+                                                <p class="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                                                    Speaker: <strong class="text-slate-900">{{ $sched->speaker_name ?? 'Guest Speaker' }}</strong>
                                                 </p>
                                                 @if($sched->event_date)
-                                                <p class="text-[9px] font-mono text-purple-500 font-bold">
+                                                <p class="text-[9px] font-mono text-[#B89024] font-bold">
                                                     {{ \Carbon\Carbon::parse($sched->event_date)->format('M d, Y') }}
                                                 </p>
                                                 @endif
@@ -449,10 +461,10 @@
                                                 </p>
                                                 @endif
 
-                                                {{-- Badges --}}
+                                                {{-- Full Width Roster Pill (Mobile) --}}
                                                 @if($isEvent)
                                                 <div class="mt-2.5">
-                                                    <span class="text-[8px] font-black uppercase text-purple-600 bg-purple-100/70 border border-purple-200 px-2 py-0.5 rounded-lg">
+                                                    <span class="w-full flex items-center justify-center text-[8px] font-black uppercase text-[#B89024] bg-[#D4AF37]/10 border border-[#D4AF37]/30 py-1.5 rounded-xl">
                                                         ⚡ Open to All Students
                                                     </span>
                                                 </div>
@@ -460,8 +472,9 @@
                                                 <div class="mt-2.5">
                                                     <button type="button"
                                                         @click="openRoster('{{ $sched->subject_code }}', @js($enrolledStudents), {{ $canManageThisClass ? 'true' : 'false' }})"
-                                                        class="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-200/80 px-2.5 py-1 text-[8px] font-black uppercase text-slate-700 cursor-pointer">
-                                                        👥 {{ $enrolledCount }} Enrolled
+                                                        class="w-full flex items-center justify-between rounded-xl bg-white border border-slate-200/90 px-3 py-1.5 text-[9px] font-black uppercase text-slate-700 cursor-pointer">
+                                                        <span>👥 Student Roster</span>
+                                                        <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[8px]">{{ $enrolledCount }}</span>
                                                     </button>
                                                 </div>
                                                 @else
@@ -472,27 +485,28 @@
                                                 </div>
                                                 @endif
 
+                                                {{-- Un-squeezed Actions (Mobile) --}}
                                                 @if($canManageThisClass)
-                                                <div class="mt-3 flex items-center justify-between border-t {{ $isEvent ? 'border-purple-200/60' : 'border-slate-200/80' }} pt-2.5">
-                                                    <div class="flex items-center gap-1.5">
-                                                        <span class="text-[9px] font-black uppercase tracking-wider text-slate-400">Logs:</span>
-                                                        <span class="text-xs font-mono font-black {{ $logCount > 0 ? ($isEvent ? 'text-purple-900' : 'text-slate-900') : 'text-slate-400' }}">
-                                                            {{ $logCount }}
+                                                <div class="mt-3 pt-2.5 border-t border-slate-200/80 flex flex-col gap-2">
+                                                    <div class="flex items-center justify-between text-[9px]">
+                                                        <span class="font-black uppercase tracking-wider text-slate-400">Attendance</span>
+                                                        <span class="font-mono font-black px-2 py-0.5 rounded-md text-[9px] {{ $logCount > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/70' : 'bg-slate-100 text-slate-400' }}">
+                                                            {{ $logCount }} {{ Str::plural('Log', $logCount) }}
                                                         </span>
                                                     </div>
 
-                                                    <div class="flex items-center gap-1.5">
+                                                    <div class="flex items-center gap-1.5 w-full">
                                                         @if(!$isEvent && !$isOpenLab)
                                                         <button type="button"
                                                             @click="openEnroll('{{ $sched->subject_code }}', '{{ $sched->user->name ?? '' }}')"
-                                                            class="inline-flex items-center gap-1 rounded-lg border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2.5 py-1 text-[9px] font-black uppercase text-[#D4AF37] hover:bg-[#D4AF37] hover:text-slate-950 transition cursor-pointer">
+                                                            class="flex-1 inline-flex items-center justify-center gap-1 rounded-xl border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1.5 text-[9px] font-black uppercase text-[#B89024] hover:bg-[#D4AF37] hover:text-slate-950 transition cursor-pointer">
                                                             + Enroll
                                                         </button>
                                                         @endif
 
                                                         @if($logCount > 0)
                                                         <a href="{{ route('personnel.export', ['schedule' => $sched->id, 'date' => $targetDate]) }}"
-                                                            class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-[9px] font-black uppercase text-[#D4AF37] hover:bg-[#D4AF37] hover:text-slate-950 transition">
+                                                            class="{{ (!$isEvent && !$isOpenLab) ? 'shrink-0 px-3' : 'flex-1 justify-center' }} inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-[9px] font-black uppercase text-[#D4AF37] hover:bg-[#D4AF37] hover:text-slate-950 transition">
                                                             Export
                                                         </a>
                                                         @endif
@@ -573,13 +587,13 @@
                     <button type="button"
                         @click="rosterTab = 'paste'"
                         :class="rosterTab === 'paste' ? 'bg-white text-slate-950 shadow-xs font-black' : 'text-slate-500 font-bold'"
-                        class="flex-1 rounded-lg py-2 text-[10px] uppercase tracking-wider transition-all">
+                        class="flex-1 rounded-lg py-2 text-[10px] uppercase tracking-wider transition-all cursor-pointer">
                         📋 Copy-Paste List
                     </button>
                     <button type="button"
                         @click="rosterTab = 'file'"
                         :class="rosterTab === 'file' ? 'bg-white text-slate-950 shadow-xs font-black' : 'text-slate-500 font-bold'"
-                        class="flex-1 rounded-lg py-2 text-[10px] uppercase tracking-wider transition-all">
+                        class="flex-1 rounded-lg py-2 text-[10px] uppercase tracking-wider transition-all cursor-pointer">
                         📁 Upload CSV / File
                     </button>
                 </div>
@@ -650,7 +664,7 @@
                             <span x-text="targetSubject"></span> Students
                         </h3>
                     </div>
-                    <button type="button" @click="rosterModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+                    <button type="button" @click="rosterModal = false" class="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
                         </svg>

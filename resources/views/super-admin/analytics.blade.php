@@ -487,14 +487,15 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 @forelse($recentIssues as $audit)
-                <div class="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 hover:border-rose-300 transition-all space-y-3">
+                <div class="p-6 rounded-2xl bg-white border border-slate-200/60 shadow-sm hover:border-rose-300 transition-all">
                     <div class="flex items-center justify-between border-b border-slate-200/60 pb-3">
                         <div class="flex items-center gap-2.5">
-                            <div class="size-8 rounded-xl bg-slate-900 text-[#D4AF37] font-mono font-black text-xs flex items-center justify-center">
+
+                            <div class="size-8 rounded-xl bg-slate-900 text-[#D4AF37] font-mono font-black text-xs flex items-center justify-center overflow-hidden whitespace-nowrap">
                                 {{ $audit->pc_number }}
                             </div>
                             <div>
-                                <h4 class="text-xs font-black text-slate-900 uppercase">{{ $audit->lab_name ?? 'Default Lab' }}</h4>
+                                <h4 class="text-sm font-black text-slate-900 uppercase">{{ $audit->lab_name ?? 'Default Lab' }}</h4>
                                 <span class="text-[10px] font-mono text-slate-400 font-bold block">{{ $audit->student_id_number }}</span>
                             </div>
                         </div>
@@ -505,36 +506,33 @@
                     </div>
 
                     {{-- Badges of failed components (Updated to the 6 items with backwards compatibility) --}}
-                    <div>
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">Failed Components</span>
-                        <div class="flex flex-wrap gap-1.5">
-                            @if(isset($audit->system_unit_ok) ? !$audit->system_unit_ok : (isset($audit->pc_case_ok) && !$audit->pc_case_ok))
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">System Unit</span>
-                            @endif
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        @if(isset($audit->system_unit_ok) ? !$audit->system_unit_ok : (isset($audit->pc_case_ok) && !$audit->pc_case_ok))
+                        <span class="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase">System Unit</span>
+                        @endif
 
-                            @if(!$audit->monitor_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Monitor</span>
-                            @endif
+                        @if(!$audit->monitor_ok)
+                        <span class="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase">Monitor</span>
+                        @endif
 
-                            @if(!$audit->avr_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">AVR</span>
-                            @endif
+                        @if(!$audit->avr_ok)
+                        <span class="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase">AVR</span>
+                        @endif
 
-                            @if(!$audit->mouse_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Mouse</span>
-                            @endif
+                        @if(!$audit->mouse_ok)
+                        <span class="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase">Mouse</span>
+                        @endif
 
-                            @if(!$audit->keyboard_ok)
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Keyboard</span>
-                            @endif
+                        @if(!$audit->keyboard_ok)
+                        <span class="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase">Keyboard</span>
+                        @endif
 
-                            @if(isset($audit->cables_ok) ? !$audit->cables_ok : (isset($audit->headset_ok) && !$audit->headset_ok))
-                            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[9px] font-black uppercase">Cables</span>
-                            @endif
-                        </div>
+                        @if(isset($audit->cables_ok) ? !$audit->cables_ok : (isset($audit->headset_ok) && !$audit->headset_ok))
+                        <span class="px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold uppercase">Cables</span>
+                        @endif
                     </div>
 
-                    <div class="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500 font-bold">
+                    <div class="pt-4 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500 font-bold">
                         <span>
                             {{ $audit->verified_at ? \Carbon\Carbon::parse($audit->verified_at)->diffForHumans() : 'Just now' }}
                         </span>
@@ -544,11 +542,11 @@
                     </div>
                 </div>
                 @empty
-                <div class="col-span-full py-12 text-center bg-slate-50 rounded-2xl border border-slate-200/60">
+                <div class="col-span-full py-12 text-center bg-white rounded-2xl border border-slate-200/60 shadow-sm">
                     <svg class="size-8 text-emerald-500 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <p class="text-xs font-black text-slate-800 uppercase tracking-wider">All Workstations Verified Operational</p>
+                    <p class="text-sm font-black text-slate-800 uppercase tracking-wider">All Workstations Verified Operational</p>
                     <p class="text-[10px] text-slate-400 font-bold uppercase mt-0.5">No hardware discrepancies reported during current inspection window</p>
                 </div>
                 @endforelse

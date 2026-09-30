@@ -5,34 +5,69 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Illuminate\Support\Facades\Auth;
 
 class CheckClearance
 {
-    public function handle(Request $request, Closure $next, string $role): Response
-    {
-        // 1. If the user is NOT logged in, don't redirect to /terminal!
-        // Just let them pass through so the 'auth' middleware can send them to /login.
+    public function handle(
+        Request $request,
+        Closure $next,
+        string $role
+    ): Response {
+
+        /*
+         * If the user is not authenticated,
+         * let the auth middleware handle the login redirect.
+         */
         if (!auth()->check()) {
             return $next($request);
         }
 
         $user = auth()->user();
 
-        // 2. If they have the right role, let them in.
+        /*
+         * User has the required clearance.
+         */
         if ($user->role === $role) {
             return $next($request);
         }
 
-        // 3. ONLY redirect if they are logged in but in the WRONG place.
-        if ($user->role === 'admin') {
-            return redirect()->route('admin.index');
+        /*
+         * SUPER ADMIN
+         *
+         * Super admins should only access routes
+         * explicitly protected by clearance:super-admin.
+         */
+        if ($user->role === 'super-admin') {
+            return redirect()->route('super-admin.index');
         }
 
+        /*
+         * ADMIN
+         */
+        if ($user->role === 'admin') {
+            return redirect()->route('dashboard.index');
+        }
+
+        /*
+         * PERSONNEL
+         */
         if ($user->role === 'personnel') {
             return redirect()->route('personnel.index');
         }
 
-        return $next($request);
+        /*
+         * STUDENT
+         *
+         * Students should be returned to their own
+         * authenticated user area instead of the admin dashboard.
+         */
+        if ($user->role === 'student') {
+            return redirect()->route('profile.show');
+        }
+
+        /*
+         * Unknown / unsupported role.
+         */
+        return abort(403, 'Unauthorized access.');
     }
 }

@@ -22,14 +22,7 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 text-[#D4AF37] border border-slate-800 rounded-xl text-[10px] font-mono font-black uppercase shadow-sm">
-                        <svg class="w-3.5 h-3.5 text-[#D4AF37]" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                        </svg>
-                        Root Clearance Active
-                    </span>
-                </div>
+
             </div>
         </x-slot>
 
@@ -199,7 +192,6 @@
                 <div>
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-lg font-black text-slate-900 uppercase tracking-tight">Mission Control</h3>
-                        <span class="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg">Root Deck</span>
                     </div>
 
                     {{-- Action Stack --}}
@@ -492,7 +484,7 @@
                         <div>
                             <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Target Laboratory Zone</label>
                             <select name="lab_id" class="w-full border border-slate-200 rounded-2xl p-3.5 bg-slate-50 text-xs font-black text-slate-800 focus:ring-2 focus:ring-rose-500">
-                                <option value="all">⚠️ ENTIRE CAMPUS (ALL LABORATORIES)</option>
+                                <option value="all">ENTIRE CAMPUS (ALL LABORATORIES)</option>
                                 @foreach($labUtilization as $key => $lab)
                                 @php
                                 $id = is_array($lab) ? ($lab['id'] ?? $key) : ($lab->id ?? $key);
@@ -543,7 +535,7 @@
                         <div>
                             <label class="block text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">Target Laboratory Zone</label>
                             <select name="lab_id" class="w-full border border-slate-200 rounded-2xl p-3.5 bg-slate-50 text-xs font-black text-slate-800 focus:ring-2 focus:ring-emerald-500">
-                                <option value="all">🌐 ENTIRE CAMPUS (ALL LABORATORIES)</option>
+                                <option value="all"> ENTIRE CAMPUS (ALL LABORATORIES)</option>
                                 @foreach($labUtilization as $key => $lab)
                                 @php
                                 $id = is_array($lab) ? ($lab['id'] ?? $key) : ($lab->id ?? $key);

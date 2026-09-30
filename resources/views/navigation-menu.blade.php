@@ -181,9 +181,16 @@ default => Route::has('login') ? route('login') : '#',
                             </p>
                         </div>
 
+
+                        @if(Auth::user()->role !== 'student')
                         <x-dropdown-link href="{{ route('profile.show') }}">
                             User Settings
                         </x-dropdown-link>
+
+                        <div class="border-t border-slate-100"></div>
+                        @endif
+
+
 
                         <div class="border-t border-slate-100"></div>
 

@@ -206,6 +206,76 @@
                             <button type="submit" id="updateBtn" class="flex-1 py-5 bg-[#D4AF37] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 shadow-xl transition-all">
                                 Save Changes
                             </button>
+
+                        </div>
+                        {{-- DELETE LABORATORY --}}
+                        <div class="pt-6 mt-2 border-t border-rose-100">
+
+                            <div class="p-4 sm:p-5 rounded-2xl bg-rose-50 border border-rose-200">
+
+                                <div class="flex items-start gap-3">
+
+                                    <div class="size-10 rounded-xl bg-rose-100 border border-rose-200 flex items-center justify-center shrink-0">
+                                        <svg
+                                            class="size-5 text-rose-600"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor">
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M12 9v4m0 4h.01M5.07 19h13.86a1.5 1.5 0 001.3-2.25L13.3 4.75a1.5 1.5 0 00-2.6 0l-6.93 12A1.5 1.5 0 005.07 19z" />
+                                        </svg>
+                                    </div>
+
+                                    <div class="min-w-0">
+                                        <p class="text-[8px] font-black text-rose-500 uppercase tracking-[0.2em]">
+                                            Danger Zone
+                                        </p>
+
+                                        <h4 class="text-sm font-black text-slate-900 uppercase mt-1">
+                                            Delete Laboratory
+                                        </h4>
+
+                                        <p class="text-[9px] text-slate-500 leading-relaxed mt-1.5">
+                                            Permanently deletes this laboratory and all registered computer units.
+                                            Historical sessions and attendance records will remain preserved.
+                                        </p>
+                                    </div>
+
+                                </div>
+
+                                <form
+                                    id="deleteLabForm"
+                                    method="POST"
+                                    class="mt-4"
+                                    onsubmit="return confirmDeleteLaboratory()">
+                                    @csrf
+                                    @method('DELETE')
+
+                                    <button
+                                        type="submit"
+                                        class="w-full py-3.5 !bg-rose-600 hover:!bg-rose-700 !text-white rounded-xl text-[9px] font-black uppercase tracking-[0.18em] transition-all shadow-lg shadow-rose-600/10 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2">
+                                        <svg
+                                            class="size-4"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor">
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+
+                                        Delete Laboratory
+                                    </button>
+
+                                </form>
+
+                            </div>
+
                         </div>
                     </div>
                 </form>

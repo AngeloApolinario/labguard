@@ -67,21 +67,61 @@ class DashboardController extends Controller
 
     public function storeUser(Request $request)
     {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => [
-                'required',
-                'string',
-                Password::min(8)
-                    ->mixedCase()
-                    ->numbers()
-                    ->symbols(),
+        $request->validate(
+            [
+                'name' => [
+                    'required',
+                    'string',
+                    'max:255',
+                ],
+
+                'email' => [
+                    'required',
+                    'string',
+                    'email',
+                    'max:255',
+                    'ends_with:@phinmaed.com',
+                    'unique:users',
+                ],
+
+                'password' => [
+                    'required',
+                    'string',
+                    Password::min(8)
+                        ->mixedCase()
+                        ->numbers()
+                        ->symbols(),
+                ],
+
+                'role' => [
+                    'required',
+                    'in:student,personnel',
+                ],
+
+                'student_number' => [
+                    'required',
+                    'string',
+                    'unique:users',
+                    'regex:/^01-[0-9]{4}-[0-9]{6}$/',
+                ],
+
+                'phone' => [
+                    'required',
+                    'string',
+                    'regex:/^09[0-9]{9}$/',
+                ],
             ],
-            'role' => ['required', 'in:student,personnel'],
-            'student_number' => ['required', 'string', 'unique:users', 'regex:/^01-[0-9]{4}-[0-9]{6}$/'],
-            'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
-        ]);
+            [
+                'email.ends_with' =>
+                'Please use an official PHINMA organization email address.',
+
+                'student_number.regex' =>
+                'The ID must follow the AU format: 01-XXXX-XXXXXX.',
+
+                'phone.regex' =>
+                'Please provide a valid 11-digit mobile number.',
+            ]
+        );
 
         User::create([
             'name' => $request->name,
@@ -93,20 +133,56 @@ class DashboardController extends Controller
             'email_verified_at' => now(),
         ]);
 
-        $this->flashToast('success', 'User Enrolled', 'User successfully enrolled in LabGuard.');
+        $this->flashToast(
+            'success',
+            'User Enrolled',
+            'User successfully enrolled in LabGuard.'
+        );
 
-        return redirect()->back()->with('success', 'User successfully enrolled in LabGuard.');
+        return redirect()->back();
     }
 
     public function updateUser(Request $request, User $user)
     {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
-            'student_number' => ['required', 'string', 'unique:users,student_number,' . $user->id],
-            'phone' => ['required', 'string', 'max:20'],
-            'role' => ['required', 'in:student,personnel,admin'],
-        ]);
+        $request->validate(
+            [
+                'name' => [
+                    'required',
+                    'string',
+                    'max:255',
+                ],
+
+                'email' => [
+                    'required',
+                    'string',
+                    'email',
+                    'max:255',
+                    'ends_with:@phinmaed.com',
+                    'unique:users,email,' . $user->id,
+                ],
+
+                'student_number' => [
+                    'required',
+                    'string',
+                    'unique:users,student_number,' . $user->id,
+                ],
+
+                'phone' => [
+                    'required',
+                    'string',
+                    'max:20',
+                ],
+
+                'role' => [
+                    'required',
+                    'in:student,personnel,admin',
+                ],
+            ],
+            [
+                'email.ends_with' =>
+                'Please use an official PHINMA organization email address.',
+            ]
+        );
 
         $user->update([
             'name' => $request->name,
@@ -116,11 +192,14 @@ class DashboardController extends Controller
             'role' => $request->role,
         ]);
 
-        $this->flashToast('success', 'Profile Updated', "Profile for {$user->name} has been updated.");
+        $this->flashToast(
+            'success',
+            'Profile Updated',
+            "Profile for {$user->name} has been updated."
+        );
 
-        return redirect()->back()->with('status', "Profile for {$user->name} has been updated.");
+        return redirect()->back();
     }
-
     public function destroyUser(User $user)
     {
         if ($user->role === 'super-admin' || $user->id === auth()->id()) {

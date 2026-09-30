@@ -17,14 +17,21 @@ class CreateNewUser implements CreatesNewUsers
     public function create(array $input): User
     {
         Validator::make($input, [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+
             'email' => [
                 'required',
                 'string',
                 'email',
                 'max:255',
+                'ends_with:@phinmaed.com',
                 Rule::unique('users')->whereNull('deleted_at'),
             ],
+
             'password' => [
                 'required',
                 'string',
@@ -34,28 +41,49 @@ class CreateNewUser implements CreatesNewUsers
                     ->symbols(),
                 'confirmed',
             ],
-            'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
+
+            'phone' => [
+                'required',
+                'string',
+                'regex:/^09[0-9]{9}$/',
+            ],
+
             'student_number' => [
                 'required',
                 'string',
                 Rule::unique('users')->whereNull('deleted_at'),
                 'regex:/^01-[0-9]{4}-[0-9]{6}$/',
             ],
-            'terms' => Jetstream::hasTermsAndPrivacyPolicyFeature() ? ['accepted', 'required'] : '',
+
+            'terms' => Jetstream::hasTermsAndPrivacyPolicyFeature()
+                ? ['accepted', 'required']
+                : '',
+
         ], [
-            'student_number.regex' => 'The ID must follow the AU format: 01-XXXX-XXXXXX.',
-            'phone.regex' => 'Please provide a valid 11-digit mobile number.',
+            'email.ends_with' =>
+            'Please use your official PHINMA organization email address.',
+
+            'student_number.regex' =>
+            'The ID must follow the AU format: 01-XXXX-XXXXXX.',
+
+            'phone.regex' =>
+            'Please provide a valid 11-digit mobile number.',
+
         ])->validate();
 
-        // 1. Check if a soft-deleted user account already exists with this email or student number
+        // 1. Check if a soft-deleted user account already exists
+        //    with this email or student number.
         $trashedUser = User::onlyTrashed()
             ->where('email', $input['email'])
             ->orWhere('student_number', $input['student_number'])
             ->first();
 
-        // 2. If soft-deleted, restore the record and sync the newly registered data
+        // 2. If a soft-deleted account exists,
+        //    restore it and update the registration details.
         if ($trashedUser) {
+
             $trashedUser->restore();
+
             $trashedUser->update([
                 'name' => $input['name'],
                 'email' => $input['email'],
@@ -68,7 +96,7 @@ class CreateNewUser implements CreatesNewUsers
             return $trashedUser;
         }
 
-        // 3. Otherwise, create a brand new user row
+        // 3. Otherwise, create a new student account.
         return User::create([
             'name' => $input['name'],
             'email' => $input['email'],

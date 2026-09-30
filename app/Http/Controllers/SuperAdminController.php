@@ -154,21 +154,61 @@ class SuperAdminController extends Controller
 
     public function storeUser(Request $request)
     {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => [
-                'required',
-                'string',
-                Password::min(8)
-                    ->mixedCase()
-                    ->numbers()
-                    ->symbols(),
+        $request->validate(
+            [
+                'name' => [
+                    'required',
+                    'string',
+                    'max:255',
+                ],
+
+                'email' => [
+                    'required',
+                    'string',
+                    'email',
+                    'max:255',
+                    'ends_with:@phinmaed.com',
+                    'unique:users',
+                ],
+
+                'password' => [
+                    'required',
+                    'string',
+                    Password::min(8)
+                        ->mixedCase()
+                        ->numbers()
+                        ->symbols(),
+                ],
+
+                'role' => [
+                    'required',
+                    'in:student,personnel,admin,super-admin',
+                ],
+
+                'student_number' => [
+                    'required',
+                    'string',
+                    'unique:users',
+                    'regex:/^01-[0-9]{4}-[0-9]{6}$/',
+                ],
+
+                'phone' => [
+                    'required',
+                    'string',
+                    'regex:/^09[0-9]{9}$/',
+                ],
             ],
-            'role' => ['required', 'in:student,personnel,admin,super-admin'],
-            'student_number' => ['required', 'string', 'unique:users', 'regex:/^01-[0-9]{4}-[0-9]{6}$/'],
-            'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
-        ]);
+            [
+                'email.ends_with' =>
+                'Please use an official PHINMA organization email address.',
+
+                'student_number.regex' =>
+                'The ID must follow the AU format: 01-XXXX-XXXXXX.',
+
+                'phone.regex' =>
+                'Please provide a valid 11-digit mobile number.',
+            ]
+        );
 
         $user = User::create([
             'name' => $request->name,
@@ -180,28 +220,80 @@ class SuperAdminController extends Controller
             'email_verified_at' => now(),
         ]);
 
-        $this->flashToast('success', 'User Created', "{$user->role} account created successfully.");
+        $this->flashToast(
+            'success',
+            'User Created',
+            "{$user->role} account created successfully."
+        );
 
-        return redirect()->back()->with('success', "{$user->role} account created successfully.");
+        return redirect()->back();
     }
 
     public function updateUser(Request $request, User $user)
     {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
-            'student_number' => ['required', 'string', 'unique:users,student_number,' . $user->id],
-            'phone' => ['required', 'string', 'regex:/^09[0-9]{9}$/'],
-            'role' => ['required', 'in:student,personnel,admin,super-admin'],
+        $request->validate(
+            [
+                'name' => [
+                    'required',
+                    'string',
+                    'max:255',
+                ],
+
+                'email' => [
+                    'required',
+                    'string',
+                    'email',
+                    'max:255',
+                    'ends_with:@phinmaed.com',
+                    'unique:users,email,' . $user->id,
+                ],
+
+                'student_number' => [
+                    'required',
+                    'string',
+                    'unique:users,student_number,' . $user->id,
+                    'regex:/^01-[0-9]{4}-[0-9]{6}$/',
+                ],
+
+                'phone' => [
+                    'required',
+                    'string',
+                    'regex:/^09[0-9]{9}$/',
+                ],
+
+                'role' => [
+                    'required',
+                    'in:student,personnel,admin,super-admin',
+                ],
+            ],
+            [
+                'email.ends_with' =>
+                'Please use an official PHINMA organization email address.',
+
+                'student_number.regex' =>
+                'The ID must follow the AU format: 01-XXXX-XXXXXX.',
+
+                'phone.regex' =>
+                'Please provide a valid 11-digit mobile number.',
+            ]
+        );
+
+        $user->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'student_number' => $request->student_number,
+            'phone' => $request->phone,
+            'role' => $request->role,
         ]);
 
-        $user->update($request->all());
+        $this->flashToast(
+            'success',
+            'Account Updated',
+            'Account updated successfully.'
+        );
 
-        $this->flashToast('success', 'Account Updated', 'Account updated successfully.');
-
-        return redirect()->back()->with('status', 'Account updated.');
+        return redirect()->back();
     }
-
     public function destroyUser(User $user)
     {
         // Prevent accidental self-deletion

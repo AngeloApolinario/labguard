@@ -469,22 +469,44 @@ class SuperAdminController extends Controller
             // Lock down all labs
             Lab::query()->update(['status' => 'maintenance']);
 
-            // Mark all PCs as maintenance and terminate sessions
+            // Mark all PCs as maintenance
             Computer::query()->update(['status' => 'maintenance']);
-        } else {
-            // Lock down target lab
-            $lab = Lab::findOrFail($labId);
-            $lab->update(['status' => 'maintenance']);
 
-            // Mark all PCs in this lab as maintenance
-            $lab->computers()->update(['status' => 'maintenance']);
+            $this->flashToast(
+                'danger',
+                'System Lockdown Active',
+                'All laboratories and computer stations have been placed under maintenance lockdown.'
+            );
+
+            return redirect()->back()->with(
+                'success',
+                'All laboratories have been placed under maintenance lockdown.'
+            );
         }
 
-        // Add session termination logic here if needed...
+        $lab = Lab::findOrFail($labId);
 
-        return redirect()->back()->with('success', 'Lab maintenance lockdown initiated.');
+        // Lock down target lab
+        $lab->update(['status' => 'maintenance']);
+
+        // Mark all PCs in this lab as maintenance
+        $lab->computers()->update(['status' => 'maintenance']);
+
+        $this->flashToast(
+            'danger',
+            'Lab Lockdown Active',
+            "{$lab->room_name} has been placed under maintenance lockdown."
+        );
+
+        return redirect()->back()->with(
+            'success',
+            "{$lab->room_name} has been placed under maintenance lockdown."
+        );
     }
 
+    /**
+     * Release Emergency Lockout
+     */
     public function releaseLockout(Request $request)
     {
         $labId = $request->input('lab_id');
@@ -492,15 +514,43 @@ class SuperAdminController extends Controller
         if ($labId === 'all') {
             // Release all labs
             Lab::query()->update(['status' => 'active']);
-            Computer::where('status', 'maintenance')->update(['status' => 'available']);
-        } else {
-            // Release target lab
-            $lab = Lab::findOrFail($labId);
-            $lab->update(['status' => 'active']);
-            $lab->computers()->where('status', 'maintenance')->update(['status' => 'available']);
+
+            // Only restore computers that were under maintenance
+            Computer::where('status', 'maintenance')
+                ->update(['status' => 'available']);
+
+            $this->flashToast(
+                'success',
+                'System Lockdown Released',
+                'All laboratories and computer stations have been restored to normal operation.'
+            );
+
+            return redirect()->back()->with(
+                'success',
+                'All laboratory lockdowns have been released.'
+            );
         }
 
-        return redirect()->back()->with('success', 'Lab maintenance lock released.');
+        $lab = Lab::findOrFail($labId);
+
+        // Release target lab
+        $lab->update(['status' => 'active']);
+
+        // Restore only maintenance computers in this lab
+        $lab->computers()
+            ->where('status', 'maintenance')
+            ->update(['status' => 'available']);
+
+        $this->flashToast(
+            'success',
+            'Lab Lockdown Released',
+            "{$lab->room_name} has been restored to normal operation."
+        );
+
+        return redirect()->back()->with(
+            'success',
+            "{$lab->room_name} lockdown has been released."
+        );
     }
 
 

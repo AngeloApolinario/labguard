@@ -127,51 +127,54 @@
             },
 
             async handleFormSubmit(event) {
-                const form = event.target;
+                const form = event.target || document.getElementById('scheduleEntryForm');
 
-                // 1. Client-side Validation Checks
+                // Extract values safely using elements
+                const teacherId = form.elements['user_id'] ? form.elements['user_id'].value : '';
+                const speakerName = form.elements['speaker_name'] ? form.elements['speaker_name'].value.trim() : '';
+                const eventDateVal = form.elements['event_date'] ? form.elements['event_date'].value : '';
+                const startTime = form.elements['start_time'] ? form.elements['start_time'].value : '';
+                const endTime = form.elements['end_time'] ? form.elements['end_time'].value : '';
+
+                // Client-side Validation Checks
                 if (this.mode === 'class') {
-                    const teacherSelect = form.querySelector('select[name=\'user_id\']');
-                    if (!teacherSelect || !teacherSelect.value) {
+                    if (!teacherId) {
                         this.showError('Instructor Required', 'Please assign an authorized instructor for this regular class slot.');
                         return;
                     }
                 } else if (this.mode === 'event') {
-                    const speakerInput = form.querySelector('input[name=\'speaker_name\']');
-                    if (!speakerInput || !speakerInput.value.trim()) {
+                    if (!speakerName) {
                         this.showError('Speaker / Host Required', 'Please provide a speaker, host, or organization name for this event.');
                         return;
                     }
-                    const dateInput = form.querySelector('input[name=\'event_date\']');
-                    if (!dateInput || !dateInput.value) {
+                    if (!eventDateVal) {
                         this.showError('Event Date Required', 'Please select a valid date for this event.');
                         return;
                     }
                 }
 
-                if (!this.subjectCode.trim()) {
+                if (!this.subjectCode || !this.subjectCode.trim()) {
                     this.showError('Subject / Title Required', 'Please enter a course code or event title.');
                     return;
                 }
 
-                const startTime = form.querySelector('input[name=\'start_time\']')?.value;
-                const endTime = form.querySelector('input[name=\'end_time\']')?.value;
                 if (!startTime || !endTime) {
                     this.showError('Time Window Required', 'Please specify both a start time and an end time.');
                     return;
                 }
+
                 if (startTime >= endTime) {
                     this.showError('Invalid Time Range', 'End time must be later than start time.');
                     return;
                 }
 
-                // 2. If overlap was already confirmed for an Event, proceed directly
+                // If overlap was already confirmed for an Event, proceed directly
                 if (this.confirmOverlap && this.mode === 'event') {
-                    form.submit();
+                    HTMLFormElement.prototype.submit.call(form);
                     return;
                 }
 
-                // 3. Conflict Check via Backend
+                // Conflict Check via Backend
                 this.checkingOverlap = true;
                 const formData = new FormData(form);
 
@@ -188,26 +191,27 @@
                     const data = await response.json();
                     this.checkingOverlap = false;
 
-                    if (data.has_conflict) {
+                    if (data && data.has_conflict) {
                         this.conflict = data.conflict;
                         this.conflictModal = true;
                     } else {
-                        form.submit();
+                        HTMLFormElement.prototype.submit.call(form);
                     }
                 } catch (e) {
                     this.checkingOverlap = false;
-                    form.submit();
+                    HTMLFormElement.prototype.submit.call(form);
                 }
             },
 
             forceProceed() {
-                // Only allow force-proceeding if it is an EVENT
                 if (this.mode === 'event') {
+                    const form = document.getElementById('scheduleEntryForm');
+                    if (form.elements['confirm_overlap']) {
+                        form.elements['confirm_overlap'].value = '1';
+                    }
                     this.confirmOverlap = true;
                     this.conflictModal = false;
-                    this.$nextTick(() => {
-                        document.getElementById('scheduleEntryForm').submit();
-                    });
+                    HTMLFormElement.prototype.submit.call(form);
                 }
             }
         }"
@@ -329,8 +333,10 @@
 
                     <button type="submit"
                         :disabled="checkingOverlap"
-                        class="w-full py-4 mt-4 text-white text-[11px] font-black uppercase rounded-2xl shadow-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
-                        :class="mode === 'class' ? 'bg-gradient-to-r from-slate-900 to-slate-800 hover:bg-black shadow-slate-900/10' : 'bg-gradient-to-r from-amber-600 to-[#D4AF37] hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black shadow-amber-500/20'">
+                        class="w-full py-4 mt-4 text-[11px] font-black uppercase rounded-2xl shadow-xl transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                        :class="mode === 'class' 
+        ? 'bg-slate-900 hover:bg-black text-white shadow-slate-900/20' 
+        : 'bg-[#D4AF37] hover:bg-amber-400 text-slate-950 shadow-amber-500/20'">
                         <span x-show="checkingOverlap" class="size-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
                         <span x-text="checkingOverlap ? 'Validating Conflicts...' : (mode === 'class' ? 'Confirm Class Slot' : 'Confirm One-Time Event')"></span>
                     </button>
@@ -402,10 +408,10 @@
                     </div>
                 </div>
 
-                {{-- Desktop Table View --}}
+                {{-- Desktop Table View (Header set to z-[1] so it never competes with modals) --}}
                 <div class="hidden sm:block overflow-y-auto max-h-[520px] pr-2 custom-scroll relative">
                     <table class="w-full text-left border-collapse">
-                        <thead class="sticky top-0 bg-slate-900/95 backdrop-blur-md z-10">
+                        <thead class="sticky top-0 bg-slate-900/95 backdrop-blur-md z-[1]">
                             <tr class="text-[9px] font-black text-slate-400 uppercase tracking-[0.25em] border-b border-slate-800">
                                 <th class="pb-3 pl-1">Host & Slot Assignment</th>
                                 <th class="pb-3">Day / Date</th>
@@ -557,247 +563,253 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- PROPERLY SCOPED MODALS (Inside x-data, fixed at root with z-[9999]) --}}
+        {{-- TELEPORTED MODALS (Teleports directly to <body> so NO TABLE HEADER CAN OVERLAP) --}}
         {{-- ========================================================================= --}}
 
-        {{-- 1. CONFLICT MODAL (Differentiates between Event Overwrite vs Class Overlap Rejection) --}}
-        <div x-cloak x-show="conflictModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
-            role="dialog" aria-modal="true">
+        {{-- 1. CONFLICT MODAL --}}
+        <template x-teleport="body">
+            <div x-cloak x-show="conflictModal"
+                class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+                role="dialog" aria-modal="true">
 
-            {{-- Backdrop --}}
-            <div x-show="conflictModal" x-transition.opacity.duration.300ms
-                class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
-                @click="conflictModal = false"></div>
+                <div x-show="conflictModal" x-transition.opacity.duration.300ms
+                    class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
+                    @click="conflictModal = false"></div>
 
-            {{-- Dialog Box --}}
-            <div x-show="conflictModal" x-transition.scale.duration.300ms
-                class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 shadow-2xl p-6 sm:p-8 text-left text-white max-w-md w-full z-10"
-                :class="mode === 'event' ? 'border border-amber-500/40' : 'border border-rose-500/40'">
+                <div x-show="conflictModal" x-transition.scale.duration.300ms
+                    class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 shadow-2xl p-6 sm:p-8 text-left text-white max-w-md w-full z-10"
+                    :class="mode === 'event' ? 'border border-amber-500/40' : 'border border-rose-500/40'">
 
-                {{-- Event: Conflict Can Be Overridden --}}
-                <template x-if="mode === 'event'">
-                    <div>
-                        <div class="flex items-center gap-3.5 mb-5">
-                            <div class="size-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                                <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 class="text-base sm:text-lg font-black uppercase text-white">Event Overlap Detected</h3>
-                                <p class="text-[9px] font-mono uppercase text-amber-400">Class Will Be Temporarily Masked</p>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 mb-5 space-y-2">
-                            <span class="text-[8px] font-black uppercase text-slate-400">Current Slot Occupant</span>
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-sm font-black text-[#D4AF37]" x-text="conflict ? conflict.subject_code : ''"></h4>
-                                <span class="text-xs font-mono font-bold text-slate-300" x-text="conflict ? conflict.time_window : ''"></span>
-                            </div>
-                            <p class="text-[10px] text-slate-400" x-text="'Instructor: ' + (conflict ? conflict.host_name : '')"></p>
-                        </div>
-
-                        <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
-                            This event will overlap with <strong class="text-white" x-text="conflict ? conflict.subject_code : ''"></strong> on <span class="text-amber-400 font-mono font-bold" x-text="eventDate"></span>. The regular class will <strong class="text-amber-400">temporarily disappear for this date</strong> and return next week. Proceed?
-                        </p>
-
-                        <div class="flex gap-2.5">
-                            <button type="button" @click="forceProceed()" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-[#D4AF37] text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95 transition cursor-pointer">
-                                Confirm & Override
-                            </button>
-                            <button type="button" @click="conflictModal = false" class="flex-1 py-3 bg-slate-800 text-slate-300 font-bold text-xs uppercase rounded-xl border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </template>
-
-                {{-- Class: Strict Conflict (NO OVERRIDE ALLOWED) --}}
-                <template x-if="mode === 'class'">
-                    <div>
-                        <div class="flex items-center gap-3.5 mb-5">
-                            <div class="size-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
-                                <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 class="text-base sm:text-lg font-black uppercase text-white">Class Schedule Conflict</h3>
-                                <p class="text-[9px] font-mono uppercase text-rose-400">Overwriting Regular Classes Is Not Permitted</p>
-                            </div>
-                        </div>
-
-                        <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 mb-5 space-y-2">
-                            <span class="text-[8px] font-black uppercase text-slate-400">Occupied Slot</span>
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-sm font-black text-rose-400" x-text="conflict ? conflict.subject_code : ''"></h4>
-                                <span class="text-xs font-mono font-bold text-slate-300" x-text="conflict ? conflict.time_window : ''"></span>
-                            </div>
-                            <p class="text-[10px] text-slate-400" x-text="'Assigned to: ' + (conflict ? conflict.host_name : '')"></p>
-                        </div>
-
-                        <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
-                            This time slot is already assigned to <strong class="text-white" x-text="conflict ? conflict.subject_code : ''"></strong>. Regular class schedules <strong class="text-rose-400">cannot overwrite each other</strong>. Please select another time window or laboratory.
-                        </p>
-
-                        <button type="button" @click="conflictModal = false" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase rounded-xl border border-slate-700 transition cursor-pointer">
-                            Dismiss & Adjust Slot
-                        </button>
-                    </div>
-                </template>
-
-            </div>
-        </div>
-
-        {{-- 2. VALIDATION ERROR MODAL (Pops up when fields like Instructor are missing) --}}
-        <div x-cloak x-show="errorModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
-            role="dialog" aria-modal="true">
-
-            <div x-show="errorModal" x-transition.opacity.duration.300ms
-                class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
-                @click="errorModal = false"></div>
-
-            <div x-show="errorModal" x-transition.scale.duration.300ms
-                class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-rose-500/40 shadow-2xl p-6 sm:p-8 text-left text-white max-w-md w-full z-10">
-                <div class="flex items-center gap-3.5 mb-4">
-                    <div class="size-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
-                        <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <span class="text-[9px] font-mono uppercase tracking-widest text-rose-400 font-bold">Input Incomplete</span>
-                        <h3 class="text-base sm:text-lg font-black uppercase text-white" x-text="errorTitle"></h3>
-                    </div>
-                </div>
-
-                <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium" x-text="errorMessage"></p>
-
-                <button type="button" @click="errorModal = false" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase rounded-xl border border-slate-700 transition cursor-pointer">
-                    Understood
-                </button>
-            </div>
-        </div>
-
-        {{-- 3. PURGE MODAL --}}
-        <div x-cloak x-show="purgeModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
-            role="dialog" aria-modal="true">
-
-            <div x-show="purgeModal" x-transition.opacity.duration.300ms
-                class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
-                @click="purgeModal = false"></div>
-
-            <div x-show="purgeModal" x-transition.scale.duration.300ms
-                class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-rose-500/40 shadow-2xl p-6 sm:p-8 text-left text-white max-w-md w-full z-10">
-
-                <div class="flex items-center gap-3.5 mb-5">
-                    <div class="size-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
-                        <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                    </div>
-                    <div>
-                        <span class="text-[9px] font-mono uppercase tracking-widest text-rose-400 font-bold">Destructive Action</span>
-                        <h3 class="text-base sm:text-lg font-black uppercase text-white" x-text="purgeType === 'all' ? 'Purge Entire Roster' : 'Revoke ' + activeDay + ' Slots'"></h3>
-                    </div>
-                </div>
-
-                <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 mb-5 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-[8px] font-black uppercase text-slate-400">Target Facility</span>
-                        <span class="text-xs font-black text-[#D4AF37]">{{ $lab->name }}</span>
-                    </div>
-                    <div class="flex items-center justify-between border-t border-slate-700/60 pt-2">
-                        <span class="text-[8px] font-black uppercase text-slate-400">Scope</span>
-                        <span class="text-xs font-mono font-bold text-white" x-text="purgeType === 'all' ? 'All Days (Mon — Sat)' : activeDay + ' Allocations'"></span>
-                    </div>
-                </div>
-
-                <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
-                    <template x-if="purgeType === 'all'">
-                        <span>This will <strong class="text-rose-400">permanently delete every recurring schedule and event</strong> across all days. This cannot be undone.</span>
-                    </template>
-                    <template x-if="purgeType === 'day'">
-                        <span>This will <strong class="text-rose-400">remove all slots assigned on <span x-text="activeDay"></span></strong>. Other days remain unaffected.</span>
-                    </template>
-                </p>
-
-                <form action="{{ route('dashboard.labs.schedule.destroyByDay', $lab->id) }}" method="POST">
-                    @csrf
-                    @method('DELETE')
-                    <input type="hidden" name="day" :value="purgeType === 'all' ? 'All' : activeDay">
-
-                    <div class="flex gap-2.5">
-                        <button type="submit" class="flex-1 py-3 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs uppercase rounded-xl active:scale-95 transition cursor-pointer">
-                            Confirm Revoke
-                        </button>
-                        <button type="button" @click="purgeModal = false" class="flex-1 py-3 bg-slate-800 text-slate-300 font-bold text-xs uppercase rounded-xl border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
-                            Abort
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        {{-- 4. PAST EVENTS ARCHIVE MODAL --}}
-        <div x-cloak x-show="archiveModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
-            role="dialog" aria-modal="true">
-
-            <div x-show="archiveModal" x-transition.opacity.duration.300ms
-                class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
-                @click="archiveModal = false"></div>
-
-            <div x-show="archiveModal" x-transition.scale.duration.300ms
-                class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-slate-700 shadow-2xl p-6 sm:p-8 text-left text-white max-w-2xl w-full z-10">
-                <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
-                    <div>
-                        <h3 class="text-lg font-black uppercase tracking-tight text-white">Event Attendance Archive</h3>
-                        <p class="text-[9px] font-mono uppercase tracking-widest text-[#D4AF37]">Historical completed events & CSV exports</p>
-                    </div>
-                    <button type="button" @click="archiveModal = false" class="text-slate-400 hover:text-white p-1 cursor-pointer">✕</button>
-                </div>
-
-                <div class="max-h-96 overflow-y-auto space-y-3 custom-scroll pr-1">
-                    @forelse($pastEvents as $pe)
-                    <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/70 flex items-center justify-between gap-4">
+                    {{-- Event Overlap --}}
+                    <template x-if="mode === 'event'">
                         <div>
-                            <div class="flex items-center gap-2">
-                                <h4 class="text-sm font-black text-white uppercase">{{ $pe->subject_code }}</h4>
-                                <span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase bg-slate-700 text-slate-300">
-                                    {{ \Carbon\Carbon::parse($pe->event_date)->format('M d, Y') }}
-                                </span>
+                            <div class="flex items-center gap-3.5 mb-5">
+                                <div class="size-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                                    <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-base sm:text-lg font-black uppercase text-white">Event Overlap Detected</h3>
+                                    <p class="text-[9px] font-mono uppercase text-amber-400">Class Will Be Temporarily Masked</p>
+                                </div>
                             </div>
-                            <p class="text-xs text-slate-400 mt-1">Speaker: <strong class="text-[#D4AF37]">{{ $pe->speaker_name ?? 'Guest Speaker' }}</strong></p>
-                            <p class="text-[9px] font-mono text-slate-500 mt-0.5">{{ date('h:i A', strtotime($pe->start_time)) }} — {{ date('h:i A', strtotime($pe->end_time)) }}</p>
+
+                            <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 mb-5 space-y-2">
+                                <span class="text-[8px] font-black uppercase text-slate-400">Current Slot Occupant</span>
+                                <div class="flex items-center justify-between">
+                                    <h4 class="text-sm font-black text-[#D4AF37]" x-text="conflict ? conflict.subject_code : ''"></h4>
+                                    <span class="text-xs font-mono font-bold text-slate-300" x-text="conflict ? conflict.time_window : ''"></span>
+                                </div>
+                                <p class="text-[10px] text-slate-400" x-text="'Instructor: ' + (conflict ? conflict.host_name : '')"></p>
+                            </div>
+
+                            <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
+                                This event will overlap with <strong class="text-white" x-text="conflict ? conflict.subject_code : ''"></strong> on <span class="text-amber-400 font-mono font-bold" x-text="eventDate"></span>. The regular class will <strong class="text-amber-400">temporarily disappear for this date</strong> and return next week. Proceed?
+                            </p>
+
+                            <div class="flex gap-2.5">
+                                <button type="button" @click="forceProceed()" class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-[#D4AF37] text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95 transition cursor-pointer">
+                                    Confirm & Override
+                                </button>
+                                <button type="button" @click="conflictModal = false" class="flex-1 py-3 bg-slate-800 text-slate-300 font-bold text-xs uppercase rounded-xl border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
+                    </template>
 
-                        <a href="{{ route('dashboard.labs.schedule.exportEvent', $pe->id) }}"
-                            class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#D4AF37] to-amber-600 hover:brightness-110 text-slate-950 font-black text-[9px] uppercase tracking-wider rounded-xl shadow-sm shrink-0 active:scale-95 transition cursor-pointer">
-                            <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                            </svg>
-                            <span>Export CSV ({{ $pe->attendees_count }})</span>
-                        </a>
-                    </div>
-                    @empty
-                    <div class="py-12 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">
-                        No past completed events recorded for this facility yet.
-                    </div>
-                    @endforelse
+                    {{-- Class Overlap (NO OVERRIDE) --}}
+                    <template x-if="mode === 'class'">
+                        <div>
+                            <div class="flex items-center gap-3.5 mb-5">
+                                <div class="size-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                                    <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-base sm:text-lg font-black uppercase text-white">Class Schedule Conflict</h3>
+                                    <p class="text-[9px] font-mono uppercase text-rose-400">Overwriting Regular Classes Is Not Permitted</p>
+                                </div>
+                            </div>
+
+                            <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 mb-5 space-y-2">
+                                <span class="text-[8px] font-black uppercase text-slate-400">Occupied Slot</span>
+                                <div class="flex items-center justify-between">
+                                    <h4 class="text-sm font-black text-rose-400" x-text="conflict ? conflict.subject_code : ''"></h4>
+                                    <span class="text-xs font-mono font-bold text-slate-300" x-text="conflict ? conflict.time_window : ''"></span>
+                                </div>
+                                <p class="text-[10px] text-slate-400" x-text="'Assigned to: ' + (conflict ? conflict.host_name : '')"></p>
+                            </div>
+
+                            <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
+                                This time slot is already assigned to <strong class="text-white" x-text="conflict ? conflict.subject_code : ''"></strong>. Regular class schedules <strong class="text-rose-400">cannot overwrite each other</strong>. Please select another time window or laboratory.
+                            </p>
+
+                            <button type="button" @click="conflictModal = false" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase rounded-xl border border-slate-700 transition cursor-pointer">
+                                Dismiss & Adjust Slot
+                            </button>
+                        </div>
+                    </template>
+
                 </div>
+            </div>
+        </template>
 
-                <div class="mt-6 pt-4 border-t border-slate-800 text-right">
-                    <button type="button" @click="archiveModal = false" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase rounded-xl cursor-pointer">
-                        Close
+        {{-- 2. VALIDATION ERROR MODAL --}}
+        <template x-teleport="body">
+            <div x-cloak x-show="errorModal"
+                class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+                role="dialog" aria-modal="true">
+
+                <div x-show="errorModal" x-transition.opacity.duration.300ms
+                    class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
+                    @click="errorModal = false"></div>
+
+                <div x-show="errorModal" x-transition.scale.duration.300ms
+                    class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-rose-500/40 shadow-2xl p-6 sm:p-8 text-left text-white max-w-md w-full z-10">
+                    <div class="flex items-center gap-3.5 mb-4">
+                        <div class="size-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <span class="text-[9px] font-mono uppercase tracking-widest text-rose-400 font-bold">Input Incomplete</span>
+                            <h3 class="text-base sm:text-lg font-black uppercase text-white" x-text="errorTitle"></h3>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium" x-text="errorMessage"></p>
+
+                    <button type="button" @click="errorModal = false" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase rounded-xl border border-slate-700 transition cursor-pointer">
+                        Understood
                     </button>
                 </div>
             </div>
-        </div>
+        </template>
+
+        {{-- 3. PURGE MODAL --}}
+        <template x-teleport="body">
+            <div x-cloak x-show="purgeModal"
+                class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+                role="dialog" aria-modal="true">
+
+                <div x-show="purgeModal" x-transition.opacity.duration.300ms
+                    class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
+                    @click="purgeModal = false"></div>
+
+                <div x-show="purgeModal" x-transition.scale.duration.300ms
+                    class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-rose-500/40 shadow-2xl p-6 sm:p-8 text-left text-white max-w-md w-full z-10">
+
+                    <div class="flex items-center gap-3.5 mb-5">
+                        <div class="size-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <div>
+                            <span class="text-[9px] font-mono uppercase tracking-widest text-rose-400 font-bold">Destructive Action</span>
+                            <h3 class="text-base sm:text-lg font-black uppercase text-white" x-text="purgeType === 'all' ? 'Purge Entire Roster' : 'Revoke ' + activeDay + ' Slots'"></h3>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 mb-5 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[8px] font-black uppercase text-slate-400">Target Facility</span>
+                            <span class="text-xs font-black text-[#D4AF37]">{{ $lab->name }}</span>
+                        </div>
+                        <div class="flex items-center justify-between border-t border-slate-700/60 pt-2">
+                            <span class="text-[8px] font-black uppercase text-slate-400">Scope</span>
+                            <span class="text-xs font-mono font-bold text-white" x-text="purgeType === 'all' ? 'All Days (Mon — Sat)' : activeDay + ' Allocations'"></span>
+                        </div>
+                    </div>
+
+                    <p class="text-xs text-slate-300 leading-relaxed mb-6 font-medium">
+                        <template x-if="purgeType === 'all'">
+                            <span>This will <strong class="text-rose-400">permanently delete every recurring schedule and event</strong> across all days. This cannot be undone.</span>
+                        </template>
+                        <template x-if="purgeType === 'day'">
+                            <span>This will <strong class="text-rose-400">remove all slots assigned on <span x-text="activeDay"></span></strong>. Other days remain unaffected.</span>
+                        </template>
+                    </p>
+
+                    <form action="{{ route('dashboard.labs.schedule.destroyByDay', $lab->id) }}" method="POST">
+                        @csrf
+                        @method('DELETE')
+                        <input type="hidden" name="day" :value="purgeType === 'all' ? 'All' : activeDay">
+
+                        <div class="flex gap-2.5">
+                            <button type="submit" class="flex-1 py-3 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs uppercase rounded-xl active:scale-95 transition cursor-pointer">
+                                Confirm Revoke
+                            </button>
+                            <button type="button" @click="purgeModal = false" class="flex-1 py-3 bg-slate-800 text-slate-300 font-bold text-xs uppercase rounded-xl border border-slate-700 hover:bg-slate-700 transition cursor-pointer">
+                                Abort
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </template>
+
+        {{-- 4. PAST EVENTS ARCHIVE MODAL (NOW TELEPORTED: Cannot be overlapped by headers) --}}
+        <template x-teleport="body">
+            <div x-cloak x-show="archiveModal"
+                class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+                role="dialog" aria-modal="true">
+
+                <div x-show="archiveModal" x-transition.opacity.duration.300ms
+                    class="fixed inset-0 bg-slate-950/85 backdrop-blur-md"
+                    @click="archiveModal = false"></div>
+
+                <div x-show="archiveModal" x-transition.scale.duration.300ms
+                    class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-slate-700 shadow-2xl p-6 sm:p-8 text-left text-white max-w-2xl w-full z-10">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
+                        <div>
+                            <h3 class="text-lg font-black uppercase tracking-tight text-white">Event Attendance Archive</h3>
+                            <p class="text-[9px] font-mono uppercase tracking-widest text-[#D4AF37]">Historical completed events & CSV exports</p>
+                        </div>
+                        <button type="button" @click="archiveModal = false" class="text-slate-400 hover:text-white p-1 cursor-pointer">✕</button>
+                    </div>
+
+                    <div class="max-h-96 overflow-y-auto space-y-3 custom-scroll pr-1">
+                        @forelse($pastEvents as $pe)
+                        <div class="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/70 flex items-center justify-between gap-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-sm font-black text-white uppercase">{{ $pe->subject_code }}</h4>
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase bg-slate-700 text-slate-300">
+                                        {{ \Carbon\Carbon::parse($pe->event_date)->format('M d, Y') }}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-1">Speaker: <strong class="text-[#D4AF37]">{{ $pe->speaker_name ?? 'Guest Speaker' }}</strong></p>
+                                <p class="text-[9px] font-mono text-slate-500 mt-0.5">{{ date('h:i A', strtotime($pe->start_time)) }} — {{ date('h:i A', strtotime($pe->end_time)) }}</p>
+                            </div>
+
+                            <a href="{{ route('dashboard.labs.schedule.exportEvent', $pe->id) }}"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#D4AF37] to-amber-600 hover:brightness-110 text-slate-950 font-black text-[9px] uppercase tracking-wider rounded-xl shadow-sm shrink-0 active:scale-95 transition cursor-pointer">
+                                <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                </svg>
+                                <span>Export CSV ({{ $pe->attendees_count }})</span>
+                            </a>
+                        </div>
+                        @empty
+                        <div class="py-12 text-center text-slate-500 text-xs font-bold uppercase tracking-wider">
+                            No past completed events recorded for this facility yet.
+                        </div>
+                        @endforelse
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-800 text-right">
+                        <button type="button" @click="archiveModal = false" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase rounded-xl cursor-pointer">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
 
     </div>
 </x-app-layout>

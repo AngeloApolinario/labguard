@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Log;
 
 class Computer extends Model
 {
+    const STATUS_RELEASED = 'released';
+    const STATUS_AVAILABLE = 'available';
+    const STATUS_ACTIVE = 'active';
+    
     use HasFactory;
 
     protected $fillable = [

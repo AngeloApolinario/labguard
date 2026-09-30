@@ -59,38 +59,7 @@
                 </div>
             </div>
 
-            {{-- Flash Notifications --}}
-            @if(session('success'))
-            <div id="success-banner" class="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 shadow-sm flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="size-2 rounded-full bg-emerald-500 animate-ping"></div>
-                    <p class="text-xs font-black uppercase tracking-wider text-emerald-900">
-                        {{ session('success') }}
-                    </p>
-                </div>
-                <button type="button" onclick="document.getElementById('success-banner').remove()" class="text-emerald-500 hover:text-emerald-700 p-1">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            @endif
 
-            @if(session('error'))
-            <div id="error-banner" class="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-sm flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="size-2 rounded-full bg-rose-500 animate-ping"></div>
-                    <p class="text-xs font-black uppercase tracking-wider text-rose-900">
-                        {{ session('error') }}
-                    </p>
-                </div>
-                <button type="button" onclick="document.getElementById('error-banner').remove()" class="text-rose-500 hover:text-rose-700 p-1">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            @endif
 
             {{-- Schedule Matrix --}}
             <div class="space-y-6 sm:space-y-8">
@@ -473,7 +442,7 @@
                                                     <button type="button"
                                                         @click="openRoster('{{ $sched->subject_code }}', @js($enrolledStudents), {{ $canManageThisClass ? 'true' : 'false' }})"
                                                         class="w-full flex items-center justify-between rounded-xl bg-white border border-slate-200/90 px-3 py-1.5 text-[9px] font-black uppercase text-slate-700 cursor-pointer">
-                                                        <span>👥 Student Roster</span>
+                                                        <span>Student Roster</span>
                                                         <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[8px]">{{ $enrolledCount }}</span>
                                                     </button>
                                                 </div>

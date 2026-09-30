@@ -141,6 +141,8 @@ Route::middleware([
     Route::get('/labs', [LabController::class, 'index'])->name('labs');
     Route::post('/labs/store', [DashboardController::class, 'storeNewLaboratory'])->name('labs.store');
     Route::put('/labs/{lab}', [LabController::class, 'update'])->name('labs.update');
+    Route::delete('/labs/{lab}', [DashboardController::class, 'destroy'])
+        ->name('labs.destroy');
 
     // LABORATORY SCHEDULING
     Route::get('/labs/{lab}/schedule', [LabController::class, 'viewSchedule'])->name('labs.schedule');

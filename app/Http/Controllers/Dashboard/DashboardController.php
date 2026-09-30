@@ -138,21 +138,48 @@ class DashboardController extends Controller
 
     public function terminateSession(Request $request, LabSession $session)
     {
+        if (!$session->computer) {
+            $this->flashToast(
+                'danger',
+                'Session Not Found',
+                'No computer associated with this session.'
+            );
+
+            return redirect()->back();
+        }
+
+        $computer = $session->computer;
+
+        $userName = $session->student_name;
+
+        if (empty($userName)) {
+            $userName = $session->user?->name;
+        }
+
+        if (empty($userName)) {
+            $userName = 'Unknown User';
+        }
+
         $session->update([
-            'logout_at' => now(),
+            'time_out' => now(),
         ]);
 
-        $session->computer->update([
-            'status' => 'available',
+        $computer->update([
+            'status' => Computer::STATUS_RELEASED,
+            'last_ping_at' => now(),
         ]);
 
-        $userName = $session->user ? $session->user->name : 'Unknown User';
+        $this->flashToast(
+            'success',
+            'Session Ended',
+            "Session for {$userName} terminated successfully."
+        );
 
-        $this->flashToast('success', 'Session Ended', "Session for {$userName} terminated successfully.");
-
-        return redirect()->back()->with('status', "Session for {$userName} terminated successfully.");
+        return redirect()->back()->with(
+            'status',
+            "Session for {$userName} terminated successfully."
+        );
     }
-
     public function storeNewLaboratory(Request $request)
     {
         // 1. Validation
@@ -205,6 +232,53 @@ class DashboardController extends Controller
 
             return back()->with('error', 'Critical System Error: Could not initialize facility nodes. ' . $e->getMessage());
         }
+    }
+    public function destroy(Lab $lab)
+    {
+        $labName = $lab->name;
+
+        $computerIds = $lab->computers()
+            ->pluck('id');
+
+        $computerCount = $computerIds->count();
+
+        DB::transaction(function () use ($lab, $computerIds) {
+
+            /*
+         * Preserve historical sessions.
+         * Their laboratory/computer reference becomes NULL
+         * instead of deleting the historical session.
+         */
+            if ($computerIds->isNotEmpty()) {
+                LabSession::whereIn('computer_id', $computerIds)
+                    ->update([
+                        'computer_id' => null,
+                    ]);
+            }
+
+            LabSession::where('lab_id', $lab->id)
+                ->update([
+                    'lab_id' => null,
+                ]);
+
+            /*
+         * Delete all computer records belonging to this laboratory.
+         */
+            $lab->computers()->delete();
+
+            /*
+         * Finally delete the laboratory itself.
+         */
+            $lab->delete();
+        });
+
+        $this->flashToast(
+            'success',
+            'Laboratory Deleted',
+            "{$labName} and {$computerCount} computer unit(s) were permanently removed. Historical sessions and attendance records were preserved."
+        );
+
+        return redirect()->route('dashboard.labs');
     }
 
     /**

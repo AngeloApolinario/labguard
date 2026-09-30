@@ -117,7 +117,7 @@ class PersonnelController extends Controller
 
             // Set to 'released' so the Python script triggers self.lock_ui_again()
             $computer->update([
-                'status'       => 'released',
+                'status'       => Computer::STATUS_RELEASED,
                 'last_ping_at' => now(),
             ]);
 
@@ -136,7 +136,7 @@ class PersonnelController extends Controller
 
         // Even if no session was found, set to 'released' to force-lock the terminal
         $computer->update([
-            'status'       => 'released',
+            'status'       => Computer::STATUS_RELEASED,
             'last_ping_at' => now(),
         ]);
 
@@ -173,7 +173,7 @@ class PersonnelController extends Controller
         Computer::where('lab_id', $labId)
             ->where('status', 'active')
             ->update([
-                'status'       => 'released',
+                'status'       => Computer::STATUS_RELEASED,
                 'last_ping_at' => now(),
             ]);
 
@@ -424,59 +424,105 @@ class PersonnelController extends Controller
         $subjectCode = trim($request->subject_code);
         $emailsToEnroll = [];
 
-        // 1. Smart Extraction from Text Box (Copy-Pasted Excel/Text)
+        // Get emails from textarea
         if ($request->filled('emails')) {
-            preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $request->emails, $matches);
-            $emailsToEnroll = array_merge($emailsToEnroll, $matches[0] ?? []);
+            preg_match_all(
+                '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/',
+                $request->emails,
+                $matches
+            );
+
+            $emailsToEnroll = array_merge(
+                $emailsToEnroll,
+                $matches[0] ?? []
+            );
         }
 
-        // 2. Smart Extraction from Uploaded CSV / TXT Roster File
+        // Get emails from uploaded file
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $content = file_get_contents($file->getRealPath());
-            preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $content, $matches);
-            $emailsToEnroll = array_merge($emailsToEnroll, $matches[0] ?? []);
+
+            preg_match_all(
+                '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/',
+                $content,
+                $matches
+            );
+
+            $emailsToEnroll = array_merge(
+                $emailsToEnroll,
+                $matches[0] ?? []
+            );
         }
 
-        // Clean, lowercase, and deduplicate email list
-        $emailsToEnroll = array_unique(array_map('strtolower', array_map('trim', $emailsToEnroll)));
+        // Clean and remove duplicates
+        $emailsToEnroll = array_unique(
+            array_map(
+                'strtolower',
+                array_map('trim', $emailsToEnroll)
+            )
+        );
 
+        // No valid emails found
         if (empty($emailsToEnroll)) {
-            return back()->with('error', 'No valid email addresses were found in your input.');
+            return back()->with('toast', [
+                'type' => 'warning',
+                'title' => 'No Students Found',
+                'message' => 'No valid email addresses were found in your input.',
+            ]);
         }
 
-        // 3. Batch Enroll All Students
         $enrolledCount = 0;
+
         foreach ($emailsToEnroll as $email) {
-            SubjectEnrollment::updateOrCreate([
-                'subject_code' => $subjectCode,
-                'email'        => $email,
-            ]);
+            SubjectEnrollment::updateOrCreate(
+                [
+                    'subject_code' => $subjectCode,
+                    'email' => $email,
+                ]
+            );
+
             $enrolledCount++;
         }
 
-        return back()->with('success', "Successfully enrolled {$enrolledCount} student(s) into {$subjectCode} for the entire week!");
+        return back()->with('toast', [
+            'type' => 'success',
+            'title' => 'Roster Authorized',
+            'message' => "Successfully enrolled {$enrolledCount} student(s) into {$subjectCode} for the entire week!",
+        ]);
     }
 
-    /**
-     * Remove a student enrollment from a subject
-     */
     public function unenrollStudent(SubjectEnrollment $enrollment)
     {
         $subjectCode = $enrollment->subject_code;
         $email = $enrollment->email;
+
         $enrollment->delete();
 
-        return back()->with('success', "Removed {$email} from {$subjectCode}.");
+        return back()->with('toast', [
+            'type' => 'success',
+            'title' => 'Student Removed',
+            'message' => "Removed {$email} from {$subjectCode}.",
+        ]);
     }
 
     public function clearRoster(Request $request)
     {
-        $request->validate(['subject_code' => 'required|string']);
+        $request->validate([
+            'subject_code' => 'required|string',
+        ]);
 
-        $subjectCode = $request->subject_code;
-        $count = SubjectEnrollment::where('subject_code', $subjectCode)->delete();
+        $subjectCode = trim($request->subject_code);
 
-        return back()->with('success', "Cleared all {$count} enrolled student(s) from {$subjectCode}.");
+        $count = SubjectEnrollment::where(
+            'subject_code',
+            $subjectCode
+        )->delete();
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'title' => 'Roster Cleared',
+            'message' => "Cleared all {$count} enrolled student(s) from {$subjectCode}.",
+        ]);
     }
 }

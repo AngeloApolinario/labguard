@@ -104,9 +104,7 @@
                             <h3 class="text-lg font-black text-slate-900 uppercase tracking-tight">Laboratory Space Utilization</h3>
                             <p class="text-xs text-slate-400 font-bold mt-0.5">Real-time workstation occupancy across monitored campus rooms</p>
                         </div>
-                        <span class="self-start sm:self-auto px-3 py-1 bg-slate-900 text-[#D4AF37] rounded-xl text-[9px] font-mono font-black uppercase tracking-widest border border-slate-800">
-                            Telemetry Active
-                        </span>
+
                     </div>
 
                     <div class="space-y-6">

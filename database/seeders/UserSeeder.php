@@ -17,11 +17,11 @@ class UserSeeder extends Seeder
     {
         $now = Carbon::now();
 
-        // 1. Create Super Admin (The Boss)
+        // 1. Create Super Admin
         User::create([
             'name' => 'Master Super Admin',
-            'email' => 'superadmin@labguard.com',
-            'password' => Hash::make('password'),
+            'email' => 'superadmin@phinmaed.com',
+            'password' => Hash::make('Password1!'),
             'role' => 'super-admin',
             'student_number' => '01-2324-047090',
             'phone' => '09000000001',
@@ -31,41 +31,41 @@ class UserSeeder extends Seeder
         // 2. Create Admin
         User::create([
             'name' => 'System Admin',
-            'email' => 'admin@labguard.com',
-            'password' => Hash::make('password'),
+            'email' => 'admin@phinmaed.com',
+            'password' => Hash::make('Password1!'),
             'role' => 'admin',
             'student_number' => '01-2324-047091',
             'phone' => '09000000002',
             'email_verified_at' => $now,
         ]);
 
-        // 3. Create Personnel (Original Teacher)
+        // 3. Create Personnel
         User::create([
             'name' => 'John Teacher',
-            'email' => 'teacher@labguard.com',
-            'password' => Hash::make('password'),
+            'email' => 'teacher@phinmaed.com',
+            'password' => Hash::make('Password1!'),
             'role' => 'personnel',
             'student_number' => '01-2324-047092',
             'phone' => '09000000003',
             'email_verified_at' => $now,
         ]);
 
-        // 4. Create Personnel (Teacher 2)
+        // 4. Create Personnel
         User::create([
             'name' => 'Maria Santos',
-            'email' => 'msantos@labguard.com',
-            'password' => Hash::make('password'),
+            'email' => 'msantos@phinmaed.com',
+            'password' => Hash::make('Password1!'),
             'role' => 'personnel',
             'student_number' => '01-2324-047093',
             'phone' => '09000000004',
             'email_verified_at' => $now,
         ]);
 
-        // 5. Create Personnel (Teacher 3)
+        // 5. Create Personnel
         User::create([
             'name' => 'Ricardo Dalisay',
-            'email' => 'rdalisay@labguard.com',
-            'password' => Hash::make('password'),
+            'email' => 'rdalisay@phinmaed.com',
+            'password' => Hash::make('Password1!'),
             'role' => 'personnel',
             'student_number' => '01-2324-047094',
             'phone' => '09000000005',
@@ -76,7 +76,7 @@ class UserSeeder extends Seeder
         User::create([
             'name' => 'Juan Dela Cruz',
             'email' => 'juan.student@phinmaed.com',
-            'password' => Hash::make('password'),
+            'password' => Hash::make('Password1!'),
             'role' => 'student',
             'student_number' => '01-2324-047095',
             'phone' => '09123456789',

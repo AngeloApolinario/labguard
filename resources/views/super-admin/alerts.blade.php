@@ -4,10 +4,10 @@
             <div>
                 <div class="flex items-center gap-2 mb-1">
                     <span class="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                    <span class="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4AF37]">Admin Incident & Alerts Command</span>
+                    <span class="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4AF37]">Super Admin Terminal Surveillance</span>
                 </div>
                 <h2 class="font-black text-2xl sm:text-4xl text-slate-800 tracking-tight uppercase">
-                    Computer <span class="text-[#D4AF37]">Alerts</span>
+                    Incident <span class="text-[#D4AF37]">Alerts</span>
                 </h2>
             </div>
 
@@ -29,25 +29,25 @@
     <div class="py-6 sm:py-8 md:py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen">
 
         {{-- ========================================================================= --}}
-        {{-- FILTER BAR (Updated with Laboratory Dropdown)                             --}}
+        {{-- FILTER BAR                                                                --}}
         {{-- ========================================================================= --}}
         <div class="mb-6 sm:mb-8">
             <div class="bg-white border border-slate-200/80 p-5 sm:p-7 rounded-3xl sm:rounded-[2.2rem] shadow-xl shadow-slate-900/5">
-                <form action="{{ route('dashboard.alerts.index') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                <form action="{{ route('super-admin.alerts') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
 
                     {{-- 1. PC Number --}}
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1">Terminal ID</label>
-                        <input type="text" name="pc_number" value="{{ request('pc_number') }}" placeholder="Search PC (e.g. PC-01)..."
+                        <input type="text" name="pc_number" value="{{ request('pc_number') }}" placeholder="E.g. PC-01..."
                             class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] placeholder:text-slate-400 py-3 px-4 transition-all">
                     </div>
 
-                    {{-- 2. NEW: Laboratory Filter --}}
+                    {{-- 2. Laboratory Filter --}}
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1">Laboratory</label>
                         <select name="lab_id" class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] py-3 px-3.5 transition-all cursor-pointer">
                             <option value="">All Laboratories</option>
-                            @foreach($allLabs ?? $labs ?? \App\Models\Lab::orderBy('name')->get() as $l)
+                            @foreach($allLabs as $l)
                             <option value="{{ $l->id }}" {{ request('lab_id') == $l->id ? 'selected' : '' }}>
                                 {{ $l->name }}
                             </option>
@@ -69,7 +69,7 @@
                             <option value="">All Reports</option>
                             <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Needs Attention</option>
                             <option value="resolved" {{ request('status') == 'resolved' ? 'selected' : '' }}>Resolved</option>
-                            <option value="discarded" {{ request('status') == 'discarded' ? 'selected' : '' }}>Discarded (False Alarm)</option>
+                            <option value="discarded" {{ request('status') == 'discarded' ? 'selected' : '' }}>False Alarm / Discarded</option>
                         </select>
                     </div>
 
@@ -81,7 +81,7 @@
                             </svg>
                             <span>Filter</span>
                         </button>
-                        <a href="{{ route('dashboard.alerts.index') }}" class="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider rounded-2xl transition-all text-center shrink-0">
+                        <a href="{{ route('super-admin.alerts') }}" class="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider rounded-2xl transition-all text-center shrink-0">
                             Reset
                         </a>
                     </div>
@@ -90,7 +90,7 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- DESKTOP TABLE LAYOUT (>= md screens)                                      --}}
+        {{-- DESKTOP TABLE LAYOUT                                                      --}}
         {{-- ========================================================================= --}}
         <div class="hidden md:block bg-white border border-slate-200/80 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-slate-900/5">
             <div class="overflow-x-auto">
@@ -108,26 +108,10 @@
                     <tbody class="divide-y divide-slate-100">
                         @forelse($alerts as $alert)
                         @php
-                        // Context resolution: Resolves Laboratory, Subject, and Teacher gracefully
-                        $resolvedLabName = $alert->computer->lab->name
-                        ?? $alert->lab->name
-                        ?? $alert->lab_name
-                        ?? null;
+                        $resolvedLabName = $alert->computer->lab->name ?? $alert->lab->name ?? null;
+                        $resolvedSubject = $alert->subject_code ?? $alert->session->subject_code ?? null;
+                        $resolvedTeacher = $alert->teacher->name ?? $alert->session->teacher->name ?? null;
 
-                        $resolvedSubject = $alert->subject_code
-                        ?? $alert->subject
-                        ?? $alert->session->subject_code
-                        ?? $alert->labSession->subject_code
-                        ?? null;
-
-                        $resolvedTeacher = $alert->teacher->name
-                        ?? $alert->instructor->name
-                        ?? $alert->teacher_name
-                        ?? $alert->session->teacher->name
-                        ?? $alert->labSession->teacher->name
-                        ?? null;
-
-                        // Fallback check against Lab Schedule if not stored directly
                         if (!$resolvedSubject && isset($alert->computer->lab_id)) {
                         $activeSched = \App\Models\Schedule::where('lab_id', $alert->computer->lab_id)
                         ->where('day', $alert->created_at->format('l'))
@@ -175,14 +159,13 @@
                                     </div>
                                 </td>
 
-                                {{-- 3. Issue & Class Context (Uncrowded Micro-Pill) --}}
+                                {{-- 3. Issue & Class Context --}}
                                 <td class="py-6 px-4">
                                     <div class="flex flex-col items-start gap-1.5">
                                         <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg {{ $alert->issue_type == 'Hardware Issue' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-sky-50 text-sky-700 border border-sky-200/60' }}">
                                             {{ $alert->issue_type }}
                                         </span>
 
-                                        {{-- "During Subject • During Teacher" Badge --}}
                                         @if($resolvedSubject || $resolvedTeacher)
                                         <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[8px] font-medium text-slate-600 max-w-[200px]" title="During {{ $resolvedSubject ?? 'Class' }} &bull; {{ $resolvedTeacher ?? 'Instructor' }}">
                                             <span class="size-1 rounded-full bg-[#D4AF37] shrink-0"></span>
@@ -215,21 +198,21 @@
                                     </div>
                                 </td>
 
-                                {{-- 6. Actions --}}
+                                {{-- 6. Super Admin Actions --}}
                                 <td class="py-6 px-7 text-right">
                                     @if($alert->status == 'pending')
                                     <div class="flex items-center justify-end gap-2">
                                         {{-- Discard Action --}}
-                                        <form action="{{ route('dashboard.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm / student trolling?');">
+                                        <form action="{{ route('super-admin.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm / student trolling?');">
                                             @csrf
                                             @method('PATCH')
-                                            <button type="submit" title="Discard as false alarm" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[9px] font-black uppercase px-3.5 py-2.5 rounded-xl transition-all cursor-pointer">
+                                            <button type="submit" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[9px] font-black uppercase px-3.5 py-2.5 rounded-xl transition-all cursor-pointer">
                                                 Discard
                                             </button>
                                         </form>
 
                                         {{-- Resolve Action --}}
-                                        <form action="{{ route('dashboard.alerts.resolve', $alert->id) }}" method="POST">
+                                        <form action="{{ route('super-admin.alerts.resolve', $alert->id) }}" method="POST">
                                             @csrf
                                             @method('PATCH')
                                             <button type="submit" class="bg-[#D4AF37] hover:bg-[#B08D2A] text-slate-950 font-black text-[9px] uppercase px-4 py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer">
@@ -244,10 +227,10 @@
                                             <span class="text-rose-600 text-[9px] font-black uppercase tracking-wider">Discarded</span>
                                         </div>
 
-                                        <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Restore this discarded alert back to pending?');">
+                                        <form action="{{ route('super-admin.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Restore this discarded alert back to pending?');">
                                             @csrf
                                             @method('PATCH')
-                                            <button type="submit" title="Undo discard" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                                            <button type="submit" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1">
                                                 <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                                                 </svg>
@@ -262,10 +245,10 @@
                                             <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
                                         </div>
 
-                                        <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution?');">
+                                        <form action="{{ route('super-admin.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution?');">
                                             @csrf
                                             @method('PATCH')
-                                            <button type="submit" title="Undo resolution" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1">
+                                            <button type="submit" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 hover:text-slate-800 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1">
                                                 <svg class="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                                                 </svg>
@@ -304,14 +287,14 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- MOBILE CARDS LAYOUT (< md screens)                                        --}}
+        {{-- MOBILE CARDS LAYOUT                                                       --}}
         {{-- ========================================================================= --}}
         <div class="block md:hidden space-y-4">
             @forelse($alerts as $alert)
             @php
-            $resolvedLabName = $alert->computer->lab->name ?? $alert->lab->name ?? $alert->lab_name ?? null;
-            $resolvedSubject = $alert->subject_code ?? $alert->subject ?? $alert->session->subject_code ?? null;
-            $resolvedTeacher = $alert->teacher->name ?? $alert->instructor->name ?? $alert->teacher_name ?? null;
+            $resolvedLabName = $alert->computer->lab->name ?? $alert->lab->name ?? null;
+            $resolvedSubject = $alert->subject_code ?? $alert->session->subject_code ?? null;
+            $resolvedTeacher = $alert->teacher->name ?? $alert->session->teacher->name ?? null;
             @endphp
 
             <div class="bg-white border border-slate-200/80 p-5 rounded-3xl shadow-xl shadow-slate-900/5 space-y-4 {{ in_array($alert->status, ['resolved', 'discarded']) ? 'opacity-65 bg-slate-50/50' : '' }}">
@@ -374,8 +357,7 @@
                 <div class="pt-2 border-t border-slate-100">
                     @if($alert->status == 'pending')
                     <div class="grid grid-cols-2 gap-2">
-                        {{-- Discard Action --}}
-                        <form action="{{ route('dashboard.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm / student trolling?');">
+                        <form action="{{ route('super-admin.alerts.discard', $alert->id) }}" method="POST" onsubmit="return confirm('Discard this alert as a false alarm / student trolling?');">
                             @csrf
                             @method('PATCH')
                             <button type="submit" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-[10px] font-black uppercase py-2.5 rounded-xl transition-all cursor-pointer">
@@ -383,8 +365,7 @@
                             </button>
                         </form>
 
-                        {{-- Resolve Action --}}
-                        <form action="{{ route('dashboard.alerts.resolve', $alert->id) }}" method="POST">
+                        <form action="{{ route('super-admin.alerts.resolve', $alert->id) }}" method="POST">
                             @csrf
                             @method('PATCH')
                             <button type="submit" class="w-full bg-[#D4AF37] hover:bg-[#B08D2A] text-slate-950 font-black text-[10px] uppercase py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer">
@@ -399,8 +380,7 @@
                             <span class="text-rose-600 text-[9px] font-black uppercase tracking-wider">Discarded</span>
                         </div>
 
-                        {{-- Undo Discard --}}
-                        <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Restore this discarded alert back to pending?');">
+                        <form action="{{ route('super-admin.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Restore this discarded alert back to pending?');">
                             @csrf
                             @method('PATCH')
                             <button type="submit" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1 cursor-pointer">
@@ -418,8 +398,7 @@
                             <span class="text-emerald-600 text-[9px] font-black uppercase tracking-wider">Resolved</span>
                         </div>
 
-                        {{-- Undo Resolution --}}
-                        <form action="{{ route('dashboard.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution?');">
+                        <form action="{{ route('super-admin.alerts.undo', $alert->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to undo this resolution?');">
                             @csrf
                             @method('PATCH')
                             <button type="submit" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-500 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1 cursor-pointer">

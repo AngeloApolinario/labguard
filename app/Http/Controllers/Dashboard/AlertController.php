@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Alert;
 use App\Models\Computer;
 use Illuminate\Http\Request;
+use App\Models\Lab;
 
 class AlertController extends Controller
 {
@@ -25,27 +26,50 @@ class AlertController extends Controller
     {
         $query = Alert::with(['computer.lab', 'reporter'])->latest();
 
-        if ($request->filled('pc_number')) {
+        // 1. COMBINED FILTER: Restricts PC Number strictly to the selected Laboratory
+        if ($request->filled('lab_id') || $request->filled('pc_number')) {
             $query->whereHas('computer', function ($q) use ($request) {
-                $q->where('pc_number', 'like', '%' . $request->pc_number . '%');
+                if ($request->filled('lab_id')) {
+                    $q->where('lab_id', $request->lab_id);
+                }
+
+                if ($request->filled('pc_number')) {
+                    $cleanPc = trim($request->pc_number);
+                    $q->where('pc_number', 'like', '%' . $cleanPc . '%');
+                }
             });
         }
 
+        // 2. Filter by Date Reported
         if ($request->filled('date')) {
             $query->whereDate('created_at', $request->date);
         }
 
+        // 3. Filter by Status (pending, resolved, discarded)
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        $alerts = $query->paginate(15)->appends($request->query());
+        // 4. Metric Counts for Header Cards
+        $totalReports    = Alert::count();
+        $unresolvedCount = Alert::where('status', 'pending')->count();
+
+        // 5. Paginate and preserve all active filter query parameters
+        $alerts = $query->paginate(15)->withQueryString();
 
         if ($request->expectsJson()) {
             return response()->json($alerts);
         }
 
-        return view('dashboard.alerts.index', compact('alerts'));
+        // 6. Fetch all laboratories for the dropdown filter
+        $allLabs = Lab::orderBy('name')->get();
+
+        return view('dashboard.alerts.index', compact(
+            'alerts',
+            'allLabs',
+            'totalReports',
+            'unresolvedCount'
+        ));
     }
 
     /**

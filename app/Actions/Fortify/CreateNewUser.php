@@ -78,32 +78,32 @@ class CreateNewUser implements CreatesNewUsers
             ->orWhere('student_number', $input['student_number'])
             ->first();
 
-        // 2. If a soft-deleted account exists,
-        //    restore it and update the registration details.
+        // 2. If a soft-deleted account exists, restore it, update details,
+        //    and RESET email_verified_at to null so they must re-verify.
         if ($trashedUser) {
-
             $trashedUser->restore();
 
-            $trashedUser->update([
-                'name' => $input['name'],
-                'email' => $input['email'],
-                'password' => Hash::make($input['password']),
-                'student_number' => $input['student_number'],
-                'phone' => $input['phone'],
-                'role' => 'student',
-            ]);
+            $trashedUser->forceFill([
+                'name'              => $input['name'],
+                'email'             => $input['email'],
+                'password'          => Hash::make($input['password']),
+                'student_number'    => $input['student_number'],
+                'phone'             => $input['phone'],
+                'role'              => 'student',
+                'email_verified_at' => null, // <-- Forces the account to be unverified
+            ])->save();
 
             return $trashedUser;
         }
 
-        // 3. Otherwise, create a new student account.
+        // 3. Otherwise, create a fresh student account.
         return User::create([
-            'name' => $input['name'],
-            'email' => $input['email'],
-            'password' => Hash::make($input['password']),
+            'name'           => $input['name'],
+            'email'          => $input['email'],
+            'password'       => Hash::make($input['password']),
             'student_number' => $input['student_number'],
-            'phone' => $input['phone'],
-            'role' => 'student',
+            'phone'          => $input['phone'],
+            'role'           => 'student',
         ]);
     }
 }

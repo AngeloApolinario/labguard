@@ -58,7 +58,6 @@ class PersonnelController extends Controller
      */
     public function index()
     {
-        // Clean up any PCs that lost Wi-Fi before rendering the page
         Computer::cleanupStaleSessions();
 
         $labs = Lab::withCount([
@@ -86,7 +85,6 @@ class PersonnelController extends Controller
             ->first();
 
         if ($currentSchedule) {
-
             if (
                 auth()->id() !== $currentSchedule->user_id &&
                 auth()->user()->role !== 'admin'
@@ -110,10 +108,7 @@ class PersonnelController extends Controller
                 );
 
                 return redirect()->route('personnel.index')
-                    ->with(
-                        'error',
-                        "Access Denied: This lab is currently reserved for {$currentSchedule->user->name}."
-                    );
+                    ->with('error', "Access Denied: This lab is currently reserved for {$currentSchedule->user->name}.");
             }
         }
 
@@ -128,15 +123,7 @@ class PersonnelController extends Controller
             ->orderBy('start_time')
             ->get();
 
-        return view(
-            'personnel.lab-view',
-            compact(
-                'lab',
-                'computers',
-                'schedules',
-                'currentSchedule'
-            )
-        );
+        return view('personnel.lab-view', compact('lab', 'computers', 'schedules', 'currentSchedule'));
     }
 
     /**
@@ -182,10 +169,7 @@ class PersonnelController extends Controller
             "{$computer->pc_number} is now assigned to {$request->student_name}."
         );
 
-        return back()->with(
-            'success',
-            "{$computer->pc_number} is now assigned to {$request->student_name}."
-        );
+        return back()->with('success', "{$computer->pc_number} is now assigned to {$request->student_name}.");
     }
 
     /**
@@ -199,12 +183,10 @@ class PersonnelController extends Controller
             ->first();
 
         if ($session) {
-
             $session->update([
                 'time_out' => now(),
             ]);
 
-            // Set to 'released' so the Python script triggers self.lock_ui_again()
             $computer->update([
                 'status' => Computer::STATUS_RELEASED,
                 'last_ping_at' => now(),
@@ -242,7 +224,6 @@ class PersonnelController extends Controller
             ]);
         }
 
-        // Even if no session was found, set to 'released' to force-lock the terminal
         $computer->update([
             'status' => Computer::STATUS_RELEASED,
             'last_ping_at' => now(),
@@ -287,15 +268,12 @@ class PersonnelController extends Controller
             ->get();
 
         if ($activePcs->isEmpty()) {
-
             $this->logActivity(
                 'incident_response',
                 "Attempted to terminate active workstations in laboratory {$labId}, but none were active.",
                 'info',
                 null,
-                [
-                    'lab_id' => $labId,
-                ]
+                ['lab_id' => $labId]
             );
 
             return response()->json([
@@ -304,7 +282,6 @@ class PersonnelController extends Controller
             ]);
         }
 
-        // 1. Set all active computers to 'released'
         Computer::where('lab_id', $labId)
             ->where('status', 'active')
             ->update([
@@ -312,7 +289,6 @@ class PersonnelController extends Controller
                 'last_ping_at' => now(),
             ]);
 
-        // 2. Close all active sessions in this lab
         LabSession::where('lab_id', $labId)
             ->whereNull('time_out')
             ->update([
@@ -333,18 +309,14 @@ class PersonnelController extends Controller
             ]
         );
 
-        $this->flashToast(
-            'success',
-            'All Terminals Released',
-            $message
-        );
+        $this->flashToast('success', 'All Computers Released', $message);
 
         return response()->json([
             'status' => 'success',
             'message' => $message,
             'toast' => [
                 'type' => 'success',
-                'title' => 'All Terminals Released',
+                'title' => 'All Computers Released',
                 'message' => $message,
             ]
         ]);
@@ -355,7 +327,6 @@ class PersonnelController extends Controller
      */
     public function labs()
     {
-        // Clean up any PCs that lost Wi-Fi before rendering the page
         Computer::cleanupStaleSessions();
 
         $labs = Lab::withCount([
@@ -382,10 +353,7 @@ class PersonnelController extends Controller
             'Sunday'
         ];
 
-        return view(
-            'personnel.full-schedule',
-            compact('labs', 'days')
-        );
+        return view('personnel.full-schedule', compact('labs', 'days'));
     }
 
     /**
@@ -393,272 +361,115 @@ class PersonnelController extends Controller
      */
     public function sessionHistory(Request $request)
     {
-        $query = LabSession::with([
-            'computer.lab',
-            'teacher',
-            'checklist'
-        ])
-            ->latest('id')
-            ->whereNotNull('time_out');
+        $currentUser = auth()->user();
+        $userRole    = strtolower(trim($currentUser->role ?? ''));
 
-        // Non-admins only see sessions for their classes
-        if (auth()->user()->role !== 'admin') {
-            $query->where(
-                'teacher_id',
-                auth()->id()
-            );
+        $query = LabSession::with(['computer.lab', 'lab', 'teacher', 'checklist'])
+            ->latest('time_in');
+
+        // STRICT RBAC SCOPING:
+        // Only 'admin' and 'super-admin' have global visibility.
+        // Personnel (teachers) will ONLY see their own sessions!
+        $isGlobalAdmin = in_array($userRole, ['admin', 'super-admin', 'super_admin']);
+
+        if (! $isGlobalAdmin) {
+            $query->where('teacher_id', $currentUser->id);
         }
 
-        // 1. Filter by Student Name or Student ID Number
         if ($request->filled('student_name')) {
-
-            $search = trim(
-                $request->student_name
-            );
-
-            $query->where(
-                function ($q) use ($search) {
-
-                    $q->where(
-                        'student_name',
-                        'like',
-                        "%{$search}%"
-                    )
-                        ->orWhere(
-                            'student_id_number',
-                            'like',
-                            "%{$search}%"
-                        );
-                }
-            );
+            $query->where('student_name', 'like', '%' . trim($request->student_name) . '%');
         }
 
-        // 2. Filter by Terminal ID / PC Number
-        if ($request->filled('pc_number')) {
-
-            $pcInput =
-                trim($request->pc_number);
-
-            $query->whereHas(
-                'computer',
-                function ($q) use ($pcInput) {
-
-                    $cleanNum =
-                        preg_replace(
-                            '/\D/',
-                            '',
-                            $pcInput
-                        );
-
-                    $q->where(
-                        'pc_number',
-                        'like',
-                        "%{$pcInput}%"
-                    );
-
-                    if (!empty($cleanNum)) {
-
-                        $num =
-                            (int) $cleanNum;
-
-                        $q->orWhere(
-                            'pc_number',
-                            'like',
-                            "%PC-{$num}%"
-                        )
-                            ->orWhere(
-                                'pc_number',
-                                'like',
-                                "%PC-0{$num}%"
-                            )
-                            ->orWhere(
-                                'pc_number',
-                                'like',
-                                "%PC {$num}%"
-                            )
-                            ->orWhere(
-                                'pc_number',
-                                'like',
-                                "%PC 0{$num}%"
-                            );
-                    }
-                }
-            );
-        }
-
-        // 3. Filter by Date
         if ($request->filled('date')) {
-            $query->whereDate(
-                'time_in',
-                $request->date
-            );
+            $query->whereDate('time_in', $request->date);
         }
 
-        // 4. Retain filters across pagination pages
-        $sessions =
-            $query->paginate(15)
-            ->withQueryString();
+        if ($request->filled('lab_id') || $request->filled('pc_number')) {
+            $query->where(function ($q) use ($request) {
+                if ($request->filled('lab_id')) {
+                    $q->where('lab_id', $request->lab_id)
+                        ->orWhereHas('computer', fn($c) => $c->where('lab_id', $request->lab_id));
+                }
 
-        return view(
-            'personnel.sessions',
-            compact('sessions')
-        );
+                if ($request->filled('pc_number')) {
+                    $cleanPc = trim($request->pc_number);
+                    $q->whereHas('computer', fn($c) => $c->where('pc_number', 'like', "%{$cleanPc}%"));
+                }
+            });
+        }
+
+        $metricsScope = LabSession::query();
+        if (! $isGlobalAdmin) {
+            $metricsScope->where('teacher_id', $currentUser->id);
+        }
+
+        $totalSessions       = (clone $metricsScope)->count();
+        $activeSessionsCount = (clone $metricsScope)->whereNull('time_out')->count();
+
+        $sessions = $query->paginate(15)->withQueryString();
+        $allLabs  = Lab::orderBy('name')->get();
+
+        return view('dashboard.sessions.index', compact(
+            'sessions',
+            'allLabs',
+            'totalSessions',
+            'activeSessionsCount'
+        ));
     }
 
     /**
      * View Alerts/Maintenance History
      */
-    public function alertHistory(Request $request)
+    public function alerthistory(Request $request)
     {
-        $query =
-            Alert::with([
-                'computer.lab',
-                'reporter'
-            ])->latest();
+        $query = Alert::with(['computer.lab', 'reporter']);
 
-        // 1. Filter by PC Number
-        if ($request->filled('pc_number')) {
-
-            $pcInput =
-                trim($request->pc_number);
-
-            $query->whereHas(
-                'computer',
-                function ($q) use ($pcInput) {
-
-                    $cleanNum =
-                        preg_replace(
-                            '/\D/',
-                            '',
-                            $pcInput
-                        );
-
-                    $q->where(
-                        'pc_number',
-                        'like',
-                        "%{$pcInput}%"
-                    );
-
-                    if (!empty($cleanNum)) {
-
-                        $num =
-                            (int) $cleanNum;
-
-                        $q->orWhere(
-                            'pc_number',
-                            'like',
-                            "%PC-{$num}%"
-                        )
-                            ->orWhere(
-                                'pc_number',
-                                'like',
-                                "%PC-0{$num}%"
-                            )
-                            ->orWhere(
-                                'pc_number',
-                                'like',
-                                "%PC {$num}%"
-                            )
-                            ->orWhere(
-                                'pc_number',
-                                'like',
-                                "%PC 0{$num}%"
-                            );
-                    }
+        if ($request->filled('lab_id') || $request->filled('pc_number')) {
+            $query->whereHas('computer', function ($q) use ($request) {
+                if ($request->filled('lab_id')) {
+                    $q->where('lab_id', $request->lab_id);
                 }
-            );
+
+                if ($request->filled('pc_number')) {
+                    $cleanPc = trim($request->pc_number);
+                    $q->where('pc_number', 'LIKE', "%{$cleanPc}%");
+                }
+            });
         }
 
-        // 2. Filter by Date Reported
         if ($request->filled('date')) {
-            $query->whereDate(
-                'created_at',
-                $request->date
-            );
+            $query->whereDate('created_at', $request->date);
         }
 
-        // 3. Filter by Status
         if ($request->filled('status')) {
-            $query->where(
-                'status',
-                $request->status
-            );
+            $query->where('status', $request->status);
         }
 
-        // Accurate counts for header stats
-        $totalReports =
-            Alert::count();
+        $totalReports = Alert::count();
+        $unresolvedCount = Alert::where('status', 'pending')->count();
 
-        $unresolvedCount =
-            Alert::where(
-                'status',
-                'pending'
-            )->count();
+        $alerts = $query->latest()->paginate(10)->withQueryString();
+        $allLabs = Lab::orderBy('name')->get();
 
-        // Paginate and retain active filter query strings
-        $alerts =
-            $query->paginate(15)
-            ->withQueryString();
-
-        return view(
-            'personnel.alerts',
-            compact(
-                'alerts',
-                'totalReports',
-                'unresolvedCount'
-            )
-        );
+        return view('personnel.alerts', compact('alerts', 'allLabs', 'totalReports', 'unresolvedCount'));
     }
 
     /**
      * Mark an alert as dismissed/false alarm.
      */
-    public function discardAlert(
-        Request $request,
-        $id
-    ) {
+    public function discardAlert(Request $request, $id)
+    {
         $alert = Alert::find($id);
 
         if (!$alert) {
-
             if ($request->expectsJson()) {
-
-                $this->logActivity(
-                    'incident_response',
-                    "Attempted to dismiss alert #{$id}, but the alert record was not found.",
-                    'warning',
-                    null,
-                    [
-                        'alert_id' => $id,
-                    ]
-                );
-
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Alert not found.'
-                ], 404);
+                $this->logActivity('incident_response', "Attempted to dismiss alert #{$id}, but the alert record was not found.", 'warning', null, ['alert_id' => $id]);
+                return response()->json(['status' => 'error', 'message' => 'Alert not found.'], 404);
             }
 
-            $this->logActivity(
-                'incident_response',
-                "Attempted to dismiss alert #{$id}, but the alert record was not found.",
-                'warning',
-                null,
-                [
-                    'alert_id' => $id,
-                ]
-            );
-
-            $this->flashToast(
-                'danger',
-                'Not Found',
-                'Alert record could not be found.'
-            );
-
-            return back()->with(
-                'error',
-                'Alert not found.'
-            );
+            $this->logActivity('incident_response', "Attempted to dismiss alert #{$id}, but the alert record was not found.", 'warning', null, ['alert_id' => $id]);
+            $this->flashToast('danger', 'Not Found', 'Alert record could not be found.');
+            return back()->with('error', 'Alert not found.');
         }
 
         $alert->update([
@@ -679,34 +490,120 @@ class PersonnelController extends Controller
             ]
         );
 
-        $this->flashToast(
-            'success',
-            'Alert Discarded',
-            'The alert has been successfully dismissed as a false alarm.'
-        );
+        $this->flashToast('success', 'Alert Discarded', 'The alert has been successfully dismissed as a false alarm.');
+        return back()->with('success', 'Alert successfully discarded as a false alarm.');
+    }
 
-        return back()->with(
-            'success',
-            'Alert successfully discarded as a false alarm.'
-        );
+    // ==========================================================
+    // STYLED SPREADSHEET ENGINE HELPER (.xls)
+    // ==========================================================
+
+    /**
+     * Streams a styled HTML-based Excel spreadsheet (.xls) complete
+     * with dark-slate headers, gold branding, and colored status cells.
+     */
+    private function streamStyledSpreadsheet(
+        string $filename,
+        string $reportTitle,
+        string $subtitle,
+        array $metadata,
+        array $headers,
+        array $rows
+    ) {
+        $headersList = [
+            'Content-Type'        => 'application/vnd.ms-excel; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma'              => 'no-cache',
+            'Cache-Control'       => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires'             => '0',
+        ];
+
+        return response()->stream(function () use ($reportTitle, $subtitle, $metadata, $headers, $rows) {
+            echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+            echo '<head>';
+            echo '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">';
+            echo '<style>';
+            echo 'body { font-family: "Segoe UI", Arial, sans-serif; background-color: #f8fafc; }';
+            echo '.banner-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }';
+            echo '.banner-cell { background-color: #0f172a; padding: 18px; color: #ffffff; border-radius: 8px; }';
+            echo '.main-title { font-size: 16pt; font-weight: bold; color: #D4AF37; letter-spacing: 1px; }';
+            echo '.sub-title { font-size: 10pt; color: #94a3b8; margin-top: 4px; }';
+            echo '.meta-box { background-color: #1e293b; padding: 10px 14px; margin-top: 10px; font-size: 9pt; color: #cbd5e1; border-left: 3px solid #D4AF37; }';
+            echo '.data-table { width: 100%; border-collapse: collapse; margin-top: 12px; }';
+            echo '.data-table th { background-color: #0f172a; color: #D4AF37; font-size: 10pt; font-weight: bold; padding: 10px 12px; border: 1px solid #334155; text-align: left; }';
+            echo '.data-table td { padding: 9px 12px; font-size: 9pt; border: 1px solid #cbd5e1; color: #1e293b; vertical-align: middle; }';
+            echo '.row-even { background-color: #ffffff; }';
+            echo '.row-odd  { background-color: #f8fafc; }';
+            echo '.badge-pass    { background-color: #dcfce7; color: #15803d; font-weight: bold; text-align: center; border-radius: 4px; }';
+            echo '.badge-fail    { background-color: #fee2e2; color: #b91c1c; font-weight: bold; text-align: center; border-radius: 4px; }';
+            echo '.badge-pending { background-color: #fef3c7; color: #b45309; font-weight: bold; text-align: center; border-radius: 4px; }';
+            echo '.badge-neutral { background-color: #f1f5f9; color: #475569; font-weight: bold; text-align: center; border-radius: 4px; }';
+            echo '</style>';
+            echo '</head>';
+            echo '<body>';
+
+            // Top Header Banner
+            echo '<table class="banner-table">';
+            echo '<tr><td class="banner-cell" colspan="' . count($headers) . '">';
+            echo '<div class="main-title">' . htmlspecialchars(strtoupper($reportTitle)) . '</div>';
+            echo '<div class="sub-title">' . htmlspecialchars($subtitle) . '</div>';
+            echo '<div class="meta-box">';
+            foreach ($metadata as $label => $val) {
+                echo '<strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars($val) . ' &nbsp;|&nbsp; ';
+            }
+            echo '<strong>Generated By:</strong> ' . htmlspecialchars(auth()->user()->name ?? 'Personnel') . ' (' . now()->format('M d, Y h:i A') . ')';
+            echo '</div>';
+            echo '</td></tr>';
+            echo '</table>';
+
+            // Main Data Table
+            echo '<table class="data-table">';
+            echo '<thead><tr>';
+            foreach ($headers as $col) {
+                echo '<th>' . htmlspecialchars($col) . '</th>';
+            }
+            echo '</tr></thead>';
+            echo '<tbody>';
+
+            foreach ($rows as $index => $row) {
+                $rowClass = ($index % 2 === 0) ? 'row-even' : 'row-odd';
+                echo '<tr class="' . $rowClass . '">';
+                foreach ($row as $cell) {
+                    $cellClass = '';
+                    $upper = strtoupper(trim((string)$cell));
+
+                    if (in_array($upper, ['PASS', 'YES', 'RESOLVED', 'ACTIVE', '100%'])) {
+                        $cellClass = 'class="badge-pass"';
+                    } elseif (in_array($upper, ['FAIL', 'NO', 'DISCARDED', 'MAINTENANCE', 'CORRUPT'])) {
+                        $cellClass = 'class="badge-fail"';
+                    } elseif (in_array($upper, ['PENDING', 'FLAGGED', 'STILL LOGGED IN'])) {
+                        $cellClass = 'class="badge-pending"';
+                    } elseif (in_array($upper, ['N/A', '--', 'UNLOGGED', 'NONE'])) {
+                        $cellClass = 'class="badge-neutral"';
+                    }
+
+                    echo '<td ' . $cellClass . '>' . htmlspecialchars((string)$cell) . '</td>';
+                }
+                echo '</tr>';
+            }
+
+            echo '</tbody></table>';
+            echo '</body></html>';
+        }, 200, $headersList);
     }
 
     /**
-     * EXPORTING THE ATTENDANCE REPORT AS CSV
-     * Reads a custom date if passed by the Master Schedule grid view layout
+     * EXPORTING THE ATTENDANCE REPORT AS A STYLED SPREADSHEET (.xls)
+     * Formatted with gold/slate branding and colored status cells.
      */
-    public function exportScheduleAttendance(
-        Request $request,
-        $id
-    ) {
-        $schedule =
-            Schedule::findOrFail($id);
+    public function exportScheduleAttendance(Request $request, $id)
+    {
+        $schedule = Schedule::with(['lab', 'user'])->findOrFail($id);
 
         if (
             auth()->id() !== $schedule->user_id &&
             auth()->user()->role !== 'admin'
         ) {
-
             $this->logActivity(
                 'auth',
                 "Unauthorized attendance export attempt for {$schedule->subject_code}.",
@@ -714,50 +611,26 @@ class PersonnelController extends Controller
                 $schedule,
                 [
                     'schedule_id' => $schedule->id,
-                    'lab_id' => $schedule->lab_id,
+                    'lab_id'      => $schedule->lab_id,
                     'attempted_by' => auth()->id(),
                 ]
             );
 
-            abort(
-                403,
-                'Unauthorized action.'
-            );
+            abort(403, 'Unauthorized action.');
         }
 
-        $targetDate =
-            $request->query(
-                'date',
-                now()->toDateString()
-            );
+        $targetDate = $request->query('date', now()->toDateString());
 
-        $sessions =
-            LabSession::where(
-                'lab_id',
-                $schedule->lab_id
-            )
-            ->where(
-                'teacher_id',
-                $schedule->user_id
-            )
-            ->whereDate(
-                'time_in',
-                $targetDate
-            )
-            ->whereTime(
-                'time_in',
-                '>=',
-                $schedule->start_time
-            )
-            ->whereTime(
-                'time_in',
-                '<=',
-                $schedule->end_time
-            )
+        $sessions = LabSession::with('computer')
+            ->where('lab_id', $schedule->lab_id)
+            ->where('teacher_id', $schedule->user_id)
+            ->whereDate('time_in', $targetDate)
+            ->whereTime('time_in', '>=', $schedule->start_time)
+            ->whereTime('time_in', '<=', $schedule->end_time)
+            ->orderBy('time_in')
             ->get();
 
         if ($sessions->isEmpty()) {
-
             $this->logActivity(
                 'system',
                 "Attendance export requested for {$schedule->subject_code}, but no attendance records were found.",
@@ -765,158 +638,79 @@ class PersonnelController extends Controller
                 $schedule,
                 [
                     'schedule_id' => $schedule->id,
-                    'lab_id' => $schedule->lab_id,
-                    'date' => $targetDate,
+                    'lab_id'      => $schedule->lab_id,
+                    'date'        => $targetDate,
                 ]
             );
 
-            $this->flashToast(
-                'danger',
-                'No Attendance Found',
-                'No attendance records found for this session date.'
-            );
-
-            return back()->with(
-                'error',
-                'No attendance records found for this session date.'
-            );
+            $this->flashToast('danger', 'No Attendance Found', 'No attendance records found for this session date.');
+            return back()->with('error', 'No attendance records found for this session date.');
         }
 
-        $fileName =
-            "Attendance_{$schedule->subject_code}_{$targetDate}.csv";
+        $fileName = "Attendance_{$schedule->subject_code}_{$targetDate}.xls";
+
+        $metadata = [
+            'Subject / Course'   => $schedule->subject_code,
+            'Supervising Faculty' => $schedule->user->name ?? 'Instructor',
+            'Laboratory Room'    => $schedule->lab->name ?? 'N/A',
+            'Session Date'       => Carbon::parse($targetDate)->format('M d, Y') . " (" . $schedule->day . ")",
+            'Allocated Window'   => Carbon::parse($schedule->start_time)->format('h:i A') . ' — ' . Carbon::parse($schedule->end_time)->format('h:i A'),
+            'Total Attendees'    => $sessions->count(),
+        ];
+
+        $headers = [
+            '#',
+            'Student Name',
+            'Student ID / Number',
+            'Workstation PC',
+            'Time In',
+            'Time Out',
+            'Session Duration',
+        ];
+
+        $rows = [];
+        foreach ($sessions as $i => $s) {
+            $timeIn = $s->time_in instanceof Carbon ? $s->time_in : Carbon::parse($s->time_in);
+            $timeOutFormat = 'STILL LOGGED IN';
+            $duration = 'Still Logged In';
+
+            if ($s->time_out) {
+                $timeOut = $s->time_out instanceof Carbon ? $s->time_out : Carbon::parse($s->time_out);
+                $timeOutFormat = $timeOut->format('h:i A');
+                $duration = $timeIn->diffInMinutes($timeOut) . ' mins';
+            }
+
+            $rows[] = [
+                $i + 1,
+                strtoupper($s->student_name),
+                $s->student_id_number,
+                $s->computer->pc_number ?? 'PC-??',
+                $timeIn->format('h:i A'),
+                $timeOutFormat,
+                $duration,
+            ];
+        }
 
         $this->logActivity(
             'system',
-            "Exported attendance report for {$schedule->subject_code}.",
+            "Exported attendance spreadsheet for {$schedule->subject_code}.",
             'info',
             $schedule,
             [
-                'schedule_id' => $schedule->id,
-                'lab_id' => $schedule->lab_id,
-                'date' => $targetDate,
-                'record_count' => $sessions->count(),
+                'schedule_id'   => $schedule->id,
+                'lab_id'        => $schedule->lab_id,
+                'date'          => $targetDate,
+                'attendees'     => $sessions->count(),
             ]
         );
 
-        return response()->streamDownload(
-            function () use (
-                $sessions,
-                $schedule,
-                $targetDate
-            ) {
-
-                $file =
-                    fopen(
-                        'php://output',
-                        'w'
-                    );
-
-                fputcsv(
-                    $file,
-                    [
-                        'LABGUARD SYSTEM - ATTENDANCE REPORT'
-                    ]
-                );
-
-                fputcsv(
-                    $file,
-                    [
-                        'Subject',
-                        $schedule->subject_code
-                    ]
-                );
-
-                fputcsv(
-                    $file,
-                    [
-                        'Instructor',
-                        $schedule->user->name
-                    ]
-                );
-
-                fputcsv(
-                    $file,
-                    [
-                        'Session Date',
-                        Carbon::parse(
-                            $targetDate
-                        )->format('M d, Y')
-                    ]
-                );
-
-                fputcsv(
-                    $file,
-                    []
-                );
-
-                fputcsv(
-                    $file,
-                    [
-                        'STUDENT NAME',
-                        'STUDENT NUMBER',
-                        'TIME IN',
-                        'TIME OUT',
-                        'DURATION (MINS)'
-                    ]
-                );
-
-                foreach ($sessions as $s) {
-
-                    $timeIn =
-                        $s->time_in instanceof Carbon
-                        ? $s->time_in
-                        : Carbon::parse(
-                            $s->time_in
-                        );
-
-                    $timeOut = null;
-
-                    $duration =
-                        'Still Logged In';
-
-                    if ($s->time_out) {
-
-                        $timeOut =
-                            $s->time_out instanceof Carbon
-                            ? $s->time_out
-                            : Carbon::parse(
-                                $s->time_out
-                            );
-
-                        $duration =
-                            $timeIn->diffInMinutes(
-                                $timeOut
-                            ) . ' mins';
-
-                        $timeOutFormat =
-                            $timeOut->format(
-                                'h:i A'
-                            );
-                    } else {
-
-                        $timeOutFormat =
-                            'N/A';
-                    }
-
-                    fputcsv(
-                        $file,
-                        [
-                            strtoupper(
-                                $s->student_name
-                            ),
-                            $s->student_id_number,
-                            $timeIn->format(
-                                'h:i A'
-                            ),
-                            $timeOutFormat,
-                            $duration,
-                        ]
-                    );
-                }
-
-                fclose($file);
-            },
-            $fileName
+        return $this->streamStyledSpreadsheet(
+            $fileName,
+            'Academic Class Attendance Ledger',
+            'PHINMA Araullo University &bull; Computer Laboratory Management System',
+            $metadata,
+            $headers,
+            $rows
         );
     }
 
@@ -924,108 +718,53 @@ class PersonnelController extends Controller
     // ENROLLMENT OF STUDENTS TO SUBJECTS
     // ==========================================================
 
-    public function enrollStudent(
-        Request $request
-    ) {
+    public function enrollStudent(Request $request)
+    {
         $request->validate([
             'subject_code' => 'required|string',
-            'emails' => 'nullable|string',
-            'file' => 'nullable|file|mimes:csv,txt|max:5120',
+            'emails'       => 'nullable|string',
+            'file'         => 'nullable|file|mimes:csv,txt|max:5120',
         ]);
 
-        $subjectCode =
-            trim(
-                $request->subject_code
-            );
-
+        $subjectCode = trim($request->subject_code);
         $emailsToEnroll = [];
 
-        // Get emails from textarea
         if ($request->filled('emails')) {
-
-            preg_match_all(
-                '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/',
-                $request->emails,
-                $matches
-            );
-
-            $emailsToEnroll =
-                array_merge(
-                    $emailsToEnroll,
-                    $matches[0] ?? []
-                );
+            preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $request->emails, $matches);
+            $emailsToEnroll = array_merge($emailsToEnroll, $matches[0] ?? []);
         }
 
-        // Get emails from uploaded file
         if ($request->hasFile('file')) {
-
-            $file =
-                $request->file('file');
-
-            $content =
-                file_get_contents(
-                    $file->getRealPath()
-                );
-
-            preg_match_all(
-                '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/',
-                $content,
-                $matches
-            );
-
-            $emailsToEnroll =
-                array_merge(
-                    $emailsToEnroll,
-                    $matches[0] ?? []
-                );
+            $file = $request->file('file');
+            $content = file_get_contents($file->getRealPath());
+            preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $content, $matches);
+            $emailsToEnroll = array_merge($emailsToEnroll, $matches[0] ?? []);
         }
 
-        // Clean and remove duplicates
-        $emailsToEnroll =
-            array_unique(
-                array_map(
-                    'strtolower',
-                    array_map(
-                        'trim',
-                        $emailsToEnroll
-                    )
-                )
-            );
+        $emailsToEnroll = array_unique(array_map('strtolower', array_map('trim', $emailsToEnroll)));
 
-        // No valid emails found
         if (empty($emailsToEnroll)) {
-
             $this->logActivity(
                 'user_management',
                 "Attempted to enroll students into {$subjectCode}, but no valid email addresses were found.",
                 'warning',
                 null,
-                [
-                    'subject_code' => $subjectCode,
-                ]
+                ['subject_code' => $subjectCode]
             );
 
-            return back()->with(
-                'toast',
-                [
-                    'type' => 'warning',
-                    'title' => 'No Students Found',
-                    'message' => 'No valid email addresses were found in your input.',
-                ]
-            );
+            return back()->with('toast', [
+                'type'    => 'warning',
+                'title'   => 'No Students Found',
+                'message' => 'No valid email addresses were found in your input.',
+            ]);
         }
 
         $enrolledCount = 0;
-
         foreach ($emailsToEnroll as $email) {
-
-            SubjectEnrollment::updateOrCreate(
-                [
-                    'subject_code' => $subjectCode,
-                    'email' => $email,
-                ]
-            );
-
+            SubjectEnrollment::updateOrCreate([
+                'subject_code' => $subjectCode,
+                'email'        => $email,
+            ]);
             $enrolledCount++;
         }
 
@@ -1035,29 +774,22 @@ class PersonnelController extends Controller
             'info',
             null,
             [
-                'subject_code' => $subjectCode,
+                'subject_code'   => $subjectCode,
                 'enrolled_count' => $enrolledCount,
             ]
         );
 
-        return back()->with(
-            'toast',
-            [
-                'type' => 'success',
-                'title' => 'Roster Authorized',
-                'message' => "Successfully enrolled {$enrolledCount} student(s) into {$subjectCode} for the entire week!",
-            ]
-        );
+        return back()->with('toast', [
+            'type'    => 'success',
+            'title'   => 'Roster Authorized',
+            'message' => "Successfully enrolled {$enrolledCount} student(s) into {$subjectCode} for the entire week!",
+        ]);
     }
 
-    public function unenrollStudent(
-        SubjectEnrollment $enrollment
-    ) {
-        $subjectCode =
-            $enrollment->subject_code;
-
-        $email =
-            $enrollment->email;
+    public function unenrollStudent(SubjectEnrollment $enrollment)
+    {
+        $subjectCode = $enrollment->subject_code;
+        $email       = $enrollment->email;
 
         $this->logActivity(
             'user_management',
@@ -1066,40 +798,29 @@ class PersonnelController extends Controller
             $enrollment,
             [
                 'enrollment_id' => $enrollment->id,
-                'subject_code' => $subjectCode,
-                'email' => $email,
+                'subject_code'  => $subjectCode,
+                'email'         => $email,
             ]
         );
 
         $enrollment->delete();
 
-        return back()->with(
-            'toast',
-            [
-                'type' => 'success',
-                'title' => 'Student Removed',
-                'message' => "Removed {$email} from {$subjectCode}.",
-            ]
-        );
+        return back()->with('toast', [
+            'type'    => 'success',
+            'title'   => 'Student Removed',
+            'message' => "Removed {$email} from {$subjectCode}.",
+        ]);
     }
 
-    public function clearRoster(
-        Request $request
-    ) {
+    public function clearRoster(Request $request)
+    {
         $request->validate([
             'subject_code' => 'required|string',
         ]);
 
-        $subjectCode =
-            trim(
-                $request->subject_code
-            );
+        $subjectCode = trim($request->subject_code);
 
-        $count =
-            SubjectEnrollment::where(
-                'subject_code',
-                $subjectCode
-            )->delete();
+        $count = SubjectEnrollment::where('subject_code', $subjectCode)->delete();
 
         $this->logActivity(
             'user_management',
@@ -1107,18 +828,15 @@ class PersonnelController extends Controller
             'warning',
             null,
             [
-                'subject_code' => $subjectCode,
+                'subject_code'  => $subjectCode,
                 'cleared_count' => $count,
             ]
         );
 
-        return back()->with(
-            'toast',
-            [
-                'type' => 'success',
-                'title' => 'Roster Cleared',
-                'message' => "Cleared all {$count} enrolled student(s) from {$subjectCode}.",
-            ]
-        );
+        return back()->with('toast', [
+            'type'    => 'success',
+            'title'   => 'Roster Cleared',
+            'message' => "Cleared all {$count} enrolled student(s) from {$subjectCode}.",
+        ]);
     }
 }

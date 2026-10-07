@@ -1376,6 +1376,7 @@ class LabGuardClient:
 
         self.wifi_modal = None
         self.wifi_active = False
+        self.shutdown_modal = None
 
         self.overlay = None
 
@@ -1489,6 +1490,22 @@ class LabGuardClient:
                     self.overlay.lift()
 
                     self.overlay.attributes(
+                        "-topmost",
+                        True
+                    )
+
+                    return
+                # =====================================================
+                # SHUTDOWN MODAL
+                # =====================================================
+
+                if (
+                    self.shutdown_modal
+                    and self.shutdown_modal.winfo_exists()
+                ):
+                    self.shutdown_modal.lift()
+
+                    self.shutdown_modal.attributes(
                         "-topmost",
                         True
                     )
@@ -1725,6 +1742,34 @@ class LabGuardClient:
         self.btn_unlock.pack(
             pady=25
         )
+        self.shutdown_button = tk.Button(
+            self.root,
+            text="⏻",
+            command=self.shutdown_pc,
+            bg="#1e293b",
+            fg="#ef4444",
+            activebackground="#7f1d1d",
+            activeforeground="white",
+            font=("Arial", 20, "bold"),
+            width=3,
+            height=1,
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#334155",
+            cursor="hand2"
+        )
+
+        self.shutdown_button.place(
+            relx=0.0,
+            rely=1.0,
+            x=25,
+            y=-25,
+            anchor="sw"
+        )
+
+
+        
 
         # -------------------------------------------------------------
         # MAINTENANCE UI
@@ -2003,7 +2048,8 @@ class LabGuardClient:
             if event.widget not in (
                 self.entry_id,
                 self.entry_password,
-                self.btn_unlock
+                self.btn_unlock,
+                self.shutdown_button
             ):
                 if self.login_view.winfo_ismapped():
                     self.entry_id.focus_set()
@@ -4494,6 +4540,20 @@ class LabGuardClient:
                     "-topmost",
                     True
                 )
+            # ---------------------------------------------------------
+            # SHUTDOWN MODAL
+            # ---------------------------------------------------------
+
+            elif (
+                self.shutdown_modal
+                and self.shutdown_modal.winfo_exists()
+            ):
+                self.shutdown_modal.lift()
+
+                self.shutdown_modal.attributes(
+                    "-topmost",
+                    True
+                )
 
             # ---------------------------------------------------------
             # LOGIN
@@ -4506,6 +4566,7 @@ class LabGuardClient:
                     "-topmost",
                     True
                 )
+            
 
         except tk.TclError:
             pass
@@ -4998,6 +5059,153 @@ class LabGuardClient:
 
         except Exception:
             self.lock_ui_again()
+
+    def shutdown_pc(self):
+        if self.shutdown_modal and self.shutdown_modal.winfo_exists():
+            try:
+                self.shutdown_modal.lift()
+                self.shutdown_modal.attributes("-topmost", True)
+                self.shutdown_modal.focus_force()
+            except Exception:
+                pass
+            return
+
+        self.shutdown_modal = tk.Toplevel(self.root)
+        self.shutdown_modal.configure(
+            bg="#1e293b",
+            highlightbackground="#ef4444",
+            highlightthickness=2
+        )
+        self.shutdown_modal.overrideredirect(True)
+
+        width = 460
+        height = 230
+
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+
+        x = (screen_w // 2) - (width // 2)
+        y = (screen_h // 2) - (height // 2)
+
+        self.shutdown_modal.geometry(f"{width}x{height}+{x}+{y}")
+        self.shutdown_modal.attributes("-topmost", True)
+        self.shutdown_modal.transient(self.root)
+
+        def close_modal(event=None):
+            if self.shutdown_modal:
+                try:
+                    self.shutdown_modal.grab_release()
+                except Exception:
+                    pass
+                try:
+                    self.shutdown_modal.destroy()
+                except Exception:
+                    pass
+            self.shutdown_modal = None
+            self.restore_login_focus()
+
+        def confirm_and_power_off():
+            close_modal()
+
+            print(f"[SHUTDOWN] Shutdown confirmed for {PC_NUMBER}.")
+            self.is_session_active = False
+
+            try:
+                send_logout_signal()
+            except Exception as e:
+                print(f"[SHUTDOWN] Release signal failed: {e}")
+
+            try:
+                self.stop_system_tray()
+            except Exception:
+                pass
+
+            try:
+                self.hide_floating_signout_pill()
+            except Exception:
+                pass
+
+            cleanup_security()
+
+            self.root.after(
+                300,
+                lambda: subprocess.Popen(
+                    ["shutdown", "/s", "/t", "0"],
+                    creationflags=(
+                        subprocess.CREATE_NO_WINDOW
+                        if hasattr(subprocess, "CREATE_NO_WINDOW")
+                        else 0
+                    )
+                )
+            )
+
+        self.shutdown_modal.protocol("WM_DELETE_WINDOW", close_modal)
+        self.shutdown_modal.bind("<Escape>", close_modal)
+
+        # Header Title
+        tk.Label(
+            self.shutdown_modal,
+            text="SHUT DOWN WORKSTATION",
+            fg="#ef4444",
+            bg="#1e293b",
+            font=("Arial Black", 15),
+        ).pack(pady=(24, 6))
+
+        # Station & Warning Details
+        tk.Label(
+            self.shutdown_modal,
+            text=(
+                f"Are you sure you want to turn off {PC_NUMBER} ({LAB_ID})?\n"
+                "The workstation will be released and powered off immediately."
+            ),
+            fg="#cbd5e1",
+            bg="#1e293b",
+            font=("Arial", 10),
+            justify="center",
+            wraplength=400,
+        ).pack(pady=(0, 20))
+
+        # Action Buttons
+        btn_box = tk.Frame(self.shutdown_modal, bg="#1e293b")
+        btn_box.pack()
+
+        tk.Button(
+            btn_box,
+            text="⏻ SHUT DOWN",
+            command=confirm_and_power_off,
+            bg="#ef4444",
+            fg="white",
+            activebackground="#dc2626",
+            activeforeground="white",
+            font=("Arial", 9, "bold"),
+            width=16,
+            height=2,
+            relief="flat",
+            cursor="hand2",
+        ).pack(side="left", padx=8)
+
+        tk.Button(
+            btn_box,
+            text="CANCEL",
+            command=close_modal,
+            bg="#475569",
+            fg="white",
+            activebackground="#64748b",
+            activeforeground="white",
+            font=("Arial", 9, "bold"),
+            width=12,
+            height=2,
+            relief="flat",
+            cursor="hand2",
+        ).pack(side="left", padx=8)
+
+        try:
+            self.shutdown_modal.grab_set()
+        except Exception:
+            pass
+
+        self.shutdown_modal.lift()
+        self.shutdown_modal.focus_force()
 
     # =================================================================
     # HEARTBEAT

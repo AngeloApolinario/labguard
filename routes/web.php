@@ -250,8 +250,10 @@ Route::middleware([
 
     // GLOBAL SESSIONS & SYSTEM ALERTS
     Route::get('/sessions', [SuperAdminController::class, 'sessions'])->name('sessions');
-    Route::get('/alerts', [AlertController::class, 'index'])->name('alerts');
-    Route::patch('/alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
+    Route::get('/alerts', [SuperAdminController::class, 'alerts'])->name('alerts');
+    Route::patch('/alerts/{alert}/resolve', [SuperAdminController::class, 'resolveAlert'])->name('alerts.resolve');
+    Route::patch('/alerts/{alert}/discard', [SuperAdminController::class, 'discardAlert'])->name('alerts.discard');
+    Route::patch('/alerts/{alert}/undo', [SuperAdminController::class, 'undoAlert'])->name('alerts.undo');
 
     // EMERGENCY CONTROLS & SYSTEM MAINTENANCE
     Route::post('/reports/generate', [SuperAdminController::class, 'generateReport'])->name('reports.generate');

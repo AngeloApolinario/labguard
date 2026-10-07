@@ -12,7 +12,13 @@
                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Clearance:
                     <span class="{{ Auth::user()->role === 'admin' ? 'text-[#D4AF37]' : 'text-cyan-500' }}">
-                        {{ Auth::user()->role === 'admin' ? 'Admin' : 'Personnel' }}
+                        {{ [
+    'super-admin' => 'Super Admin',
+    'super_admin' => 'Super Admin',
+    'admin'       => 'Admin',
+    'personnel'   => 'Personnel',
+    'student'     => 'Student',
+][Auth::user()->role] ?? 'User' }}
                     </span>
                 </span>
             </div>

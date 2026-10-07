@@ -42,22 +42,7 @@
 
     <div class="py-12 px-6 min-h-screen  relative overflow-hidden">
 
-        {{-- ACCESS DENIED ALERT --}}
-        @if(session('error'))
-        <div class="max-w-7xl mx-auto mb-8 animate-bounce">
-            <div class="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center gap-4">
-                <div class="size-10 bg-rose-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-rose-200">
-                    <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                </div>
-                <div>
-                    <p class="text-xs font-black text-rose-500 uppercase tracking-widest">Access Restricted</p>
-                    <p class="text-sm font-bold text-rose-800">{{ session('error') }}</p>
-                </div>
-            </div>
-        </div>
-        @endif
+
 
         {{-- High-End Ambient Background --}}
         <div class="absolute top-0 left-0 w-full h-full opacity-30 pointer-events-none">

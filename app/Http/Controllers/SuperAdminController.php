@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Spatie\Activitylog\Models\Activity;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Schema;
 
 class SuperAdminController extends Controller
 {
@@ -282,6 +284,71 @@ class SuperAdminController extends Controller
         $this->flashToast('success', 'User Removed', 'User removed from system.');
 
         return redirect()->back()->with('status', 'User removed from system.');
+    }
+
+    /**
+     * Restore user from Archive Vault.
+     */
+    public function restoreUser($id)
+    {
+        $user = User::onlyTrashed()->findOrFail($id);
+        $user->restore();
+
+        $this->flashToast('success', 'Account Restored', "{$user->name} ({$user->student_number}) has been reinstated to active status.");
+
+        return back();
+    }
+
+    /**
+     * Permanently purge a soft-deleted user record forever.
+     */
+    public function forceDeleteUser($id)
+    {
+        $user = User::onlyTrashed()->findOrFail($id);
+
+        // 1. Check for linked alerts and schedules
+        $hasAlerts    = Alert::where('reported_by', $user->id)->exists();
+        $hasSchedules = Schedule::where('user_id', $user->id)->exists();
+
+        // 2. Check for lab sessions by student_id_number (or student_number)
+        $hasSessions = false;
+        if (!empty($user->student_number)) {
+            if (Schema::hasColumn('lab_sessions', 'student_id_number')) {
+                $hasSessions = LabSession::where('student_id_number', $user->student_number)->exists();
+            } elseif (Schema::hasColumn('lab_sessions', 'student_number')) {
+                $hasSessions = LabSession::where('student_number', $user->student_number)->exists();
+            }
+        }
+
+        // 3. Block purge if history exists
+        if ($hasSessions || $hasAlerts || $hasSchedules) {
+            $this->flashToast(
+                'danger',
+                'Purge Prevented',
+                "Cannot permanently purge {$user->name}. This user is linked to historical lab sessions, alerts, or schedules. Keep them quarantined in the Archive Vault instead."
+            );
+            return back();
+        }
+
+        // 4. Safe to delete (e.g. test accounts or typo enrollments with no history)
+        try {
+            $userName = $user->name;
+            $user->forceDelete();
+
+            $this->flashToast(
+                'success',
+                'Record Purged',
+                "Account for {$userName} has been permanently deleted from the database."
+            );
+        } catch (QueryException $e) {
+            $this->flashToast(
+                'danger',
+                'Database Error',
+                'Cannot delete this user because other records in the database depend on it.'
+            );
+        }
+
+        return back();
     }
 
     // ==========================================================

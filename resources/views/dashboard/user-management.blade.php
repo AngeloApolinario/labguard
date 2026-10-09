@@ -1,3 +1,8 @@
+@php
+// Safe fallback so the view works instantly even before updating the controller
+$archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('deleted_at')->get();
+@endphp
+
 <x-app-layout>
     <!-- Page Header Slot -->
     <x-slot name="header">
@@ -13,6 +18,21 @@
                     </p>
                 </div>
             </div>
+
+            {{-- Header Action Badges --}}
+            <div class="flex items-center gap-2">
+                <button @click="archiveModal = true"
+                    type="button"
+                    class="group px-4 py-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-[#D4AF37]/50 hover:shadow-md transition-all flex items-center gap-2.5 cursor-pointer">
+                    <div class="size-2 rounded-full {{ $archivedUsers->count() > 0 ? 'bg-amber-500 animate-pulse' : 'bg-slate-300' }}"></div>
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-600 group-hover:text-slate-900">
+                        Archive Vault
+                    </span>
+                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black font-mono {{ $archivedUsers->count() > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500' }}">
+                        {{ $archivedUsers->count() }}
+                    </span>
+                </button>
+            </div>
         </div>
     </x-slot>
 
@@ -21,9 +41,12 @@
         addModal: {{ $errors->hasAny(['name', 'email', 'student_number', 'role', 'phone', 'password']) ? 'true' : 'false' }}, 
         editModal: false, 
         massEnrollModal: {{ $errors->has('file') ? 'true' : 'false' }},
+        archiveModal: false,
         currentUser: {},
         search: '',
-        selectedRole: ''
+        selectedRole: '',
+        archiveSearch: '',
+        archiveRole: ''
     }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
@@ -53,8 +76,19 @@
                 </div>
 
                 <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+                    <!-- Archive Vault Trigger Button -->
+                    <button @click="archiveModal = true" type="button" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-95 text-sm cursor-pointer border border-slate-200/80">
+                        <svg class="w-4 h-4 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                        </svg>
+                        <span>Archive Vault</span>
+                        <span class="bg-amber-500/15 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full font-mono">
+                            {{ $archivedUsers->count() }}
+                        </span>
+                    </button>
+
                     <!-- Mass Enroll Button -->
-                    <button @click="massEnrollModal = true" class="w-full sm:w-auto bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm">
+                    <button @click="massEnrollModal = true" class="w-full sm:w-auto bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm cursor-pointer">
                         <svg class="w-5 h-5 text-[#D4AF37]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                         </svg>
@@ -62,7 +96,7 @@
                     </button>
 
                     <!-- Add User Button -->
-                    <button @click="addModal = true" class="w-full sm:w-auto bg-[#D4AF37] hover:bg-[#b8962d] text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm">
+                    <button @click="addModal = true" class="w-full sm:w-auto bg-[#D4AF37] hover:bg-[#b8962d] text-white px-5 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm cursor-pointer">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                         </svg>
@@ -75,10 +109,16 @@
             <div class="bg-white rounded-2xl sm:rounded-[2.5rem] p-4 sm:p-6 md:p-10 shadow-sm border border-slate-100">
                 <div class="flex items-center justify-between mb-6 sm:mb-8">
                     <div class="flex items-center gap-3">
-                        <h3 class="text-lg sm:text-xl font-black text-slate-800 tracking-tight">All Users</h3>
+                        <h3 class="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Active Users</h3>
                         <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-black">
                             {{ $users->count() }} Total
                         </span>
+                        @if($archivedUsers->count() > 0)
+                        <button @click="archiveModal = true" class="text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60 px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
+                            <span class="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            {{ $archivedUsers->count() }} Soft-Deleted in Archive
+                        </button>
+                        @endif
                     </div>
                 </div>
 
@@ -161,7 +201,7 @@
 
                                             <hr class="border-slate-50">
 
-                                            <form method="POST" action="{{ route('dashboard.users.destroy', $user->id) }}" onsubmit="return confirm('Permanently remove this user?')">
+                                            <form method="POST" action="{{ route('dashboard.users.destroy', $user->id) }}" onsubmit="return confirm('Soft-delete this account? The user will be moved to the Archive Vault.')">
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="w-full text-left px-5 py-3 text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 transition-colors">
                                                     Delete Account
@@ -174,6 +214,175 @@
                             @endforeach
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+
+        {{-- ========================================================================= --}}
+        {{-- ARCHIVE VAULT MODAL (AWARD-WINNING LUXURY INTERFACE)                     --}}
+        {{-- ========================================================================= --}}
+        <div x-show="archiveModal"
+            x-cloak
+            class="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+            role="dialog" aria-modal="true">
+
+            {{-- Backdrop --}}
+            <div x-show="archiveModal"
+                x-transition:enter="ease-out duration-300"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="ease-in duration-200"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                @click="archiveModal = false"
+                class="fixed inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity"></div>
+
+            {{-- Modal Dialog --}}
+            <div x-show="archiveModal"
+                x-transition:enter="ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave="ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                @click.stop
+                class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-slate-800 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-4xl max-h-[92vh] flex flex-col">
+
+                {{-- Header --}}
+                <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 p-6 sm:p-8 shrink-0 relative">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2.5 mb-1.5">
+                            <span class="size-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span class="text-[9px] font-black uppercase tracking-[0.3em] text-[#D4AF37]">Quarantine Repository</span>
+                        </div>
+                        <button type="button" @click="archiveModal = false"
+                            class="text-slate-400 hover:text-white transition-colors size-8 rounded-xl bg-slate-800/80 hover:bg-slate-800 flex items-center justify-center cursor-pointer">
+                            ✕
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
+                        <div>
+                            <h3 class="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
+                                Archived User <span class="text-[#D4AF37]">Vault</span>
+                            </h3>
+                            <p class="text-xs text-slate-400 font-medium mt-0.5">
+                                Soft-deleted student and personnel records. Accounts can be restored to active service at any time.
+                            </p>
+                        </div>
+
+                        {{-- Search within Archive --}}
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <div class="relative w-full sm:w-64">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+                                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </span>
+                                <input type="text"
+                                    x-model="archiveSearch"
+                                    placeholder="Filter archived records..."
+                                    class="w-full bg-slate-800/90 border border-slate-700/80 text-white rounded-xl text-xs py-2 pl-9 pr-3 focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] placeholder:text-slate-500">
+                            </div>
+
+                            <select x-model="archiveRole"
+                                class="bg-slate-800/90 border border-slate-700/80 text-white rounded-xl text-xs py-2 px-3 focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] cursor-pointer">
+                                <option value="">All</option>
+                                <option value="student">Student</option>
+                                <option value="personnel">Personnel</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Archive Body List --}}
+                <div class="p-6 sm:p-8 overflow-y-auto space-y-3 custom-scroll flex-1">
+                    @forelse($archivedUsers as $archived)
+                    <div class="p-4 sm:p-5 rounded-2xl bg-slate-800/60 border border-slate-700/60 hover:border-slate-600 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                        x-show="(archiveSearch === '' || '{{ strtolower($archived->name . ' ' . $archived->email . ' ' . $archived->student_number) }}'.includes(archiveSearch.toLowerCase())) && (archiveRole === '' || '{{ $archived->role }}' === archiveRole)"
+                        x-transition>
+
+                        {{-- Left: User Meta --}}
+                        <div class="flex items-start sm:items-center gap-3.5">
+                            <div class="size-11 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-center font-bold text-slate-400 text-xs shrink-0 shadow-inner">
+                                <span class="relative">
+                                    {{ substr($archived->name, 0, 1) }}
+                                    <span class="absolute -bottom-1 -right-1 size-2 rounded-full bg-rose-500 ring-2 ring-slate-900"></span>
+                                </span>
+                            </div>
+
+                            <div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h4 class="text-sm font-black text-white tracking-tight">{{ $archived->name }}</h4>
+                                    <span class="px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider
+                                        {{ $archived->role == 'admin' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : '' }}
+                                        {{ $archived->role == 'student' ? 'bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30' : '' }}
+                                        {{ $archived->role == 'personnel' ? 'bg-slate-700 text-slate-300 border border-slate-600' : '' }}">
+                                        {{ $archived->role }}
+                                    </span>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] font-medium text-slate-400">
+                                    <span class="font-mono text-slate-300">{{ $archived->student_number ?? 'No ID Assigned' }}</span>
+                                    <span class="text-slate-600">•</span>
+                                    <span>{{ $archived->email }}</span>
+                                    @if($archived->phone)
+                                    <span class="text-slate-600">•</span>
+                                    <span class="font-mono">{{ $archived->phone }}</span>
+                                    @endif
+                                </div>
+
+                                <p class="text-[9px] font-mono text-rose-400/90 mt-1.5 flex items-center gap-1.5">
+                                    <svg class="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    <span>Deleted {{ $archived->deleted_at?->diffForHumans() }} ({{ $archived->deleted_at?->format('M d, Y h:i A') }})</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        {{-- Right: Actions --}}
+                        <div class="flex items-center justify-end gap-2 shrink-0 pt-2 md:pt-0 border-t border-slate-700/40 md:border-t-0">
+                            {{-- Restore Action --}}
+                            <form method="POST" action="{{ Route::has('dashboard.users.restore') ? route('dashboard.users.restore', $archived->id) : url('/dashboard/users/' . $archived->id . '/restore') }}"
+                                onsubmit="return confirm('Restore this user account? The user will immediately be able to login and access workstations.')">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit"
+                                    class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black uppercase text-[10px] tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer">
+                                    <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    <span>Restore Account</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    @empty
+                    <div class="py-16 text-center">
+                        <div class="size-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mx-auto mb-3">
+                            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                            </svg>
+                        </div>
+                        <h4 class="text-sm font-black text-white uppercase tracking-wider">Archive Vault Empty</h4>
+                        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                            No soft-deleted student or personnel accounts are currently quarantined in the archive.
+                        </p>
+                    </div>
+                    @endforelse
+                </div>
+
+                {{-- Footer --}}
+                <div class="p-5 sm:p-6 bg-slate-950/70 border-t border-slate-800 flex items-center justify-between shrink-0">
+                    <p class="text-[9px] text-slate-400 font-mono uppercase tracking-wider">
+                        Archived Total: <span class="text-[#D4AF37] font-bold">{{ $archivedUsers->count() }} accounts</span>
+                    </p>
+                    <button type="button" @click="archiveModal = false"
+                        class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer">
+                        Close Vault
+                    </button>
                 </div>
             </div>
         </div>
@@ -221,7 +430,7 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="space-y-1">
-                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">ID Number (01-XXXX-XXXXXX)</label>
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">ID Number (XX-XXXX-XXXX...)</label>
                             <input type="text" name="student_number" value="{{ old('student_number') }}"
                                 class="w-full rounded-xl @error('student_number') border-red-500 @else border-slate-200 @enderror bg-slate-50 text-sm py-3 px-4 focus:ring-[#D4AF37]"
                                 placeholder="01-2324-048389" required>
@@ -425,7 +634,7 @@
                         <ol class="list-decimal list-inside text-xs text-slate-600 space-y-1 font-medium mb-4">
                             <li>The first row of your spreadsheet <strong>must</strong> contain exact column header names.</li>
                             <li>Valid roles are: <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">student</code>, <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">personnel</code>, or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">admin</code>.</li>
-                            <li>Format file as <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.csv</code> or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.TXT</code>.</li>
+                            <li>Format file as <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.csv</code> or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">.xlsx</code>.</li>
                         </ol>
 
                         <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Required Columns & Sample Header:</p>

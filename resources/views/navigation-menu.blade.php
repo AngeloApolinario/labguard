@@ -22,7 +22,7 @@ default => Route::has('login') ? route('login') : '#',
 
         <button @click="open = !open"
             type="button"
-            class="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-none transition-all">
+            class="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-none transition-all cursor-pointer">
             <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path x-show="!open" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                 <path x-show="open" x-cloak stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -147,11 +147,11 @@ default => Route::has('login') ? route('login') : '#',
         <div class="mt-auto p-4 space-y-3 border-t border-slate-800 bg-slate-950/30">
             @auth
             <div class="relative px-1">
-                <x-dropdown align="up" width="full">
+                <x-dropdown align="up" width="full" contentClasses="py-0 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
                     <x-slot name="trigger">
-                        <button class="group flex items-center w-full p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 hover:border-[#D4AF37]/60 hover:bg-slate-800 transition-all duration-300">
+                        <button class="group flex items-center w-full p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 hover:border-[#D4AF37]/60 hover:bg-slate-800 transition-all duration-300 cursor-pointer">
                             <div class="relative shrink-0">
-                                <img class="size-9 rounded-lg object-cover mr-3 ring-2 ring-slate-700 group-hover:ring-[#D4AF37] transition-all" src="{{ Auth::user()->profile_photo_url }}" alt="">
+                                <img class="size-9 rounded-lg object-cover mr-3 ring-2 ring-slate-700 group-hover:ring-[#D4AF37] transition-all" src="{{ Auth::user()->profile_photo_url }}" alt="{{ Auth::user()->name }}">
                                 <div class="absolute -bottom-1 -right-1 size-3 bg-green-500 border-2 border-slate-900 rounded-full"></div>
                             </div>
                             <div class="text-left flex-1 min-w-0">
@@ -175,29 +175,41 @@ default => Route::has('login') ? route('login') : '#',
                     </x-slot>
 
                     <x-slot name="content">
-                        <div class="px-4 py-2 border-b border-slate-100">
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        {{-- Dropdown Header --}}
+                        <div class="px-4 py-2.5 border-b border-slate-800 bg-slate-950">
+                            <p class="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">
                                 @if(Auth::user()->role === 'super-admin') Master Access @else Account Access @endif
                             </p>
                         </div>
 
-
+                        {{-- USER SETTINGS: Pure White Text on Dark Slate --}}
                         @if(Auth::user()->role !== 'student')
-                        <x-dropdown-link href="{{ route('profile.show') }}">
-                            User Settings
-                        </x-dropdown-link>
-
-                        <div class="border-t border-slate-100"></div>
+                        <a href="{{ route('profile.show') }}"
+                            class="group flex items-center gap-3 px-4 py-3 bg-slate-900 hover:bg-slate-800 border-b border-slate-800/80 transition-all cursor-pointer">
+                            <div class="size-8 rounded-xl bg-slate-800 border border-slate-700 group-hover:border-[#D4AF37]/50 group-hover:bg-[#D4AF37]/15 flex items-center justify-center transition-colors shrink-0">
+                                <svg class="size-4 text-[#D4AF37]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </div>
+                            <div class="text-left flex-1 min-w-0">
+                                <span class="block text-white font-bold text-xs leading-none">User Settings</span>
+                                <span class="block text-[10px] text-slate-400 font-medium mt-1">Profile, security & preferences</span>
+                            </div>
+                        </a>
                         @endif
 
-
-
-                        <div class="border-t border-slate-100"></div>
-
-                        <form method="POST" action="{{ route('logout') }}">
+                        {{-- SIGN OUT: Vibrant Rose Red on Dark Slate --}}
+                        <form method="POST" action="{{ route('logout') }}" class="bg-slate-900 m-0">
                             @csrf
-                            <button type="submit" class="flex w-full px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-all">
-                                Sign Out
+                            <button type="submit"
+                                class="group flex w-full items-center gap-3 px-4 py-3 bg-slate-900 hover:bg-rose-950/30 text-rose-400 hover:text-rose-300 transition-all cursor-pointer">
+                                <div class="size-8 rounded-xl bg-rose-500/10 border border-rose-500/30 group-hover:bg-rose-500/20 flex items-center justify-center transition-colors shrink-0">
+                                    <svg class="size-4 text-rose-400 group-hover:text-rose-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                    </svg>
+                                </div>
+                                <span class="text-xs font-bold text-rose-400 group-hover:text-rose-300">Sign Out</span>
                             </button>
                         </form>
                     </x-slot>

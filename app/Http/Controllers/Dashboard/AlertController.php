@@ -224,4 +224,25 @@ class AlertController extends Controller
         $this->flashToast('info', 'Alert Restored', "Alert for {$alert->computer->pc_number} restored to pending status.");
         return back()->with('success', "Alert for {$alert->computer->pc_number} restored to pending status.");
     }
+    public function manualStore(Request $request)
+    {
+        $validated = $request->validate([
+            'lab_id'      => 'required|exists:labs,id',
+            'computer_id' => 'required|exists:computers,id',
+            'reported_by' => 'required|exists:users,id',
+            'issue_type'  => 'required|string',
+            'remarks'     => 'required|string|max:1000',
+        ]);
+
+        Alert::create([
+            'computer_id' => $validated['computer_id'],
+            'lab_id'      => $validated['lab_id'],
+            'reported_by' => $validated['reported_by'],
+            'issue_type'  => $validated['issue_type'],
+            'remarks'     => $validated['remarks'],
+            'status'      => 'pending',
+        ]);
+
+        return redirect()->route('personnel.alerts')->with('success', 'Manual incident ticket logged successfully.');
+    }
 }

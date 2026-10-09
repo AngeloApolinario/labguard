@@ -52,7 +52,8 @@ class CreateNewUser implements CreatesNewUsers
                 'required',
                 'string',
                 Rule::unique('users')->whereNull('deleted_at'),
-                'regex:/^01-[0-9]{4}-[0-9]{6}$/',
+                // XX (any 2 digits) - XXXX (4 digits) - any length of digits
+                'regex:/^[0-9]{2}-[0-9]{4}-[0-9]+$/',
             ],
 
             'terms' => Jetstream::hasTermsAndPrivacyPolicyFeature()
@@ -64,7 +65,7 @@ class CreateNewUser implements CreatesNewUsers
             'Please use your official PHINMA organization email address.',
 
             'student_number.regex' =>
-            'The ID must follow the AU format: 01-XXXX-XXXXXX.',
+            'The ID must follow the format: XX-XXXX-XXXX... (e.g., 01-2024-123456).',
 
             'phone.regex' =>
             'Please provide a valid 11-digit mobile number.',

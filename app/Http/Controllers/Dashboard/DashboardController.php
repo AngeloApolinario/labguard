@@ -259,6 +259,19 @@ class DashboardController extends Controller
             "Session for {$userName} terminated successfully."
         );
     }
+
+    public function restore($id)
+    {
+        $user = User::onlyTrashed()->findOrFail($id);
+
+        // Restore the model
+        $user->restore();
+
+        return back()->with('success', "Account for {$user->name} ({$user->student_number}) has been restored to active status.");
+    }
+
+
+
     public function storeNewLaboratory(Request $request)
     {
         // 1. Validation

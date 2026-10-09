@@ -714,34 +714,75 @@ class LabController extends Controller
             'All'
         );
 
+        $todayDate = now()->toDateString();
+        $currentTime = now()->format('H:i:s');
+
+        // Query only regular classes OR active/upcoming events (NEVER past archived events)
+        $query = Schedule::where(
+            'lab_id',
+            $labId
+        )->where(function ($q) use (
+            $todayDate,
+            $currentTime
+        ) {
+            // 1. Regular recurring classes
+            $q->where(
+                'is_event',
+                false
+            )
+                // 2. OR active/future events only
+                ->orWhere(function ($activeEventQ) use (
+                    $todayDate,
+                    $currentTime
+                ) {
+                    $activeEventQ->where(
+                        'is_event',
+                        true
+                    )->where(function ($timeQ) use (
+                        $todayDate,
+                        $currentTime
+                    ) {
+                        $timeQ->whereDate(
+                            'event_date',
+                            '>',
+                            $todayDate
+                        )->orWhere(function ($todayQ) use (
+                            $todayDate,
+                            $currentTime
+                        ) {
+                            $todayQ->whereDate(
+                                'event_date',
+                                $todayDate
+                            )->whereTime(
+                                'end_time',
+                                '>=',
+                                $currentTime
+                            );
+                        });
+                    });
+                });
+        });
+
         if (
             $day
             && $day !== 'All'
         ) {
-            $deletedCount = Schedule::where(
-                'lab_id',
-                $labId
-            )
-                ->where(
-                    'day',
-                    $day
-                )
-                ->delete();
-
-            $message =
-                "All slots for {$day} "
-                . "revoked successfully.";
-
-            $title = "Day Schedule Cleared";
-        } else {
-            $deletedCount = Schedule::where(
-                'lab_id',
-                $labId
+            $deletedCount = $query->where(
+                'day',
+                $day
             )->delete();
 
             $message =
-                "All laboratory schedule slots "
-                . "revoked successfully.";
+                "Active slots for {$day} "
+                . "revoked successfully. Past event archives were preserved.";
+
+            $title = "Day Schedule Cleared";
+        } else {
+            $deletedCount = $query->delete();
+
+            $message =
+                "All active laboratory schedule slots "
+                . "revoked successfully. Past event archives were preserved.";
 
             $title = "All Schedules Cleared";
         }
@@ -756,7 +797,7 @@ class LabController extends Controller
             $this->flashToast(
                 'info',
                 'Nothing to Remove',
-                'There were no schedule slots to revoke.'
+                'There were no active schedule slots to revoke.'
             );
         }
 

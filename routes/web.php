@@ -133,6 +133,8 @@ Route::middleware([
     Route::patch('/users/{user}', [DashboardController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [DashboardController::class, 'destroyUser'])->name('users.destroy');
     Route::post('/users/import', [DashboardController::class, 'import'])->name('users.import');
+    Route::patch('/users/{id}/restore', [DashboardController::class, 'restore'])
+        ->name('users.restore');
 
     // WORKSTATION SESSION CONTROL
     Route::patch('/sessions/{session}/terminate', [DashboardController::class, 'terminateSession'])->name('sessions.terminate');
@@ -208,6 +210,8 @@ Route::middleware([
     Route::patch('/alerts/{alert}/undo', [AlertController::class, 'undoResolution'])->name('alerts.undo');
     Route::patch('/alerts/{id}/discard', [PersonnelController::class, 'discardAlert'])
         ->name('alerts.discard');
+    Route::post('/alerts/manual', [PersonnelController::class, 'manualStore'])
+        ->name('alerts.manual_store');
 });
 
 
@@ -237,6 +241,10 @@ Route::middleware([
     Route::get('/users', [SuperAdminController::class, 'userManagement'])->name('users');
     Route::post('/users', [SuperAdminController::class, 'storeUser'])->name('users.store');
     Route::patch('/users/{user}', [SuperAdminController::class, 'updateUser'])->name('users.update');
+    Route::patch('/users/{id}/restore', [SuperAdminController::class, 'restoreUser'])
+        ->name('users.restore');
+    Route::delete('/users/{id}/force-delete', [SuperAdminController::class, 'forceDeleteUser'])
+        ->name('users.forceDelete');
     Route::delete('/users/{user}', [SuperAdminController::class, 'destroyUser'])->name('users.destroy');
     Route::post('/users/import', [SuperAdminController::class, 'import'])->name('users.import');
 

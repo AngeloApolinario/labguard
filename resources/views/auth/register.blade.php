@@ -146,7 +146,7 @@
                                 type="text"
                                 name="student_number"
                                 value="{{ old('student_number') }}"
-                                placeholder="01-2324-048389"
+                                placeholder="XX-XXXX-XXXXXX"
                                 required />
 
                             @error('student_number')

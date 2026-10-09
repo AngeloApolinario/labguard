@@ -493,6 +493,30 @@ class PersonnelController extends Controller
         $this->flashToast('success', 'Alert Discarded', 'The alert has been successfully dismissed as a false alarm.');
         return back()->with('success', 'Alert successfully discarded as a false alarm.');
     }
+    public function manualStore(Request $request)
+    {
+        $validated = $request->validate([
+            'lab_id'      => 'required|exists:labs,id',
+            'computer_id' => 'required|exists:computers,id',
+            'reported_by' => 'required|exists:users,id',
+            'issue_type'  => 'required|string',
+            'remarks'     => 'required|string|max:1000',
+        ]);
+
+        Alert::create([
+            'computer_id' => $validated['computer_id'],
+            'lab_id'      => $validated['lab_id'],
+            'reported_by' => $validated['reported_by'],
+            'issue_type'  => $validated['issue_type'],
+            'remarks'     => $validated['remarks'],
+            'status'      => 'pending',
+        ]);
+
+        // Trigger your toast helper
+        $this->flashToast('success', 'Incident Logged', 'Manual incident ticket has been filed successfully.');
+
+        return back();
+    }
 
     // ==========================================================
     // STYLED SPREADSHEET ENGINE HELPER (.xls)

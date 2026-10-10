@@ -13,6 +13,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import requests
 import json
+import winreg
+import webbrowser
 
 import ctypes
 from ctypes import wintypes
@@ -20,13 +22,12 @@ from ctypes import wintypes
 try:
     import pystray
     from PIL import Image, ImageDraw
+
     TRAY_AVAILABLE = True
 except ImportError:
     TRAY_AVAILABLE = False
 
-urllib3.disable_warnings(
-    urllib3.exceptions.InsecureRequestWarning
-)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # =====================================================================
@@ -44,9 +45,7 @@ VK_RWIN = 0x5C
 VK_F4 = 0x73
 
 ULONG_PTR = (
-    ctypes.c_ulonglong
-    if ctypes.sizeof(ctypes.c_void_p) == 8
-    else ctypes.c_ulong
+    ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
 )
 
 LRESULT = ctypes.c_ssize_t
@@ -68,18 +67,36 @@ _hook_proc_ref = None
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
-HOOKPROC = ctypes.WINFUNCTYPE(
-    LRESULT,
-    ctypes.c_int,
-    wintypes.WPARAM,
-    wintypes.LPARAM
-)
+# 64-Bit Win32 Type Declarations (REQUIRED for Windows 10/11)
+user32.GetForegroundWindow.restype = wintypes.HWND
+user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+user32.GetWindowTextLengthW.restype = ctypes.c_int
+user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+user32.GetWindowTextW.restype = ctypes.c_int
+kernel32.GetTickCount.restype = wintypes.DWORD
+
+def get_active_window_title():
+    try:
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return "Desktop"
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return "Desktop"
+        buff = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buff, length + 1)
+        title = buff.value.strip()
+        return title if title else "Desktop"
+    except Exception:
+        return "Desktop"
+
+HOOKPROC = ctypes.WINFUNCTYPE(LRESULT, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
 
 user32.CallNextHookEx.argtypes = [
     wintypes.HANDLE,
     ctypes.c_int,
     wintypes.WPARAM,
-    wintypes.LPARAM
+    wintypes.LPARAM,
 ]
 
 user32.CallNextHookEx.restype = LRESULT
@@ -88,193 +105,243 @@ user32.SetWindowsHookExW.argtypes = [
     ctypes.c_int,
     HOOKPROC,
     wintypes.HINSTANCE,
-    wintypes.DWORD
+    wintypes.DWORD,
 ]
 
 user32.SetWindowsHookExW.restype = wintypes.HANDLE
 
-user32.UnhookWindowsHookEx.argtypes = [
-    wintypes.HANDLE
-]
+user32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
 
 user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+
+# =====================================================================
+# HARDWARE, SECURITY & PROCESS MONITORING HELPERS
+# =====================================================================
+
+# 1. Disable / Enable Task Manager via Registry
+def set_task_manager_disabled(disabled: bool):
+    try:
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+        winreg.SetValueEx(key, "DisableTaskMgr", 0, winreg.REG_DWORD, 1 if disabled else 0)
+        winreg.CloseKey(key)
+    except Exception as e:
+        print(f"[SECURITY] Registry taskmgr error: {e}")
+
+# 2. Get Idle Time (Seconds)
+class LASTINPUTINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.UINT),
+        ("dwTime", wintypes.DWORD)
+    ]
+
+user32.GetLastInputInfo.argtypes = [ctypes.POINTER(LASTINPUTINFO)]
+user32.GetLastInputInfo.restype = wintypes.BOOL
+
+def get_idle_seconds():
+    try:
+        lii = LASTINPUTINFO()
+        lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+        if user32.GetLastInputInfo(ctypes.byref(lii)):
+            return (kernel32.GetTickCount() - lii.dwTime) / 1000.0
+    except Exception:
+        pass
+    return 0
+
+# 3. Count Connected Raw Mice and Keyboards (Pure Win32, Zero-CPU overhead)
+class RAWINPUTDEVICELIST(ctypes.Structure):
+    _fields_ = [
+        ("hDevice", wintypes.HANDLE),
+        ("dwType", wintypes.DWORD)
+    ]
+
+user32.GetRawInputDeviceList.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.UINT), wintypes.UINT]
+user32.GetRawInputDeviceList.restype = wintypes.UINT
+
+def count_raw_input_devices(device_type):
+    """device_type: 0 = Mouse, 1 = Keyboard"""
+    count = 0
+    try:
+        num_devices = wintypes.UINT(0)
+        cb_size = ctypes.sizeof(RAWINPUTDEVICELIST)
+        user32.GetRawInputDeviceList(None, ctypes.byref(num_devices), cb_size)
+        if num_devices.value > 0:
+            device_array = (RAWINPUTDEVICELIST * num_devices.value)()
+            res = user32.GetRawInputDeviceList(ctypes.byref(device_array), ctypes.byref(num_devices), cb_size)
+            if res != 0xFFFFFFFF:
+                for dev in device_array:
+                    if dev.dwType == device_type:
+                        count += 1
+    except Exception:
+        pass
+    return count
+
+# 4. Detect USB Removable Storage Drives
+# Detect all active drive letters (C:\, D:\, E:\, etc.)
+kernel32.GetLogicalDrives.restype = wintypes.DWORD
+kernel32.GetDriveTypeW.argtypes = [wintypes.LPCWSTR]
+kernel32.GetDriveTypeW.restype = wintypes.UINT
+
+def get_all_drive_letters():
+    drives = set()
+    try:
+        bitmask = kernel32.GetLogicalDrives()
+        for i in range(26):
+            if bitmask & (1 << i):
+                drives.add(chr(ord('A') + i) + ":\\")
+    except Exception:
+        pass
+    return drives
+
+# 5. Snapshot Installed Software in Registry
+def get_user_installed_software():
+    """Reads both HKLM and HKCU registry hives to capture all installed software."""
+    installed = set()
+    sub_path = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+
+    # Detect 64-bit and 32-bit access flags
+    access_flags = []
+    if hasattr(winreg, 'KEY_WOW64_64KEY'):
+        access_flags.extend([winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY])
+    else:
+        access_flags.append(0)
+
+    # 1. SCAN HKEY_LOCAL_MACHINE (System-wide applications)
+    for flag in access_flags:
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_path, 0, winreg.KEY_READ | flag) as root_key:
+                num_subkeys = winreg.QueryInfoKey(root_key)[0]
+                for i in range(num_subkeys):
+                    try:
+                        key_name = winreg.EnumKey(root_key, i)
+                        # Open key_name directly under root_key
+                        with winreg.OpenKey(root_key, key_name, 0, winreg.KEY_READ | flag) as subkey:
+                            try:
+                                display_name, _ = winreg.QueryValueEx(subkey, "DisplayName")
+                                if display_name and str(display_name).strip():
+                                    installed.add(str(display_name).strip())
+                            except (FileNotFoundError, OSError):
+                                pass
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    # 2. SCAN HKEY_CURRENT_USER (User-profile applications like Discord, Roblox, etc.)
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_path, 0, winreg.KEY_READ) as root_key:
+            num_subkeys = winreg.QueryInfoKey(root_key)[0]
+            for i in range(num_subkeys):
+                try:
+                    key_name = winreg.EnumKey(root_key, i)
+                    with winreg.OpenKey(root_key, key_name, 0, winreg.KEY_READ) as subkey:
+                        try:
+                            display_name, _ = winreg.QueryValueEx(subkey, "DisplayName")
+                            if display_name and str(display_name).strip():
+                                installed.add(str(display_name).strip())
+                        except (FileNotFoundError, OSError):
+                            pass
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return installed
+
 
 
 # =====================================================================
 # 2. TASKBAR CONTROL
 # =====================================================================
 
+
 def hide_taskbar():
     try:
-        hwnd_primary = user32.FindWindowW(
-            "Shell_TrayWnd",
-            None
-        )
+        hwnd_primary = user32.FindWindowW("Shell_TrayWnd", None)
 
         if hwnd_primary:
-            user32.ShowWindow(
-                hwnd_primary,
-                0
-            )
+            user32.ShowWindow(hwnd_primary, 0)
 
-            user32.EnableWindow(
-                hwnd_primary,
-                False
-            )
+            user32.EnableWindow(hwnd_primary, False)
 
-        hwnd_secondary = user32.FindWindowW(
-            "Shell_SecondaryTrayWnd",
-            None
-        )
+        hwnd_secondary = user32.FindWindowW("Shell_SecondaryTrayWnd", None)
 
         if hwnd_secondary:
-            user32.ShowWindow(
-                hwnd_secondary,
-                0
-            )
+            user32.ShowWindow(hwnd_secondary, 0)
 
-            user32.EnableWindow(
-                hwnd_secondary,
-                False
-            )
+            user32.EnableWindow(hwnd_secondary, False)
 
         print("[DEBUG] Taskbar hidden.")
 
     except Exception as e:
-        print(
-            f"[DEBUG] Error hiding taskbar: {e}"
-        )
+        print(f"[DEBUG] Error hiding taskbar: {e}")
 
 
 def show_taskbar():
     try:
-        hwnd_primary = user32.FindWindowW(
-            "Shell_TrayWnd",
-            None
-        )
+        hwnd_primary = user32.FindWindowW("Shell_TrayWnd", None)
 
         if hwnd_primary:
-            user32.EnableWindow(
-                hwnd_primary,
-                True
-            )
+            user32.EnableWindow(hwnd_primary, True)
 
-            user32.ShowWindow(
-                hwnd_primary,
-                5
-            )
+            user32.ShowWindow(hwnd_primary, 5)
 
-        hwnd_secondary = user32.FindWindowW(
-            "Shell_SecondaryTrayWnd",
-            None
-        )
+        hwnd_secondary = user32.FindWindowW("Shell_SecondaryTrayWnd", None)
 
         if hwnd_secondary:
-            user32.EnableWindow(
-                hwnd_secondary,
-                True
-            )
+            user32.EnableWindow(hwnd_secondary, True)
 
-            user32.ShowWindow(
-                hwnd_secondary,
-                5
-            )
+            user32.ShowWindow(hwnd_secondary, 5)
 
         print("[DEBUG] Taskbar restored.")
 
     except Exception as e:
-        print(
-            f"[DEBUG] Error showing taskbar: {e}"
-        )
+        print(f"[DEBUG] Error showing taskbar: {e}")
 
 
 # =====================================================================
 # 3. LOW-LEVEL KEYBOARD HOOK
 # =====================================================================
 
-def _low_level_keyboard_proc(
-    nCode,
-    wParam,
-    lParam
-):
+
+def _low_level_keyboard_proc(nCode, wParam, lParam):
     try:
         if nCode >= 0 and lParam:
-            kb_struct = KBDLLHOOKSTRUCT.from_address(
-                lParam
-            )
+            kb_struct = KBDLLHOOKSTRUCT.from_address(lParam)
 
             vk_code = kb_struct.vkCode
 
-            if vk_code not in (
-                VK_LWIN,
-                VK_RWIN,
-                VK_TAB,
-                VK_ESCAPE,
-                VK_F4
-            ):
-                return user32.CallNextHookEx(
-                    _hook_id,
-                    nCode,
-                    wParam,
-                    lParam
-                )
+            if vk_code not in (VK_LWIN, VK_RWIN, VK_TAB, VK_ESCAPE, VK_F4):
+                return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
 
             flags = kb_struct.flags
 
             is_alt_pressed = (
-                bool(flags & 0x20)
-                or (
-                    user32.GetAsyncKeyState(
-                        VK_MENU
-                    ) & 0x8000
-                ) != 0
+                bool(flags & 0x20) or (user32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
             )
 
-            if vk_code in (
-                VK_LWIN,
-                VK_RWIN
-            ):
+            if vk_code in (VK_LWIN, VK_RWIN):
                 return 1
 
-            if (
-                vk_code == VK_TAB
-                and is_alt_pressed
-            ):
+            if vk_code == VK_TAB and is_alt_pressed:
                 return 1
 
-            if (
-                vk_code == VK_ESCAPE
-                and is_alt_pressed
-            ):
+            if vk_code == VK_ESCAPE and is_alt_pressed:
                 return 1
 
             if vk_code == VK_ESCAPE:
-                is_ctrl_pressed = (
-                    user32.GetAsyncKeyState(
-                        VK_CONTROL
-                    ) & 0x8000
-                ) != 0
+                is_ctrl_pressed = (user32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
 
                 if is_ctrl_pressed:
                     return 1
 
-            if (
-                vk_code == VK_F4
-                and is_alt_pressed
-            ):
+            if vk_code == VK_F4 and is_alt_pressed:
                 return 1
 
     except Exception as e:
-        print(
-            f"[DEBUG] Hook Procedure Error: {e}"
-        )
+        print(f"[DEBUG] Hook Procedure Error: {e}")
 
-    return user32.CallNextHookEx(
-        _hook_id,
-        nCode,
-        wParam,
-        lParam
-    )
+    return user32.CallNextHookEx(_hook_id, nCode, wParam, lParam)
 
 
 def start_keyboard_hook():
@@ -285,36 +352,22 @@ def start_keyboard_hook():
         return
 
     try:
-        _hook_proc_ref = HOOKPROC(
-            _low_level_keyboard_proc
-        )
+        _hook_proc_ref = HOOKPROC(_low_level_keyboard_proc)
 
-        _hook_id = user32.SetWindowsHookExW(
-            WH_KEYBOARD_LL,
-            _hook_proc_ref,
-            None,
-            0
-        )
+        _hook_id = user32.SetWindowsHookExW(WH_KEYBOARD_LL, _hook_proc_ref, None, 0)
 
         if not _hook_id or _hook_id == 0:
             err = kernel32.GetLastError()
 
-            print(
-                f"[DEBUG] SetWindowsHookExW FAILED: {err}"
-            )
+            print(f"[DEBUG] SetWindowsHookExW FAILED: {err}")
 
             _hook_id = None
 
         else:
-            print(
-                f"[DEBUG] Keyboard Hook installed! "
-                f"Hook ID: {_hook_id}"
-            )
+            print(f"[DEBUG] Keyboard Hook installed! " f"Hook ID: {_hook_id}")
 
     except Exception as e:
-        print(
-            f"[DEBUG] Keyboard Hook exception: {e}"
-        )
+        print(f"[DEBUG] Keyboard Hook exception: {e}")
 
 
 def stop_keyboard_hook():
@@ -322,18 +375,12 @@ def stop_keyboard_hook():
 
     if _hook_id:
         try:
-            user32.UnhookWindowsHookEx(
-                _hook_id
-            )
+            user32.UnhookWindowsHookEx(_hook_id)
 
-            print(
-                "[DEBUG] Keyboard Hook uninstalled."
-            )
+            print("[DEBUG] Keyboard Hook uninstalled.")
 
         except Exception as e:
-            print(
-                f"[DEBUG] Error uninstalling hook: {e}"
-            )
+            print(f"[DEBUG] Error uninstalling hook: {e}")
 
         _hook_id = None
 
@@ -342,71 +389,44 @@ def stop_keyboard_hook():
 # 4. CONFIGURATION & SANCTUM SESSION
 # =====================================================================
 
+
 def load_config():
     if getattr(sys, "frozen", False):
-        base_dir = os.path.dirname(
-            sys.executable
-        )
+        base_dir = os.path.dirname(sys.executable)
     else:
-        base_dir = os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    config_path = os.path.join(
-        base_dir,
-        "config.json"
-    )
+    config_path = os.path.join(base_dir, "config.json")
 
     config_data = {
         "server_url": "https://labguard.test/api/pc",
-        "lab": "LAB 1",
+        "lab": "CL1",
         "pc": "PC-01",
     }
 
     if os.path.exists(config_path):
         try:
-            with open(
-                config_path,
-                "r",
-                encoding="utf-8"
-            ) as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
 
         except Exception as e:
-            print(
-                f"Error loading config.json: {e}"
-            )
+            print(f"Error loading config.json: {e}")
 
     return config_data
 
 
 config = load_config()
 
-API_URL = config.get(
-    "server_url",
-    "https://labguard.it.com/api/pc"
-).rstrip("/")
+API_URL = config.get("server_url", "https://labguard.it.com/api/pc").rstrip("/")
 
 if not API_URL.endswith("/api/pc"):
     API_URL += "/api/pc"
 
-LAB_ID = str(
-    config.get(
-        "lab",
-        "LAB 1"
-    )
-).strip()
+LAB_ID = str(config.get("lab", "LAB 1")).strip()
 
-PC_NUMBER = str(
-    config.get(
-        "pc",
-        "PC-01"
-    )
-).strip()
+PC_NUMBER = str(config.get("pc", "PC-01")).strip()
 
-HEADERS = {
-    "Accept": "application/json"
-}
+HEADERS = {"Accept": "application/json"}
 
 
 def get_authenticated_session():
@@ -414,35 +434,23 @@ def get_authenticated_session():
 
     session.verify = False
 
-    base_domain = API_URL.split(
-        "/api"
-    )[0]
+    base_domain = API_URL.split("/api")[0]
 
     try:
-        session.get(
-            f"{base_domain}/sanctum/csrf-cookie",
-            headers=HEADERS,
-            timeout=5
-        )
+        session.get(f"{base_domain}/sanctum/csrf-cookie", headers=HEADERS, timeout=5)
 
-        csrf_token = session.cookies.get(
-            "XSRF-TOKEN"
-        )
+        csrf_token = session.cookies.get("XSRF-TOKEN")
 
         if csrf_token:
-            session.headers.update({
-                "X-XSRF-TOKEN":
-                    urllib.parse.unquote(
-                        csrf_token
-                    ),
-                "Accept":
-                    "application/json"
-            })
+            session.headers.update(
+                {
+                    "X-XSRF-TOKEN": urllib.parse.unquote(csrf_token),
+                    "Accept": "application/json",
+                }
+            )
 
     except Exception as e:
-        print(
-            f"[DEBUG] CSRF Cookie Fetch Exception: {e}"
-        )
+        print(f"[DEBUG] CSRF Cookie Fetch Exception: {e}")
 
     return session
 
@@ -450,6 +458,7 @@ def get_authenticated_session():
 def cleanup_security():
     stop_keyboard_hook()
     show_taskbar()
+    set_task_manager_disabled(False)
 
 
 def send_logout_signal():
@@ -460,63 +469,36 @@ def send_logout_signal():
 
         session.post(
             f"{API_URL}/logout",
-            json={
-                "pc_number": PC_NUMBER
-            },
+            json={"pc_number": PC_NUMBER},
             timeout=3,
         )
 
-        print(
-            f"Signal Sent: {PC_NUMBER} has been released."
-        )
+        print(f"Signal Sent: {PC_NUMBER} has been released.")
 
     except Exception as e:
-        print(
-            f"Logout signal failed: {e}"
-        )
+        print(f"Logout signal failed: {e}")
 
 
-def handle_exit_signal(
-    sig,
-    frame
-):
-    print(
-        "Force shutdown detected..."
-    )
+def handle_exit_signal(sig, frame):
+    print("Force shutdown detected...")
 
     send_logout_signal()
 
     sys.exit(0)
 
 
-signal.signal(
-    signal.SIGINT,
-    handle_exit_signal
-)
+signal.signal(signal.SIGINT, handle_exit_signal)
 
-signal.signal(
-    signal.SIGTERM,
-    handle_exit_signal
-)
+signal.signal(signal.SIGTERM, handle_exit_signal)
 
-atexit.register(
-    cleanup_security
-)
+atexit.register(cleanup_security)
 
 
 def register_shutdown_hooks():
-    def windows_shutdown_handler(
-        ctrl_type
-    ):
-        if ctrl_type in (
-            2,
-            5,
-            6
-        ):
+    def windows_shutdown_handler(ctrl_type):
+        if ctrl_type in (2, 5, 6):
             print(
-                "[SHUTDOWN] Windows OS "
-                "Shutdown/Logoff detected! "
-                "Releasing PC..."
+                "[SHUTDOWN] Windows OS " "Shutdown/Logoff detected! " "Releasing PC..."
             )
 
             send_logout_signal()
@@ -526,34 +508,22 @@ def register_shutdown_hooks():
         return False
 
     try:
-        PHANDLER_ROUTINE = ctypes.WINFUNCTYPE(
-            wintypes.BOOL,
-            wintypes.DWORD
-        )
+        PHANDLER_ROUTINE = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
 
-        handler_delegate = PHANDLER_ROUTINE(
-            windows_shutdown_handler
-        )
+        handler_delegate = PHANDLER_ROUTINE(windows_shutdown_handler)
 
-        register_shutdown_hooks.handler_delegate = (
-            handler_delegate
-        )
+        register_shutdown_hooks.handler_delegate = handler_delegate
 
-        kernel32.SetConsoleCtrlHandler(
-            handler_delegate,
-            True
-        )
+        kernel32.SetConsoleCtrlHandler(handler_delegate, True)
 
     except Exception as e:
-        print(
-            f"Could not register Windows "
-            f"shutdown hook: {e}"
-        )
+        print(f"Could not register Windows " f"shutdown hook: {e}")
 
 
 # =====================================================================
 # 5. WI-FI MANAGEMENT
 # =====================================================================
+
 
 def turn_on_wifi_radio_native():
     try:
@@ -564,140 +534,68 @@ def turn_on_wifi_radio_native():
                 ("Data1", wintypes.DWORD),
                 ("Data2", wintypes.WORD),
                 ("Data3", wintypes.WORD),
-                (
-                    "Data4",
-                    wintypes.BYTE * 8
-                ),
+                ("Data4", wintypes.BYTE * 8),
             ]
 
-        class WLAN_INTERFACE_INFO(
-            ctypes.Structure
-        ):
+        class WLAN_INTERFACE_INFO(ctypes.Structure):
             _fields_ = [
-                (
-                    "InterfaceGuid",
-                    GUID
-                ),
-                (
-                    "strInterfaceDescription",
-                    wintypes.WCHAR * 256
-                ),
-                (
-                    "isState",
-                    ctypes.c_uint
-                ),
+                ("InterfaceGuid", GUID),
+                ("strInterfaceDescription", wintypes.WCHAR * 256),
+                ("isState", ctypes.c_uint),
             ]
 
-        class WLAN_INTERFACE_INFO_LIST(
-            ctypes.Structure
-        ):
+        class WLAN_INTERFACE_INFO_LIST(ctypes.Structure):
             _fields_ = [
-                (
-                    "dwNumberOfItems",
-                    wintypes.DWORD
-                ),
-                (
-                    "dwIndex",
-                    wintypes.DWORD
-                ),
-                (
-                    "InterfaceInfo",
-                    WLAN_INTERFACE_INFO * 1
-                ),
+                ("dwNumberOfItems", wintypes.DWORD),
+                ("dwIndex", wintypes.DWORD),
+                ("InterfaceInfo", WLAN_INTERFACE_INFO * 1),
             ]
 
-        class WLAN_PHY_RADIO_STATE(
-            ctypes.Structure
-        ):
+        class WLAN_PHY_RADIO_STATE(ctypes.Structure):
             _fields_ = [
-                (
-                    "dwPhyIndex",
-                    wintypes.DWORD
-                ),
-                (
-                    "dot11SoftwareRadioState",
-                    ctypes.c_uint
-                ),
-                (
-                    "dot11HardwareRadioState",
-                    ctypes.c_uint
-                ),
+                ("dwPhyIndex", wintypes.DWORD),
+                ("dot11SoftwareRadioState", ctypes.c_uint),
+                ("dot11HardwareRadioState", ctypes.c_uint),
             ]
 
         hClient = wintypes.HANDLE()
         pVersion = wintypes.DWORD()
 
-        if wlanapi.WlanOpenHandle(
-            2,
-            None,
-            ctypes.byref(pVersion),
-            ctypes.byref(hClient)
-        ) == 0:
+        if (
+            wlanapi.WlanOpenHandle(
+                2, None, ctypes.byref(pVersion), ctypes.byref(hClient)
+            )
+            == 0
+        ):
 
-            pList = ctypes.POINTER(
-                WLAN_INTERFACE_INFO_LIST
-            )()
+            pList = ctypes.POINTER(WLAN_INTERFACE_INFO_LIST)()
 
-            if wlanapi.WlanEnumInterfaces(
-                hClient,
-                None,
-                ctypes.byref(pList)
-            ) == 0:
+            if wlanapi.WlanEnumInterfaces(hClient, None, ctypes.byref(pList)) == 0:
 
-                if (
-                    pList.contents.dwNumberOfItems
-                    > 0
-                ):
-                    guid = (
-                        pList.contents
-                        .InterfaceInfo[0]
-                        .InterfaceGuid
-                    )
+                if pList.contents.dwNumberOfItems > 0:
+                    guid = pList.contents.InterfaceInfo[0].InterfaceGuid
 
-                    radio_state = (
-                        WLAN_PHY_RADIO_STATE(
-                            0,
-                            1,
-                            1
-                        )
-                    )
+                    radio_state = WLAN_PHY_RADIO_STATE(0, 1, 1)
 
                     wlanapi.WlanSetInterface(
                         hClient,
                         ctypes.byref(guid),
                         4,
-                        ctypes.sizeof(
-                            WLAN_PHY_RADIO_STATE
-                        ),
-                        ctypes.byref(
-                            radio_state
-                        ),
-                        None
+                        ctypes.sizeof(WLAN_PHY_RADIO_STATE),
+                        ctypes.byref(radio_state),
+                        None,
                     )
 
-                    wlanapi.WlanScan(
-                        hClient,
-                        ctypes.byref(guid),
-                        None,
-                        None,
-                        None
-                    )
+                    wlanapi.WlanScan(hClient, ctypes.byref(guid), None, None, None)
 
-                wlanapi.WlanFreeMemory(
-                    pList
-                )
+                wlanapi.WlanFreeMemory(pList)
 
-            wlanapi.WlanCloseHandle(
-                hClient,
-                None
-            )
+            wlanapi.WlanCloseHandle(hClient, None)
 
             return True
 
     except Exception as e:
-        print(
-            f"Native radio activation failed: {e}"
-        )
+        print(f"Native radio activation failed: {e}")
 
     return False
 
@@ -713,273 +611,114 @@ def get_native_wifi_networks():
                 ("Data1", wintypes.DWORD),
                 ("Data2", wintypes.WORD),
                 ("Data3", wintypes.WORD),
-                (
-                    "Data4",
-                    wintypes.BYTE * 8
-                ),
+                ("Data4", wintypes.BYTE * 8),
             ]
 
-        class WLAN_INTERFACE_INFO(
-            ctypes.Structure
-        ):
+        class WLAN_INTERFACE_INFO(ctypes.Structure):
             _fields_ = [
-                (
-                    "InterfaceGuid",
-                    GUID
-                ),
-                (
-                    "strInterfaceDescription",
-                    wintypes.WCHAR * 256
-                ),
-                (
-                    "isState",
-                    ctypes.c_uint
-                ),
+                ("InterfaceGuid", GUID),
+                ("strInterfaceDescription", wintypes.WCHAR * 256),
+                ("isState", ctypes.c_uint),
             ]
 
-        class WLAN_INTERFACE_INFO_LIST(
-            ctypes.Structure
-        ):
+        class WLAN_INTERFACE_INFO_LIST(ctypes.Structure):
             _fields_ = [
-                (
-                    "dwNumberOfItems",
-                    wintypes.DWORD
-                ),
-                (
-                    "dwIndex",
-                    wintypes.DWORD
-                ),
-                (
-                    "InterfaceInfo",
-                    WLAN_INTERFACE_INFO * 1
-                ),
+                ("dwNumberOfItems", wintypes.DWORD),
+                ("dwIndex", wintypes.DWORD),
+                ("InterfaceInfo", WLAN_INTERFACE_INFO * 1),
             ]
 
-        class DOT11_SSID(
-            ctypes.Structure
-        ):
+        class DOT11_SSID(ctypes.Structure):
             _fields_ = [
-                (
-                    "uSSIDLength",
-                    ctypes.c_ulong
-                ),
-                (
-                    "ucSSID",
-                    ctypes.c_char * 32
-                ),
+                ("uSSIDLength", ctypes.c_ulong),
+                ("ucSSID", ctypes.c_char * 32),
             ]
 
-        class WLAN_AVAILABLE_NETWORK(
-            ctypes.Structure
-        ):
+        class WLAN_AVAILABLE_NETWORK(ctypes.Structure):
             _fields_ = [
-                (
-                    "strProfileName",
-                    wintypes.WCHAR * 256
-                ),
-                (
-                    "dot11Ssid",
-                    DOT11_SSID
-                ),
-                (
-                    "dot11BssType",
-                    ctypes.c_uint
-                ),
-                (
-                    "uNumberOfBssids",
-                    ctypes.c_ulong
-                ),
-                (
-                    "bNetworkConnectable",
-                    wintypes.BOOL
-                ),
-                (
-                    "wlanNotConnectableReason",
-                    wintypes.DWORD
-                ),
-                (
-                    "uNumberOfPhyTypes",
-                    ctypes.c_ulong
-                ),
-                (
-                    "dot11PhyTypes",
-                    ctypes.c_uint * 8
-                ),
-                (
-                    "bMorePhyTypes",
-                    wintypes.BOOL
-                ),
-                (
-                    "wlanSignalQuality",
-                    ctypes.c_ulong
-                ),
-                (
-                    "bSecurityEnabled",
-                    wintypes.BOOL
-                ),
-                (
-                    "dot11DefaultAuthAlgorithm",
-                    ctypes.c_uint
-                ),
-                (
-                    "dot11DefaultCipherAlgorithm",
-                    ctypes.c_uint
-                ),
-                (
-                    "dwFlags",
-                    wintypes.DWORD
-                ),
-                (
-                    "dwReserved",
-                    wintypes.DWORD
-                ),
+                ("strProfileName", wintypes.WCHAR * 256),
+                ("dot11Ssid", DOT11_SSID),
+                ("dot11BssType", ctypes.c_uint),
+                ("uNumberOfBssids", ctypes.c_ulong),
+                ("bNetworkConnectable", wintypes.BOOL),
+                ("wlanNotConnectableReason", wintypes.DWORD),
+                ("uNumberOfPhyTypes", ctypes.c_ulong),
+                ("dot11PhyTypes", ctypes.c_uint * 8),
+                ("bMorePhyTypes", wintypes.BOOL),
+                ("wlanSignalQuality", ctypes.c_ulong),
+                ("bSecurityEnabled", wintypes.BOOL),
+                ("dot11DefaultAuthAlgorithm", ctypes.c_uint),
+                ("dot11DefaultCipherAlgorithm", ctypes.c_uint),
+                ("dwFlags", wintypes.DWORD),
+                ("dwReserved", wintypes.DWORD),
             ]
 
-        class WLAN_AVAILABLE_NETWORK_LIST(
-            ctypes.Structure
-        ):
+        class WLAN_AVAILABLE_NETWORK_LIST(ctypes.Structure):
             _fields_ = [
-                (
-                    "dwNumberOfItems",
-                    wintypes.DWORD
-                ),
-                (
-                    "dwIndex",
-                    wintypes.DWORD
-                ),
-                (
-                    "Network",
-                    WLAN_AVAILABLE_NETWORK * 1
-                ),
+                ("dwNumberOfItems", wintypes.DWORD),
+                ("dwIndex", wintypes.DWORD),
+                ("Network", WLAN_AVAILABLE_NETWORK * 1),
             ]
 
         hClient = wintypes.HANDLE()
         pVersion = wintypes.DWORD()
 
-        if wlanapi.WlanOpenHandle(
-            2,
-            None,
-            ctypes.byref(pVersion),
-            ctypes.byref(hClient)
-        ) == 0:
+        if (
+            wlanapi.WlanOpenHandle(
+                2, None, ctypes.byref(pVersion), ctypes.byref(hClient)
+            )
+            == 0
+        ):
 
-            pList = ctypes.POINTER(
-                WLAN_INTERFACE_INFO_LIST
-            )()
+            pList = ctypes.POINTER(WLAN_INTERFACE_INFO_LIST)()
 
-            if wlanapi.WlanEnumInterfaces(
-                hClient,
-                None,
-                ctypes.byref(pList)
-            ) == 0:
+            if wlanapi.WlanEnumInterfaces(hClient, None, ctypes.byref(pList)) == 0:
 
-                if (
-                    pList.contents.dwNumberOfItems
-                    > 0
-                ):
-                    guid = (
-                        pList.contents
-                        .InterfaceInfo[0]
-                        .InterfaceGuid
-                    )
+                if pList.contents.dwNumberOfItems > 0:
+                    guid = pList.contents.InterfaceInfo[0].InterfaceGuid
 
-                    pNetList = ctypes.POINTER(
-                        WLAN_AVAILABLE_NETWORK_LIST
-                    )()
+                    pNetList = ctypes.POINTER(WLAN_AVAILABLE_NETWORK_LIST)()
 
                     if (
-                        wlanapi
-                        .WlanGetAvailableNetworkList(
-                            hClient,
-                            ctypes.byref(guid),
-                            2,
-                            None,
-                            ctypes.byref(
-                                pNetList
-                            )
-                        ) == 0
+                        wlanapi.WlanGetAvailableNetworkList(
+                            hClient, ctypes.byref(guid), 2, None, ctypes.byref(pNetList)
+                        )
+                        == 0
                     ):
 
-                        num_items = (
-                            pNetList.contents
-                            .dwNumberOfItems
-                        )
+                        num_items = pNetList.contents.dwNumberOfItems
 
-                        base_ptr = (
-                            ctypes.addressof(
-                                pNetList
-                                .contents
-                                .Network
-                            )
-                        )
+                        base_ptr = ctypes.addressof(pNetList.contents.Network)
 
-                        stride = ctypes.sizeof(
-                            WLAN_AVAILABLE_NETWORK
-                        )
+                        stride = ctypes.sizeof(WLAN_AVAILABLE_NETWORK)
 
-                        for i in range(
-                            num_items
-                        ):
-                            net = (
-                                WLAN_AVAILABLE_NETWORK
-                                .from_address(
-                                    base_ptr
-                                    + i * stride
-                                )
+                        for i in range(num_items):
+                            net = WLAN_AVAILABLE_NETWORK.from_address(
+                                base_ptr + i * stride
                             )
 
-                            ssid_len = (
-                                net.dot11Ssid
-                                .uSSIDLength
-                            )
+                            ssid_len = net.dot11Ssid.uSSIDLength
 
-                            if (
-                                0 < ssid_len <= 32
-                            ):
-                                ssid_bytes = bytes(
-                                    net.dot11Ssid
-                                    .ucSSID[
-                                        :ssid_len
-                                    ]
-                                )
+                            if 0 < ssid_len <= 32:
+                                ssid_bytes = bytes(net.dot11Ssid.ucSSID[:ssid_len])
 
-                                ssid_str = (
-                                    ssid_bytes
-                                    .decode(
-                                        "utf-8",
-                                        errors="ignore"
-                                    )
-                                    .strip()
-                                )
+                                ssid_str = ssid_bytes.decode(
+                                    "utf-8", errors="ignore"
+                                ).strip()
 
                                 if ssid_str:
-                                    ssids.append(
-                                        ssid_str
-                                    )
+                                    ssids.append(ssid_str)
 
-                        wlanapi.WlanFreeMemory(
-                            pNetList
-                        )
+                        wlanapi.WlanFreeMemory(pNetList)
 
-                wlanapi.WlanFreeMemory(
-                    pList
-                )
+                wlanapi.WlanFreeMemory(pList)
 
-            wlanapi.WlanCloseHandle(
-                hClient,
-                None
-            )
+            wlanapi.WlanCloseHandle(hClient, None)
 
     except Exception as e:
-        print(
-            f"Native network list failed: {e}"
-        )
+        print(f"Native network list failed: {e}")
 
-    return sorted(
-        list(
-            set(ssids)
-        )
-    )
+    return sorted(list(set(ssids)))
 
 
 def enable_wifi_adapter():
@@ -1000,10 +739,7 @@ def enable_wifi_adapter():
             check=False,
             creationflags=(
                 subprocess.CREATE_NO_WINDOW
-                if hasattr(
-                    subprocess,
-                    "CREATE_NO_WINDOW"
-                )
+                if hasattr(subprocess, "CREATE_NO_WINDOW")
                 else 0
             ),
         )
@@ -1020,6 +756,7 @@ def enable_wifi_adapter():
 # 6. CINEMATIC NOTIFICATION
 # =====================================================================
 
+
 class CinematicNotify(tk.Toplevel):
 
     DISPLAY_TIME = 15000
@@ -1028,13 +765,7 @@ class CinematicNotify(tk.Toplevel):
     PROGRESS_INTERVAL = 50
 
     def __init__(
-        self,
-        parent,
-        title,
-        message,
-        color="#D4AF37",
-        position="center",
-        on_close=None
+        self, parent, title, message, color="#D4AF37", position="center", on_close=None
     ):
         super().__init__()
 
@@ -1044,21 +775,11 @@ class CinematicNotify(tk.Toplevel):
 
         self.overrideredirect(True)
 
-        self.attributes(
-            "-topmost",
-            True
-        )
+        self.attributes("-topmost", True)
 
-        self.attributes(
-            "-alpha",
-            1.0
-        )
+        self.attributes("-alpha", 1.0)
 
-        self.configure(
-            bg="#1e293b",
-            highlightbackground=color,
-            highlightthickness=2
-        )
+        self.configure(bg="#1e293b", highlightbackground=color, highlightthickness=2)
 
         try:
             screen_w = self.winfo_screenwidth()
@@ -1076,53 +797,23 @@ class CinematicNotify(tk.Toplevel):
             y = 25
 
         elif position == "top_right":
-            x = (
-                screen_w
-                - self.width
-                - 25
-            )
+            x = screen_w - self.width - 25
             y = 25
 
         elif position == "bottom_left":
             x = 25
-            y = (
-                screen_h
-                - self.height
-                - 25
-            )
+            y = screen_h - self.height - 25
 
         elif position == "bottom_right":
-            x = (
-                screen_w
-                - self.width
-                - 25
-            )
-            y = (
-                screen_h
-                - self.height
-                - 25
-            )
+            x = screen_w - self.width - 25
+            y = screen_h - self.height - 25
 
         else:
-            x = (
-                screen_w
-                // 2
-            ) - (
-                self.width
-                // 2
-            )
+            x = (screen_w // 2) - (self.width // 2)
 
-            y = (
-                screen_h
-                // 2
-            ) - (
-                self.height
-                // 2
-            )
+            y = (screen_h // 2) - (self.height // 2)
 
-        self.geometry(
-            f"{self.width}x{self.height}+{x}+{y}"
-        )
+        self.geometry(f"{self.width}x{self.height}+{x}+{y}")
 
         self.title_label = tk.Label(
             self,
@@ -1130,12 +821,10 @@ class CinematicNotify(tk.Toplevel):
             fg=color,
             bg="#1e293b",
             font=("Arial Black", 15),
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        self.title_label.pack(
-            pady=(24, 6)
-        )
+        self.title_label.pack(pady=(24, 6))
 
         self.message_label = tk.Label(
             self,
@@ -1145,12 +834,10 @@ class CinematicNotify(tk.Toplevel):
             font=("Arial", 10),
             wraplength=390,
             justify="center",
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        self.message_label.pack(
-            pady=5
-        )
+        self.message_label.pack(pady=5)
 
         self.dismiss_label = tk.Label(
             self,
@@ -1158,77 +845,41 @@ class CinematicNotify(tk.Toplevel):
             fg="#64748b",
             bg="#1e293b",
             font=("Arial", 8),
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        self.dismiss_label.pack(
-            pady=(6, 0)
-        )
+        self.dismiss_label.pack(pady=(6, 0))
 
-        self.progress_bg = tk.Frame(
-            self,
-            bg="#0f172a",
-            height=5
-        )
+        self.progress_bg = tk.Frame(self, bg="#0f172a", height=5)
 
-        self.progress_bg.pack(
-            side="bottom",
-            fill="x"
-        )
+        self.progress_bg.pack(side="bottom", fill="x")
 
-        self.progress_fill = tk.Frame(
-            self.progress_bg,
-            bg=color,
-            height=5
-        )
+        self.progress_fill = tk.Frame(self.progress_bg, bg=color, height=5)
 
-        self.progress_fill.place(
-            x=0,
-            y=0,
-            width=self.width,
-            height=5
-        )
+        self.progress_fill.place(x=0, y=0, width=self.width, height=5)
 
-        self.bind(
-            "<Button-1>",
-            self.dismiss
-        )
+        self.bind("<Button-1>", self.dismiss)
 
         for widget in (
             self.title_label,
             self.message_label,
             self.dismiss_label,
             self.progress_bg,
-            self.progress_fill
+            self.progress_fill,
         ):
-            widget.bind(
-                "<Button-1>",
-                self.dismiss
-            )
+            widget.bind("<Button-1>", self.dismiss)
 
-        self.protocol(
-            "WM_DELETE_WINDOW",
-            self.dismiss
-        )
+        self.protocol("WM_DELETE_WINDOW", self.dismiss)
 
         self.lift()
 
-        self.attributes(
-            "-topmost",
-            True
-        )
+        self.attributes("-topmost", True)
 
         self.start_time = time.monotonic()
 
-        self.after(
-            self.PROGRESS_INTERVAL,
-            self.update_progress
-        )
+        self.after(self.PROGRESS_INTERVAL, self.update_progress)
 
-        self.after(
-            self.DISPLAY_TIME,
-            self.fade_out
-        )
+        self.after(self.DISPLAY_TIME, self.fade_out)
 
     def _run_close_callback(self):
         if self.on_close_callback:
@@ -1239,14 +890,9 @@ class CinematicNotify(tk.Toplevel):
                 callback()
 
             except Exception as e:
-                print(
-                    f"[NOTIFICATION CALLBACK ERROR] {e}"
-                )
+                print(f"[NOTIFICATION CALLBACK ERROR] {e}")
 
-    def dismiss(
-        self,
-        event=None
-    ):
+    def dismiss(self, event=None):
         if self.destroyed:
             return
 
@@ -1272,37 +918,16 @@ class CinematicNotify(tk.Toplevel):
                 self.destroyed = True
                 return
 
-            elapsed = (
-                time.monotonic()
-                - self.start_time
-            ) * 1000
+            elapsed = (time.monotonic() - self.start_time) * 1000
 
-            remaining_ratio = max(
-                0.0,
-                1.0
-                - (
-                    elapsed
-                    / self.DISPLAY_TIME
-                )
-            )
+            remaining_ratio = max(0.0, 1.0 - (elapsed / self.DISPLAY_TIME))
 
-            current_width = int(
-                self.width
-                * remaining_ratio
-            )
+            current_width = int(self.width * remaining_ratio)
 
-            self.progress_fill.place(
-                x=0,
-                y=0,
-                width=current_width,
-                height=5
-            )
+            self.progress_fill.place(x=0, y=0, width=current_width, height=5)
 
             if remaining_ratio > 0:
-                self.after(
-                    self.PROGRESS_INTERVAL,
-                    self.update_progress
-                )
+                self.after(self.PROGRESS_INTERVAL, self.update_progress)
 
         except tk.TclError:
             self.destroyed = True
@@ -1319,9 +944,7 @@ class CinematicNotify(tk.Toplevel):
                 self.destroyed = True
                 return
 
-            alpha = float(
-                self.attributes("-alpha")
-            )
+            alpha = float(self.attributes("-alpha"))
 
             alpha -= self.FADE_STEP
 
@@ -1334,15 +957,9 @@ class CinematicNotify(tk.Toplevel):
 
                 return
 
-            self.attributes(
-                "-alpha",
-                alpha
-            )
+            self.attributes("-alpha", alpha)
 
-            self.after(
-                self.FADE_INTERVAL,
-                self.fade_out
-            )
+            self.after(self.FADE_INTERVAL, self.fade_out)
 
         except tk.TclError:
             self.destroyed = True
@@ -1363,22 +980,29 @@ class CinematicNotify(tk.Toplevel):
 # 7. MAIN LABGUARD TERMINAL CLIENT
 # =====================================================================
 
-class LabGuardClient:
 
-    def __init__(
-        self,
-        root
-    ):
+class LabGuardClient:
+    def __init__(self, root):
         self.root = root
 
         self.is_session_active = False
         self.is_maintenance_mode = False
 
         self.wifi_modal = None
+        # Security Baselines
+        self.dynamic_banned_apps = []
+        self.initial_installed_apps = set()
+        self.baseline_mice = 0
+        self.baseline_keyboards = 0
+        self.baseline_usb_drives = set()
         self.wifi_active = False
         self.shutdown_modal = None
 
         self.overlay = None
+
+        self.last_broadcast_message = ""
+        self.last_pushed_url = ""
+        self.network_grace_warned = False
 
         self.tray_icon = None
         self.floating_pill = None
@@ -1400,47 +1024,23 @@ class LabGuardClient:
         hide_taskbar()
         start_keyboard_hook()
 
-        self.root.title(
-            "LabGuard Terminal"
-        )
+        self.root.title("LabGuard Terminal")
 
-        self.root.attributes(
-            "-fullscreen",
-            True
-        )
+        self.root.attributes("-fullscreen", True)
 
-        self.root.attributes(
-            "-topmost",
-            True
-        )
+        self.root.attributes("-topmost", True)
 
-        self.root.configure(
-            bg="#0f172a"
-        )
+        self.root.configure(bg="#0f172a")
 
-        self.root.protocol(
-            "WM_DELETE_WINDOW",
-            lambda: None
-        )
+        self.root.protocol("WM_DELETE_WINDOW", lambda: None)
 
-        self.root.bind(
-            "<Button-1>",
-            self._on_bg_click
-        )
+        self.root.bind("<Button-1>", self._on_bg_click)
 
-        self.root.bind(
-            "<Control-Alt-Shift-Key-X>",
-            self.emergency_admin_exit
-        )
+        self.root.bind("<Control-Alt-Shift-Key-X>", self.emergency_admin_exit)
 
-        self.root.bind(
-            "<Control-Alt-Shift-Key-x>",
-            self.emergency_admin_exit
-        )
+        self.root.bind("<Control-Alt-Shift-Key-x>", self.emergency_admin_exit)
 
-        def reclaim_focus(
-            event=None
-        ):
+        def reclaim_focus(event=None):
             if self.is_session_active:
                 return
 
@@ -1449,16 +1049,10 @@ class LabGuardClient:
                 # NOTIFICATION ALWAYS HAS FIRST PRIORITY
                 # =====================================================
 
-                if (
-                    self.active_notification
-                    and self.active_notification.winfo_exists()
-                ):
+                if self.active_notification and self.active_notification.winfo_exists():
                     self.active_notification.lift()
 
-                    self.active_notification.attributes(
-                        "-topmost",
-                        True
-                    )
+                    self.active_notification.attributes("-topmost", True)
 
                     return
 
@@ -1466,16 +1060,10 @@ class LabGuardClient:
                 # WI-FI MODAL
                 # =====================================================
 
-                if (
-                    self.wifi_modal
-                    and self.wifi_modal.winfo_exists()
-                ):
+                if self.wifi_modal and self.wifi_modal.winfo_exists():
                     self.wifi_modal.lift()
 
-                    self.wifi_modal.attributes(
-                        "-topmost",
-                        True
-                    )
+                    self.wifi_modal.attributes("-topmost", True)
 
                     return
 
@@ -1483,32 +1071,20 @@ class LabGuardClient:
                 # REPORT OVERLAY
                 # =====================================================
 
-                if (
-                    self.overlay
-                    and self.overlay.winfo_exists()
-                ):
+                if self.overlay and self.overlay.winfo_exists():
                     self.overlay.lift()
 
-                    self.overlay.attributes(
-                        "-topmost",
-                        True
-                    )
+                    self.overlay.attributes("-topmost", True)
 
                     return
                 # =====================================================
                 # SHUTDOWN MODAL
                 # =====================================================
 
-                if (
-                    self.shutdown_modal
-                    and self.shutdown_modal.winfo_exists()
-                ):
+                if self.shutdown_modal and self.shutdown_modal.winfo_exists():
                     self.shutdown_modal.lift()
 
-                    self.shutdown_modal.attributes(
-                        "-topmost",
-                        True
-                    )
+                    self.shutdown_modal.attributes("-topmost", True)
 
                     return
 
@@ -1518,47 +1094,26 @@ class LabGuardClient:
 
                 self.root.lift()
 
-                self.root.attributes(
-                    "-topmost",
-                    True
-                )
+                self.root.attributes("-topmost", True)
 
             except Exception:
                 pass
 
-        self.root.bind(
-            "<FocusOut>",
-            reclaim_focus
-        )
+        self.root.bind("<FocusOut>", reclaim_focus)
 
-        self.root.bind(
-            "<Unmap>",
-            reclaim_focus
-        )
+        self.root.bind("<Unmap>", reclaim_focus)
 
         # -------------------------------------------------------------
         # TOP BAR
         # -------------------------------------------------------------
 
-        self.top_bar = tk.Frame(
-            self.root,
-            bg="#0f172a"
-        )
+        self.top_bar = tk.Frame(self.root, bg="#0f172a")
 
-        self.top_bar.pack(
-            side="top",
-            fill="x",
-            padx=25,
-            pady=20
-        )
+        self.top_bar.pack(side="top", fill="x", padx=25, pady=20)
 
         self.station_badge = tk.Label(
             self.top_bar,
-            text=(
-                f"LAB: {LAB_ID}"
-                f"  •  "
-                f"{PC_NUMBER}"
-            ),
+            text=(f"LAB: {LAB_ID}" f"  •  " f"{PC_NUMBER}"),
             fg="#94a3b8",
             bg="#1e293b",
             font=("Arial", 9, "bold"),
@@ -1566,9 +1121,7 @@ class LabGuardClient:
             pady=6,
         )
 
-        self.station_badge.pack(
-            side="left"
-        )
+        self.station_badge.pack(side="left")
 
         self.net_indicator = tk.Label(
             self.top_bar,
@@ -1579,39 +1132,23 @@ class LabGuardClient:
             cursor="hand2",
         )
 
-        self.net_indicator.pack(
-            side="right"
-        )
+        self.net_indicator.pack(side="right")
 
-        self.net_indicator.bind(
-            "<Button-1>",
-            lambda e:
-                self.open_wifi_modal()
-        )
+        self.net_indicator.bind("<Button-1>", lambda e: self.open_wifi_modal())
 
         # -------------------------------------------------------------
         # MAIN CONTAINER
         # -------------------------------------------------------------
 
-        self.main_container = tk.Frame(
-            self.root,
-            bg="#0f172a"
-        )
+        self.main_container = tk.Frame(self.root, bg="#0f172a")
 
-        self.main_container.place(
-            relx=0.5,
-            rely=0.5,
-            anchor="center"
-        )
+        self.main_container.place(relx=0.5, rely=0.5, anchor="center")
 
         # -------------------------------------------------------------
         # PAGE 1: LOGIN
         # -------------------------------------------------------------
 
-        self.login_view = tk.Frame(
-            self.main_container,
-            bg="#0f172a"
-        )
+        self.login_view = tk.Frame(self.main_container, bg="#0f172a")
 
         self.login_view.pack()
 
@@ -1625,25 +1162,15 @@ class LabGuardClient:
 
         tk.Label(
             self.login_view,
-            text=(
-                "TERMINAL ACCESS "
-                "MANAGEMENT SYSTEM"
-            ),
+            text=("TERMINAL ACCESS " "MANAGEMENT SYSTEM"),
             fg="#64748b",
             bg="#0f172a",
             font=("Arial", 10, "bold"),
-        ).pack(
-            pady=(0, 20)
-        )
+        ).pack(pady=(0, 20))
 
-        self.login_form_frame = tk.Frame(
-            self.login_view,
-            bg="#0f172a"
-        )
+        self.login_form_frame = tk.Frame(self.login_view, bg="#0f172a")
 
-        self.login_form_frame.pack(
-            pady=5
-        )
+        self.login_form_frame.pack(pady=5)
 
         tk.Label(
             self.login_form_frame,
@@ -1651,11 +1178,7 @@ class LabGuardClient:
             fg="#cbd5e1",
             bg="#0f172a",
             font=("Arial", 9, "bold"),
-        ).pack(
-            anchor="w",
-            padx=10,
-            pady=(10, 3)
-        )
+        ).pack(anchor="w", padx=10, pady=(10, 3))
 
         self.entry_id = tk.Entry(
             self.login_form_frame,
@@ -1668,25 +1191,13 @@ class LabGuardClient:
             border=0,
         )
 
-        self.entry_id.pack(
-            ipady=10
-        )
+        self.entry_id.pack(ipady=10)
 
-        self.entry_id.bind(
-            "<Key>",
-            self._filter_student_id_key
-        )
+        self.entry_id.bind("<Key>", self._filter_student_id_key)
 
-        self.entry_id.bind(
-            "<KeyRelease>",
-            self._format_student_id_entry
-        )
+        self.entry_id.bind("<KeyRelease>", self._format_student_id_entry)
 
-        self.entry_id.bind(
-            "<Return>",
-            lambda e:
-                self.entry_password.focus_set()
-        )
+        self.entry_id.bind("<Return>", lambda e: self.entry_password.focus_set())
 
         tk.Label(
             self.login_form_frame,
@@ -1694,11 +1205,7 @@ class LabGuardClient:
             fg="#cbd5e1",
             bg="#0f172a",
             font=("Arial", 9, "bold"),
-        ).pack(
-            anchor="w",
-            padx=10,
-            pady=(15, 3)
-        )
+        ).pack(anchor="w", padx=10, pady=(15, 3))
 
         self.entry_password = tk.Entry(
             self.login_form_frame,
@@ -1712,15 +1219,9 @@ class LabGuardClient:
             border=0,
         )
 
-        self.entry_password.pack(
-            ipady=10
-        )
+        self.entry_password.pack(ipady=10)
 
-        self.entry_password.bind(
-            "<Return>",
-            lambda e:
-                self.attempt_login()
-        )
+        self.entry_password.bind("<Return>", lambda e: self.attempt_login())
 
         self.entry_id.focus_set()
 
@@ -1739,9 +1240,7 @@ class LabGuardClient:
             relief="flat",
         )
 
-        self.btn_unlock.pack(
-            pady=25
-        )
+        self.btn_unlock.pack(pady=25)
         self.shutdown_button = tk.Button(
             self.root,
             text="⏻",
@@ -1757,48 +1256,32 @@ class LabGuardClient:
             bd=0,
             highlightthickness=1,
             highlightbackground="#334155",
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        self.shutdown_button.place(
-            relx=0.0,
-            rely=1.0,
-            x=25,
-            y=-25,
-            anchor="sw"
-        )
-
-
-        
+        self.shutdown_button.place(relx=0.0, rely=1.0, x=25, y=-25, anchor="sw")
 
         # -------------------------------------------------------------
         # MAINTENANCE UI
         # -------------------------------------------------------------
 
-        self.maintenance_frame = tk.Frame(
-            self.login_view,
-            bg="#0f172a"
-        )
+        self.maintenance_frame = tk.Frame(self.login_view, bg="#0f172a")
 
         tk.Label(
             self.maintenance_frame,
             text="🔧",
             fg="#f59e0b",
             bg="#0f172a",
-            font=("Arial", 46)
-        ).pack(
-            pady=(15, 5)
-        )
+            font=("Arial", 46),
+        ).pack(pady=(15, 5))
 
         tk.Label(
             self.maintenance_frame,
             text="TERMINAL UNDER MAINTENANCE",
             fg="#f59e0b",
             bg="#0f172a",
-            font=("Arial Black", 16)
-        ).pack(
-            pady=5
-        )
+            font=("Arial Black", 16),
+        ).pack(pady=5)
 
         tk.Label(
             self.maintenance_frame,
@@ -1812,36 +1295,23 @@ class LabGuardClient:
             font=("Arial", 11),
             justify="center",
             wraplength=440,
-        ).pack(
-            pady=10
-        )
+        ).pack(pady=10)
 
         # -------------------------------------------------------------
         # PAGE 2
         # -------------------------------------------------------------
 
-        self.checklist_view = tk.Frame(
-            self.main_container,
-            bg="#0f172a"
-        )
+        self.checklist_view = tk.Frame(self.main_container, bg="#0f172a")
 
         self.force_on_top()
 
-        self.root.after(
-            50,
-            self.deferred_background_init
-        )
+        self.root.after(50, self.deferred_background_init)
 
     # =================================================================
     # NOTIFICATION
     # =================================================================
 
-    def show_notification(
-        self,
-        title,
-        message,
-        color="#D4AF37"
-    ):
+    def show_notification(self, title, message, color="#D4AF37"):
         def create_notification():
             wifi_was_grabbed = False
 
@@ -1850,10 +1320,7 @@ class LabGuardClient:
                 # Temporarily release Wi-Fi modal grab.
                 # -----------------------------------------------------
 
-                if (
-                    self.wifi_modal
-                    and self.wifi_modal.winfo_exists()
-                ):
+                if self.wifi_modal and self.wifi_modal.winfo_exists():
                     try:
                         self.wifi_modal.grab_release()
 
@@ -1866,10 +1333,7 @@ class LabGuardClient:
                 # Destroy old notification.
                 # -----------------------------------------------------
 
-                if (
-                    self.active_notification
-                    and self.active_notification.winfo_exists()
-                ):
+                if self.active_notification and self.active_notification.winfo_exists():
                     try:
                         self.active_notification.destroy()
 
@@ -1893,10 +1357,7 @@ class LabGuardClient:
                         return
 
                     try:
-                        if (
-                            not self.wifi_modal
-                            or not self.wifi_modal.winfo_exists()
-                        ):
+                        if not self.wifi_modal or not self.wifi_modal.winfo_exists():
                             return
 
                         # Restore modal grab.
@@ -1904,15 +1365,10 @@ class LabGuardClient:
 
                         self.wifi_modal.lift()
 
-                        self.wifi_modal.attributes(
-                            "-topmost",
-                            True
-                        )
+                        self.wifi_modal.attributes("-topmost", True)
 
                     except Exception as e:
-                        print(
-                            f"[WIFI GRAB RESTORE ERROR] {e}"
-                        )
+                        print(f"[WIFI GRAB RESTORE ERROR] {e}")
 
                     # -------------------------------------------------
                     # Give the Wi-Fi password field keyboard focus.
@@ -1928,34 +1384,21 @@ class LabGuardClient:
 
                             self.wifi_modal.lift()
 
-                            self.wifi_modal.attributes(
-                                "-topmost",
-                                True
-                            )
+                            self.wifi_modal.attributes("-topmost", True)
 
                             if (
-                                hasattr(
-                                    self,
-                                    "wifi_pass"
-                                )
+                                hasattr(self, "wifi_pass")
                                 and self.wifi_pass.winfo_exists()
                             ):
                                 self.wifi_pass.focus_force()
 
-                                self.wifi_pass.icursor(
-                                    tk.END
-                                )
+                                self.wifi_pass.icursor(tk.END)
 
                         except Exception as e:
-                            print(
-                                f"[WIFI FOCUS RESTORE ERROR] {e}"
-                            )
+                            print(f"[WIFI FOCUS RESTORE ERROR] {e}")
 
                     try:
-                        self.root.after(
-                            100,
-                            restore_password_focus
-                        )
+                        self.root.after(100, restore_password_focus)
 
                     except Exception:
                         pass
@@ -1964,15 +1407,13 @@ class LabGuardClient:
                 # Create independent notification window.
                 # -----------------------------------------------------
 
-                self.active_notification = (
-                    CinematicNotify(
-                        self.root,
-                        title,
-                        message,
-                        color,
-                        position="center",
-                        on_close=restore_wifi_grab_and_focus
-                    )
+                self.active_notification = CinematicNotify(
+                    self.root,
+                    title,
+                    message,
+                    color,
+                    position="center",
+                    on_close=restore_wifi_grab_and_focus,
                 )
 
                 # -----------------------------------------------------
@@ -1981,31 +1422,20 @@ class LabGuardClient:
 
                 self.active_notification.lift()
 
-                self.active_notification.attributes(
-                    "-topmost",
-                    True
-                )
+                self.active_notification.attributes("-topmost", True)
 
             except Exception as e:
-                print(
-                    f"[NOTIFICATION ERROR] {e}"
-                )
+                print(f"[NOTIFICATION ERROR] {e}")
 
                 if wifi_was_grabbed:
                     try:
-                        if (
-                            self.wifi_modal
-                            and self.wifi_modal.winfo_exists()
-                        ):
+                        if self.wifi_modal and self.wifi_modal.winfo_exists():
                             self.wifi_modal.grab_set()
 
                             self.wifi_modal.lift()
 
                             if (
-                                hasattr(
-                                    self,
-                                    "wifi_pass"
-                                )
+                                hasattr(self, "wifi_pass")
                                 and self.wifi_pass.winfo_exists()
                             ):
                                 self.wifi_pass.focus_force()
@@ -2014,10 +1444,7 @@ class LabGuardClient:
                         pass
 
         try:
-            self.root.after(
-                0,
-                create_notification
-            )
+            self.root.after(0, create_notification)
 
         except Exception:
             pass
@@ -2026,30 +1453,20 @@ class LabGuardClient:
     # BACKGROUND CLICK
     # =================================================================
 
-    def _on_bg_click(
-        self,
-        event
-    ):
+    def _on_bg_click(self, event):
         if (
             not self.is_session_active
+            and not (self.wifi_modal and self.wifi_modal.winfo_exists())
+            and not (self.overlay and self.overlay.winfo_exists())
             and not (
-                self.wifi_modal
-                and self.wifi_modal.winfo_exists()
-            )
-            and not (
-                self.overlay
-                and self.overlay.winfo_exists()
-            )
-            and not (
-                self.active_notification
-                and self.active_notification.winfo_exists()
+                self.active_notification and self.active_notification.winfo_exists()
             )
         ):
             if event.widget not in (
                 self.entry_id,
                 self.entry_password,
                 self.btn_unlock,
-                self.shutdown_button
+                self.shutdown_button,
             ):
                 if self.login_view.winfo_ismapped():
                     self.entry_id.focus_set()
@@ -2059,24 +1476,15 @@ class LabGuardClient:
     # =================================================================
 
     def deferred_background_init(self):
-        threading.Thread(
-            target=register_shutdown_hooks,
-            daemon=True
-        ).start()
+        threading.Thread(target=register_shutdown_hooks, daemon=True).start()
 
-        threading.Thread(
-            target=self.network_monitor_loop,
-            daemon=True
-        ).start()
+        threading.Thread(target=self.network_monitor_loop, daemon=True).start()
 
     # =================================================================
     # STUDENT ID FORMATTING
     # =================================================================
 
-    def _filter_student_id_key(
-        self,
-        event
-    ):
+    def _filter_student_id_key(self, event):
         if event.keysym in {
             "BackSpace",
             "Delete",
@@ -2087,94 +1495,52 @@ class LabGuardClient:
             "Up",
             "Down",
             "Home",
-            "End"
+            "End",
         }:
             return
 
-        if (
-            event.char
-            and not event.char.isdigit()
-        ):
+        if event.char and not event.char.isdigit():
             return "break"
 
-    def _format_student_id_entry(
-        self,
-        event=None
-    ):
+    def _format_student_id_entry(self, event=None):
         if event and event.keysym in {
             "BackSpace",
             "Delete",
             "Left",
             "Right",
             "Home",
-            "End"
+            "End",
         }:
             return
 
-        target = (
-            event.widget
-            if event
-            else self.entry_id
-        )
+        target = event.widget if event else self.entry_id
 
         current_value = target.get()
 
-        cursor_pos = target.index(
-            tk.INSERT
-        )
+        cursor_pos = target.index(tk.INSERT)
 
-        was_at_end = (
-            cursor_pos
-            == len(current_value)
-        )
+        was_at_end = cursor_pos == len(current_value)
 
-        digits = re.sub(
-            r"\D",
-            "",
-            current_value
-        )[:12]
+        digits = re.sub(r"\D", "", current_value)[:12]
 
-        formatted = (
-            self._format_student_id_text(
-                digits
-            )
-        )
+        formatted = self._format_student_id_text(digits)
 
         if formatted != current_value:
-            target.delete(
-                0,
-                tk.END
-            )
+            target.delete(0, tk.END)
 
-            target.insert(
-                0,
-                formatted
-            )
+            target.insert(0, formatted)
 
             if was_at_end:
-                target.icursor(
-                    tk.END
-                )
+                target.icursor(tk.END)
 
             else:
-                old_prefix_digits = len(
-                    re.sub(
-                        r"\D",
-                        "",
-                        current_value[
-                            :cursor_pos
-                        ]
-                    )
-                )
+                old_prefix_digits = len(re.sub(r"\D", "", current_value[:cursor_pos]))
 
                 new_pos = 0
                 digit_count = 0
 
                 for char in formatted:
-                    if (
-                        digit_count
-                        == old_prefix_digits
-                    ):
+                    if digit_count == old_prefix_digits:
                         break
 
                     if char.isdigit():
@@ -2182,28 +1548,16 @@ class LabGuardClient:
 
                     new_pos += 1
 
-                target.icursor(
-                    new_pos
-                )
+                target.icursor(new_pos)
 
-    def _format_student_id_text(
-        self,
-        value
-    ):
+    def _format_student_id_text(self, value):
         if len(value) <= 2:
             return value
 
         if len(value) <= 6:
-            return (
-                f"{value[:2]}-"
-                f"{value[2:]}"
-            )
+            return f"{value[:2]}-" f"{value[2:]}"
 
-        return (
-            f"{value[:2]}-"
-            f"{value[2:6]}-"
-            f"{value[6:]}"
-        )
+        return f"{value[:2]}-" f"{value[2:6]}-" f"{value[6:]}"
 
     # =================================================================
     # MAINTENANCE
@@ -2215,9 +1569,7 @@ class LabGuardClient:
 
             self.login_form_frame.pack_forget()
 
-            self.maintenance_frame.pack(
-                pady=10
-            )
+            self.maintenance_frame.pack(pady=10)
 
     def restore_login_ui(self):
         if self.is_maintenance_mode:
@@ -2225,14 +1577,9 @@ class LabGuardClient:
 
             self.maintenance_frame.pack_forget()
 
-            self.login_form_frame.pack(
-                pady=10
-            )
+            self.login_form_frame.pack(pady=10)
 
-            self.root.after(
-                100,
-                self.restore_login_focus
-            )
+            self.root.after(100, self.restore_login_focus)
 
     # =================================================================
     # LOGIN FOCUS RESTORE
@@ -2253,10 +1600,7 @@ class LabGuardClient:
 
             self.root.lift()
 
-            self.root.attributes(
-                "-topmost",
-                True
-            )
+            self.root.attributes("-topmost", True)
 
             self.root.update_idletasks()
 
@@ -2264,55 +1608,35 @@ class LabGuardClient:
 
             self.entry_id.focus_force()
 
-            self.entry_id.icursor(
-                tk.END
-            )
+            self.entry_id.icursor(tk.END)
 
         except tk.TclError:
             pass
 
         except Exception as e:
-            print(
-                f"[DEBUG] Focus restore error: {e}"
-            )
+            print(f"[DEBUG] Focus restore error: {e}")
 
     # =================================================================
     # HARDWARE CHECKLIST
     # =================================================================
 
-    def show_checklist_screen(
-        self,
-        student_name
-    ):
+    def show_checklist_screen(self, student_name):
         self.login_screen_active = False
 
         self.login_view.pack_forget()
 
-        for widget in (
-            self.checklist_view.winfo_children()
-        ):
+        for widget in self.checklist_view.winfo_children():
             widget.destroy()
 
-        self.checklist_view.pack(
-            fill="both",
-            expand=True
-        )
+        self.checklist_view.pack(fill="both", expand=True)
 
-        badge_frame = tk.Frame(
-            self.checklist_view,
-            bg="#0f172a"
-        )
+        badge_frame = tk.Frame(self.checklist_view, bg="#0f172a")
 
-        badge_frame.pack(
-            pady=(0, 6)
-        )
+        badge_frame.pack(pady=(0, 6))
 
         tk.Label(
             badge_frame,
-            text=(
-                "STEP 2 OF 2 • "
-                "MANDATORY WORKSTATION AUDIT"
-            ),
+            text=("STEP 2 OF 2 • " "MANDATORY WORKSTATION AUDIT"),
             fg="#D4AF37",
             bg="#1e293b",
             font=("Arial", 9, "bold"),
@@ -2322,16 +1646,11 @@ class LabGuardClient:
 
         tk.Label(
             self.checklist_view,
-            text=(
-                f"Welcome, "
-                f"{student_name.upper()}!"
-            ),
+            text=(f"Welcome, " f"{student_name.upper()}!"),
             fg="white",
             bg="#0f172a",
             font=("Arial Black", 22),
-        ).pack(
-            pady=(6, 2)
-        )
+        ).pack(pady=(6, 2))
 
         tk.Label(
             self.checklist_view,
@@ -2347,9 +1666,7 @@ class LabGuardClient:
             font=("Arial", 10),
             justify="center",
             wraplength=650,
-        ).pack(
-            pady=(0, 16)
-        )
+        ).pack(pady=(0, 16))
 
         self.hardware_items = [
             {
@@ -2357,79 +1674,56 @@ class LabGuardClient:
                 "icon": "🖥️",
                 "title": "System Unit",
                 "desc": (
-                    "Power button working, casing sealed, "
-                    "no abnormal fan noise."
-                )
+                    "Power button working, casing sealed, " "no abnormal fan noise."
+                ),
             },
             {
                 "id": "monitor",
                 "icon": "🖥️",
                 "title": "Display Monitor",
-                "desc": (
-                    "Screen clear, no cracks, lines, "
-                    "or video signal loss."
-                )
+                "desc": ("Screen clear, no cracks, lines, " "or video signal loss."),
             },
             {
                 "id": "avr",
                 "icon": "⚡",
                 "title": "Power Unit (AVR)",
                 "desc": (
-                    "Voltage regulator active, "
-                    "power indicator light on, grounded."
-                )
+                    "Voltage regulator active, " "power indicator light on, grounded."
+                ),
             },
             {
                 "id": "mouse",
                 "icon": "🖱️",
                 "title": "Optical Mouse",
-                "desc": (
-                    "Laser tracking smooth, left & "
-                    "right click responsive."
-                )
+                "desc": ("Laser tracking smooth, left & " "right click responsive."),
             },
             {
                 "id": "keyboard",
                 "icon": "⌨️",
                 "title": "Keyboard Unit",
-                "desc": (
-                    "All keycaps present, typing responsive, "
-                    "no sticky keys."
-                )
+                "desc": ("All keycaps present, typing responsive, " "no sticky keys."),
             },
             {
                 "id": "cables",
                 "icon": "🔌",
                 "title": "Power & I/O Cables",
                 "desc": (
-                    "Display, power, and peripheral cords "
-                    "securely plugged in."
-                )
+                    "Display, power, and peripheral cords " "securely plugged in."
+                ),
             },
         ]
 
         self.check_states = {}
         self.checklist_widgets = {}
 
-        cards_container = tk.Frame(
-            self.checklist_view,
-            bg="#0f172a"
-        )
+        cards_container = tk.Frame(self.checklist_view, bg="#0f172a")
 
-        cards_container.pack(
-            pady=4
-        )
+        cards_container.pack(pady=4)
 
-        for idx, item in enumerate(
-            self.hardware_items
-        ):
-            var = tk.BooleanVar(
-                value=False
-            )
+        for idx, item in enumerate(self.hardware_items):
+            var = tk.BooleanVar(value=False)
 
-            self.check_states[
-                item["id"]
-            ] = var
+            self.check_states[item["id"]] = var
 
             r = idx // 2
             c = idx % 2
@@ -2440,20 +1734,12 @@ class LabGuardClient:
                 width=310,
                 height=65,
                 highlightthickness=1,
-                highlightbackground="#334155"
+                highlightbackground="#334155",
             )
 
-            card.grid(
-                row=r,
-                column=c,
-                padx=8,
-                pady=6,
-                sticky="nsew"
-            )
+            card.grid(row=r, column=c, padx=8, pady=6, sticky="nsew")
 
-            card.pack_propagate(
-                False
-            )
+            card.pack_propagate(False)
 
             lbl_check = tk.Label(
                 card,
@@ -2461,42 +1747,25 @@ class LabGuardClient:
                 fg="#64748b",
                 bg="#1e293b",
                 font=("Courier", 12, "bold"),
-                cursor="hand2"
+                cursor="hand2",
             )
 
-            lbl_check.pack(
-                side="left",
-                padx=(12, 6)
-            )
+            lbl_check.pack(side="left", padx=(12, 6))
 
-            content = tk.Frame(
-                card,
-                bg="#1e293b",
-                cursor="hand2"
-            )
+            content = tk.Frame(card, bg="#1e293b", cursor="hand2")
 
-            content.pack(
-                side="left",
-                fill="both",
-                expand=True,
-                pady=6
-            )
+            content.pack(side="left", fill="both", expand=True, pady=6)
 
             title_lbl = tk.Label(
                 content,
-                text=(
-                    f"{item['icon']} "
-                    f"{item['title']}"
-                ),
+                text=(f"{item['icon']} " f"{item['title']}"),
                 fg="#f8fafc",
                 bg="#1e293b",
                 font=("Arial", 10, "bold"),
                 anchor="w",
             )
 
-            title_lbl.pack(
-                anchor="w"
-            )
+            title_lbl.pack(anchor="w")
 
             desc_lbl = tk.Label(
                 content,
@@ -2509,63 +1778,32 @@ class LabGuardClient:
                 justify="left",
             )
 
-            desc_lbl.pack(
-                anchor="w"
-            )
+            desc_lbl.pack(anchor="w")
 
-            self.checklist_widgets[
-                item["id"]
-            ] = {
+            self.checklist_widgets[item["id"]] = {
                 "var": var,
                 "lbl": lbl_check,
-                "card": card
+                "card": card,
             }
 
-            def toggle_item(
-                item_id=item["id"]
-            ):
-                current_val = (
-                    self.checklist_widgets[
-                        item_id
-                    ]["var"].get()
-                )
+            def toggle_item(item_id=item["id"]):
+                current_val = self.checklist_widgets[item_id]["var"].get()
 
-                self._set_checklist_item_state(
-                    item_id,
-                    not current_val
-                )
+                self._set_checklist_item_state(item_id, not current_val)
 
                 self._update_checklist_button_state()
 
-            for widget in (
-                card,
-                lbl_check,
-                content,
-                title_lbl,
-                desc_lbl
-            ):
-                widget.bind(
-                    "<Button-1>",
-                    lambda e,
-                    func=toggle_item:
-                        func()
-                )
+            for widget in (card, lbl_check, content, title_lbl, desc_lbl):
+                widget.bind("<Button-1>", lambda e, func=toggle_item: func())
 
-        quick_select_frame = tk.Frame(
-            self.checklist_view,
-            bg="#0f172a"
-        )
+        quick_select_frame = tk.Frame(self.checklist_view, bg="#0f172a")
 
-        quick_select_frame.pack(
-            pady=(8, 12)
-        )
+        quick_select_frame.pack(pady=(8, 12))
 
         btn_select_all = tk.Button(
             quick_select_frame,
             text="✔ SELECT ALL AS OPERATIONAL",
-            command=(
-                self.select_all_checklist_items
-            ),
+            command=(self.select_all_checklist_items),
             bg="#334155",
             fg="#cbd5e1",
             activebackground="#475569",
@@ -2579,24 +1817,14 @@ class LabGuardClient:
 
         btn_select_all.pack()
 
-        action_frame = tk.Frame(
-            self.checklist_view,
-            bg="#0f172a"
-        )
+        action_frame = tk.Frame(self.checklist_view, bg="#0f172a")
 
-        action_frame.pack(
-            pady=5
-        )
+        action_frame.pack(pady=5)
 
         self.btn_proceed = tk.Button(
             action_frame,
-            text=(
-                "CONFIRM & PROCEED "
-                "TO DESKTOP"
-            ),
-            command=(
-                self.complete_checklist_and_unlock
-            ),
+            text=("CONFIRM & PROCEED " "TO DESKTOP"),
+            command=(self.complete_checklist_and_unlock),
             bg="#10b981",
             fg="white",
             activebackground="#059669",
@@ -2609,17 +1837,12 @@ class LabGuardClient:
             cursor="hand2",
         )
 
-        self.btn_proceed.pack(
-            side="left",
-            padx=8
-        )
+        self.btn_proceed.pack(side="left", padx=8)
 
         btn_cancel = tk.Button(
             action_frame,
             text="CANCEL & LOGOUT",
-            command=(
-                self.return_to_login_screen
-            ),
+            command=(self.return_to_login_screen),
             bg="#1e293b",
             fg="#94a3b8",
             font=("Arial", 9, "bold"),
@@ -2629,20 +1852,11 @@ class LabGuardClient:
             cursor="hand2",
         )
 
-        btn_cancel.pack(
-            side="left",
-            padx=8
-        )
+        btn_cancel.pack(side="left", padx=8)
 
-        report_pill = tk.Frame(
-            self.checklist_view,
-            bg="#1e293b",
-            cursor="hand2"
-        )
+        report_pill = tk.Frame(self.checklist_view, bg="#1e293b", cursor="hand2")
 
-        report_pill.pack(
-            pady=(18, 0)
-        )
+        report_pill.pack(pady=(18, 0))
 
         lbl_warn_icon = tk.Label(
             report_pill,
@@ -2650,109 +1864,53 @@ class LabGuardClient:
             fg="#ef4444",
             bg="#1e293b",
             font=("Arial", 11, "bold"),
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        lbl_warn_icon.pack(
-            side="left",
-            padx=(14, 4),
-            pady=6
-        )
+        lbl_warn_icon.pack(side="left", padx=(14, 4), pady=6)
 
         lbl_warn_text = tk.Label(
             report_pill,
-            text=(
-                "SOMETHING BROKEN OR MISSING? "
-                "CLICK HERE TO LOG A FORMAL TICKET"
-            ),
+            text=("SOMETHING BROKEN OR MISSING? " "CLICK HERE TO LOG A FORMAL TICKET"),
             fg="#ef4444",
             bg="#1e293b",
             font=("Arial", 8, "bold"),
             cursor="hand2",
         )
 
-        lbl_warn_text.pack(
-            side="left",
-            padx=(0, 14),
-            pady=6
-        )
+        lbl_warn_text.pack(side="left", padx=(0, 14), pady=6)
 
-        for widget in (
-            report_pill,
-            lbl_warn_icon,
-            lbl_warn_text
-        ):
-            widget.bind(
-                "<Button-1>",
-                lambda e:
-                    self.open_report_overlay(
-                        prefill=True
-                    )
-            )
+        for widget in (report_pill, lbl_warn_icon, lbl_warn_text):
+            widget.bind("<Button-1>", lambda e: self.open_report_overlay(prefill=True))
 
-    def _set_checklist_item_state(
-        self,
-        item_id,
-        is_checked
-    ):
+    def _set_checklist_item_state(self, item_id, is_checked):
         if item_id in self.checklist_widgets:
-            widget_data = (
-                self.checklist_widgets[
-                    item_id
-                ]
-            )
+            widget_data = self.checklist_widgets[item_id]
 
-            widget_data["var"].set(
-                is_checked
-            )
+            widget_data["var"].set(is_checked)
 
             if is_checked:
-                widget_data["lbl"].config(
-                    text="[ ✔ ]",
-                    fg="#10b981"
-                )
+                widget_data["lbl"].config(text="[ ✔ ]", fg="#10b981")
 
-                widget_data["card"].config(
-                    highlightbackground="#10b981"
-                )
+                widget_data["card"].config(highlightbackground="#10b981")
 
             else:
-                widget_data["lbl"].config(
-                    text="[ ✕ ]",
-                    fg="#ef4444"
-                )
+                widget_data["lbl"].config(text="[ ✕ ]", fg="#ef4444")
 
-                widget_data["card"].config(
-                    highlightbackground="#ef4444"
-                )
+                widget_data["card"].config(highlightbackground="#ef4444")
 
     def select_all_checklist_items(self):
-        for item_id in (
-            self.checklist_widgets.keys()
-        ):
-            self._set_checklist_item_state(
-                item_id,
-                True
-            )
+        for item_id in self.checklist_widgets.keys():
+            self._set_checklist_item_state(item_id, True)
 
         self._update_checklist_button_state()
 
     def _update_checklist_button_state(self):
-        checked_count = sum(
-            1
-            for v in self.check_states.values()
-            if v.get()
-        )
+        checked_count = sum(1 for v in self.check_states.values() if v.get())
 
-        if (
-            checked_count
-            == len(self.check_states)
-        ):
+        if checked_count == len(self.check_states):
             self.btn_proceed.config(
-                text=(
-                    "CONFIRM & PROCEED "
-                    "TO DESKTOP"
-                ),
+                text=("CONFIRM & PROCEED " "TO DESKTOP"),
                 bg="#10b981",
                 fg="white",
             )
@@ -2775,7 +1933,7 @@ class LabGuardClient:
             "password": "",
             "name": "",
             "role": "student",
-            "session_id": None
+            "session_id": None,
         }
 
         self.login_screen_active = True
@@ -2784,67 +1942,40 @@ class LabGuardClient:
 
         self.login_view.pack()
 
-        self.entry_password.delete(
-            0,
-            tk.END
-        )
+        self.entry_password.delete(0, tk.END)
 
-        self.btn_unlock.config(
-            state="normal",
-            text="AUTHENTICATE & INSPECT"
-        )
+        self.btn_unlock.config(state="normal", text="AUTHENTICATE & INSPECT")
 
-        self.root.after(
-            100,
-            self.restore_login_focus
-        )
+        self.root.after(100, self.restore_login_focus)
 
     # =================================================================
     # CHECKLIST SUBMISSION
     # =================================================================
 
     def complete_checklist_and_unlock(self):
-        self.btn_proceed.config(
-            state="disabled",
-            text="SAVING INSPECTION AUDIT..."
-        )
+        self.btn_proceed.config(state="disabled", text="SAVING INSPECTION AUDIT...")
 
         checklist_payload = {
-            item_id: var.get()
-            for item_id, var
-            in self.check_states.items()
+            item_id: var.get() for item_id, var in self.check_states.items()
         }
 
         request_body = {
             "pc_number": PC_NUMBER,
             "lab": LAB_ID,
-            "student_id": (
-                self.current_student["id"]
-            ),
-            "session_id": (
-                self.current_student[
-                    "session_id"
-                ]
-            ),
+            "student_id": (self.current_student["id"]),
+            "session_id": (self.current_student["session_id"]),
             "checklist": checklist_payload,
         }
 
         def send_checklist_to_laravel():
             try:
-                session = (
-                    get_authenticated_session()
-                )
+                session = get_authenticated_session()
 
                 resp = session.post(
-                    f"{API_URL}/checklist",
-                    json=request_body,
-                    timeout=6
+                    f"{API_URL}/checklist", json=request_body, timeout=6
                 )
 
-                if resp.status_code in (
-                    200,
-                    201
-                ):
+                if resp.status_code in (200, 201):
                     print(
                         "[AUDIT] Workstation checklist "
                         "saved to Laravel successfully."
@@ -2858,42 +1989,26 @@ class LabGuardClient:
                     )
 
             except Exception as e:
-                print(
-                    "[AUDIT ERROR] Failed to send "
-                    f"checklist to Laravel: {e}"
-                )
+                print("[AUDIT ERROR] Failed to send " f"checklist to Laravel: {e}")
 
             try:
-                self.root.after(
-                    0,
-                    self._finalize_unlock_session
-                )
+                self.root.after(0, self._finalize_unlock_session)
 
             except Exception:
                 pass
 
-        threading.Thread(
-            target=send_checklist_to_laravel,
-            daemon=True
-        ).start()
+        threading.Thread(target=send_checklist_to_laravel, daemon=True).start()
 
     def _finalize_unlock_session(self):
         self.login_screen_active = False
 
         self.show_notification(
             "Session Started",
-            (
-                "Terminal unlocked. "
-                f"Welcome, "
-                f"{self.current_student['name']}!"
-            ),
-            color="#10b981"
+            ("Terminal unlocked. " f"Welcome, " f"{self.current_student['name']}!"),
+            color="#10b981",
         )
 
-        self.root.after(
-            1000,
-            self.hide_terminal
-        )
+        self.root.after(1000, self.hide_terminal)
 
     # =================================================================
     # NETWORK MONITOR
@@ -2901,131 +2016,65 @@ class LabGuardClient:
 
     def network_monitor_loop(self):
         while True:
+            # Do not ping or compete with heartbeat while student session is active
+            if self.is_session_active:
+                time.sleep(5)
+                continue
+
             try:
-                lab_param = urllib.parse.quote(
-                    str(LAB_ID)
-                )
+                lab_param = urllib.parse.quote(str(LAB_ID))
+                pc_param = urllib.parse.quote(str(PC_NUMBER))
 
-                pc_param = urllib.parse.quote(
-                    str(PC_NUMBER)
-                )
-
-                url = (
-                    f"{API_URL}/status/"
-                    f"{lab_param}/"
-                    f"{pc_param}"
-                )
-
-                session = (
-                    get_authenticated_session()
-                )
-
-                res = session.get(
-                    url,
-                    timeout=3
-                )
+                url = f"{API_URL}/status/{lab_param}/{pc_param}"
+                session = get_authenticated_session()
+                res = session.get(url, timeout=3)
 
                 if res.status_code == 200:
                     try:
                         data = res.json()
-
                     except Exception:
                         data = {}
 
-                    pc_status = (
-                        data.get("status")
-                        or data.get(
-                            "data",
-                            {}
-                        ).get("status")
-                    )
+                    pc_status = data.get("status") or data.get("data", {}).get("status")
 
                     try:
-                        self.root.after(
-                            0,
-                            self.update_net_status,
-                            True
-                        )
+                        self.root.after(0, self.update_net_status, True)
 
-                        if (
-                            pc_status
-                            and str(
-                                pc_status
-                            ).lower()
-                            == "maintenance"
-                        ):
-                            self.root.after(
-                                0,
-                                self.show_maintenance_ui
-                            )
-
+                        if pc_status and str(pc_status).lower() == "maintenance":
+                            self.root.after(0, self.show_maintenance_ui)
                         else:
-                            self.root.after(
-                                0,
-                                self.restore_login_ui
-                            )
-
+                            self.root.after(0, self.restore_login_ui)
                     except Exception:
                         pass
 
                 elif res.status_code == 404:
                     try:
-                        self.root.after(
-                            0,
-                            self.update_net_status,
-                            True
-                        )
-
-                        self.root.after(
-                            0,
-                            self.restore_login_ui
-                        )
-
+                        self.root.after(0, self.update_net_status, True)
+                        self.root.after(0, self.restore_login_ui)
                     except Exception:
                         pass
-
                 else:
                     try:
-                        self.root.after(
-                            0,
-                            self.update_net_status,
-                            False
-                        )
-
+                        self.root.after(0, self.update_net_status, False)
                     except Exception:
                         pass
 
             except Exception:
                 try:
-                    self.root.after(
-                        0,
-                        self.update_net_status,
-                        False
-                    )
-
+                    self.root.after(0, self.update_net_status, False)
                 except Exception:
                     pass
 
             time.sleep(5)
 
-    def update_net_status(
-        self,
-        is_online
-    ):
+    def update_net_status(self, is_online):
         try:
             if is_online:
-                self.net_indicator.config(
-                    text="● ONLINE",
-                    fg="#10b981"
-                )
+                self.net_indicator.config(text="● ONLINE", fg="#10b981")
 
             else:
                 self.net_indicator.config(
-                    text=(
-                        "▲ OFFLINE "
-                        "(CLICK TO FIX WI-FI)"
-                    ),
-                    fg="#ef4444"
+                    text=("▲ OFFLINE " "(CLICK TO FIX WI-FI)"), fg="#ef4444"
                 )
 
         except tk.TclError:
@@ -3036,17 +2085,11 @@ class LabGuardClient:
     # =================================================================
 
     def open_wifi_modal(self):
-        if (
-            self.wifi_modal
-            and self.wifi_modal.winfo_exists()
-        ):
+        if self.wifi_modal and self.wifi_modal.winfo_exists():
             try:
                 self.wifi_modal.lift()
 
-                self.wifi_modal.attributes(
-                    "-topmost",
-                    True
-                )
+                self.wifi_modal.attributes("-topmost", True)
 
                 self.wifi_modal.focus_force()
 
@@ -3058,66 +2101,32 @@ class LabGuardClient:
         self.wifi_active = True
         self.login_screen_active = False
 
-        self.root.attributes(
-            "-topmost",
-            False
-        )
+        self.root.attributes("-topmost", False)
 
-        self.wifi_modal = tk.Toplevel(
-            self.root
-        )
+        self.wifi_modal = tk.Toplevel(self.root)
 
-        self.wifi_modal.configure(
-            bg="#1e293b"
-        )
+        self.wifi_modal.configure(bg="#1e293b")
 
-        self.wifi_modal.overrideredirect(
-            True
-        )
+        self.wifi_modal.overrideredirect(True)
 
         width = 480
         height = 550
 
-        screen_w = (
-            self.root.winfo_screenwidth()
-        )
+        screen_w = self.root.winfo_screenwidth()
 
-        screen_h = (
-            self.root.winfo_screenheight()
-        )
+        screen_h = self.root.winfo_screenheight()
 
-        x = (
-            screen_w
-            // 2
-        ) - (
-            width
-            // 2
-        )
+        x = (screen_w // 2) - (width // 2)
 
-        y = (
-            screen_h
-            // 2
-        ) - (
-            height
-            // 2
-        )
+        y = (screen_h // 2) - (height // 2)
 
-        self.wifi_modal.geometry(
-            f"{width}x{height}+{x}+{y}"
-        )
+        self.wifi_modal.geometry(f"{width}x{height}+{x}+{y}")
 
-        self.wifi_modal.attributes(
-            "-topmost",
-            True
-        )
+        self.wifi_modal.attributes("-topmost", True)
 
-        self.wifi_modal.transient(
-            self.root
-        )
+        self.wifi_modal.transient(self.root)
 
-        def close_wifi(
-            event=None
-        ):
+        def close_wifi(event=None):
             self.wifi_active = False
 
             modal = self.wifi_modal
@@ -3138,10 +2147,7 @@ class LabGuardClient:
                     pass
 
                 try:
-                    modal.attributes(
-                        "-topmost",
-                        False
-                    )
+                    modal.attributes("-topmost", False)
 
                 except Exception:
                     pass
@@ -3155,10 +2161,7 @@ class LabGuardClient:
             try:
                 self.root.deiconify()
 
-                self.root.attributes(
-                    "-topmost",
-                    True
-                )
+                self.root.attributes("-topmost", True)
 
                 self.root.lift()
 
@@ -3167,49 +2170,29 @@ class LabGuardClient:
             except Exception:
                 pass
 
-            self.login_screen_active = (
-                self.login_view.winfo_ismapped()
-            )
+            self.login_screen_active = self.login_view.winfo_ismapped()
 
             try:
-                self.root.after(
-                    100,
-                    self.restore_login_focus
-                )
+                self.root.after(100, self.restore_login_focus)
 
             except Exception:
                 pass
 
-        self.wifi_modal.protocol(
-            "WM_DELETE_WINDOW",
-            close_wifi
-        )
+        self.wifi_modal.protocol("WM_DELETE_WINDOW", close_wifi)
 
-        self.wifi_modal.bind(
-            "<Escape>",
-            close_wifi
-        )
+        self.wifi_modal.bind("<Escape>", close_wifi)
 
-        header_frame = tk.Frame(
-            self.wifi_modal,
-            bg="#1e293b"
-        )
+        header_frame = tk.Frame(self.wifi_modal, bg="#1e293b")
 
-        header_frame.pack(
-            fill="x",
-            padx=15,
-            pady=(15, 0)
-        )
+        header_frame.pack(fill="x", padx=15, pady=(15, 0))
 
         tk.Label(
             header_frame,
             text="NETWORK SETTINGS",
             fg="#D4AF37",
             bg="#1e293b",
-            font=("Arial Black", 14)
-        ).pack(
-            side="left"
-        )
+            font=("Arial Black", 14),
+        ).pack(side="left")
 
         btn_x = tk.Button(
             header_frame,
@@ -3224,36 +2207,19 @@ class LabGuardClient:
             cursor="hand2",
         )
 
-        btn_x.pack(
-            side="right"
-        )
+        btn_x.pack(side="right")
 
         tk.Label(
             self.wifi_modal,
-            text=(
-                "Select an available Wi-Fi access point "
-                "to connect."
-            ),
+            text=("Select an available Wi-Fi access point " "to connect."),
             fg="#94a3b8",
             bg="#1e293b",
             font=("Arial", 9),
-        ).pack(
-            anchor="w",
-            padx=15,
-            pady=(2, 10)
-        )
+        ).pack(anchor="w", padx=15, pady=(2, 10))
 
-        list_frame = tk.Frame(
-            self.wifi_modal,
-            bg="#0f172a"
-        )
+        list_frame = tk.Frame(self.wifi_modal, bg="#0f172a")
 
-        list_frame.pack(
-            fill="both",
-            expand=True,
-            padx=20,
-            pady=5
-        )
+        list_frame.pack(fill="both", expand=True, padx=20, pady=5)
 
         self.wifi_listbox = tk.Listbox(
             list_frame,
@@ -3266,25 +2232,15 @@ class LabGuardClient:
             highlightthickness=0,
         )
 
-        self.wifi_listbox.pack(
-            side="left",
-            fill="both",
-            expand=True,
-            padx=5,
-            pady=5
-        )
+        self.wifi_listbox.pack(side="left", fill="both", expand=True, padx=5, pady=5)
 
         tk.Label(
             self.wifi_modal,
             text="Security Key / Password",
             fg="white",
             bg="#1e293b",
-            font=("Arial", 9, "bold")
-        ).pack(
-            anchor="w",
-            padx=20,
-            pady=(10, 2)
-        )
+            font=("Arial", 9, "bold"),
+        ).pack(anchor="w", padx=20, pady=(10, 2))
 
         self.wifi_pass = tk.Entry(
             self.wifi_modal,
@@ -3293,24 +2249,14 @@ class LabGuardClient:
             bg="#0f172a",
             fg="white",
             border=0,
-            insertbackground="white"
+            insertbackground="white",
         )
 
-        self.wifi_pass.pack(
-            fill="x",
-            padx=20,
-            pady=5,
-            ipady=6
-        )
+        self.wifi_pass.pack(fill="x", padx=20, pady=5, ipady=6)
 
-        btn_frame = tk.Frame(
-            self.wifi_modal,
-            bg="#1e293b"
-        )
+        btn_frame = tk.Frame(self.wifi_modal, bg="#1e293b")
 
-        btn_frame.pack(
-            pady=20
-        )
+        btn_frame.pack(pady=20)
 
         tk.Button(
             btn_frame,
@@ -3323,10 +2269,7 @@ class LabGuardClient:
             height=2,
             relief="flat",
             cursor="hand2",
-        ).pack(
-            side="left",
-            padx=5
-        )
+        ).pack(side="left", padx=5)
 
         tk.Button(
             btn_frame,
@@ -3339,10 +2282,7 @@ class LabGuardClient:
             height=2,
             relief="flat",
             cursor="hand2",
-        ).pack(
-            side="left",
-            padx=5
-        )
+        ).pack(side="left", padx=5)
 
         tk.Button(
             btn_frame,
@@ -3355,10 +2295,7 @@ class LabGuardClient:
             height=2,
             relief="flat",
             cursor="hand2",
-        ).pack(
-            side="left",
-            padx=5
-        )
+        ).pack(side="left", padx=5)
 
         try:
             self.wifi_modal.grab_set()
@@ -3374,48 +2311,24 @@ class LabGuardClient:
 
         self.scan_wifi_networks()
 
-    def _set_wifi_list_items(
-        self,
-        items
-    ):
+    def _set_wifi_list_items(self, items):
         try:
-            if (
-                self.wifi_modal
-                and self.wifi_modal.winfo_exists()
-            ):
-                self.wifi_listbox.delete(
-                    0,
-                    tk.END
-                )
+            if self.wifi_modal and self.wifi_modal.winfo_exists():
+                self.wifi_listbox.delete(0, tk.END)
 
                 for item in items:
-                    self.wifi_listbox.insert(
-                        tk.END,
-                        item
-                    )
+                    self.wifi_listbox.insert(tk.END, item)
 
         except Exception as e:
-            print(
-                f"[DEBUG] Wi-Fi list update error: {e}"
-            )
+            print(f"[DEBUG] Wi-Fi list update error: {e}")
 
     def scan_wifi_networks(self):
         try:
-            if (
-                self.wifi_modal
-                and self.wifi_modal.winfo_exists()
-            ):
-                self.wifi_listbox.delete(
-                    0,
-                    tk.END
-                )
+            if self.wifi_modal and self.wifi_modal.winfo_exists():
+                self.wifi_listbox.delete(0, tk.END)
 
                 self.wifi_listbox.insert(
-                    tk.END,
-                    (
-                        "Turning on Wi-Fi adapter "
-                        "& scanning..."
-                    )
+                    tk.END, ("Turning on Wi-Fi adapter " "& scanning...")
                 )
 
         except Exception:
@@ -3427,36 +2340,22 @@ class LabGuardClient:
 
                 time.sleep(2.5)
 
-                found_ssids = (
-                    get_native_wifi_networks()
-                )
+                found_ssids = get_native_wifi_networks()
 
                 if not found_ssids:
                     try:
-                        output = (
-                            subprocess.check_output(
-                                "netsh wlan show networks",
-                                shell=True,
-                                stderr=subprocess.STDOUT,
-                                creationflags=(
-                                    subprocess.CREATE_NO_WINDOW
-                                    if hasattr(
-                                        subprocess,
-                                        "CREATE_NO_WINDOW"
-                                    )
-                                    else 0
-                                )
-                            )
-                            .decode(
-                                "utf-8",
-                                errors="ignore"
-                            )
-                        )
+                        output = subprocess.check_output(
+                            "netsh wlan show networks",
+                            shell=True,
+                            stderr=subprocess.STDOUT,
+                            creationflags=(
+                                subprocess.CREATE_NO_WINDOW
+                                if hasattr(subprocess, "CREATE_NO_WINDOW")
+                                else 0
+                            ),
+                        ).decode("utf-8", errors="ignore")
 
-                        ssids = re.findall(
-                            r"SSID\s+\d+\s*:\s*(.+)",
-                            output
-                        )
+                        ssids = re.findall(r"SSID\s+\d+\s*:\s*(.+)", output)
 
                         found_ssids = sorted(
                             list(
@@ -3466,10 +2365,7 @@ class LabGuardClient:
                                         for s in ssids
                                         if (
                                             s.strip()
-                                            and not s.strip()
-                                            .startswith(
-                                                "SSID"
-                                            )
+                                            and not s.strip().startswith("SSID")
                                         )
                                     ]
                                 )
@@ -3480,100 +2376,65 @@ class LabGuardClient:
                         pass
 
                 if found_ssids:
-                    self.root.after(
-                        0,
-                        lambda:
-                            self._set_wifi_list_items(
-                                found_ssids
-                            )
-                    )
+                    self.root.after(0, lambda: self._set_wifi_list_items(found_ssids))
 
                 else:
                     self.root.after(
                         0,
-                        lambda:
-                            self._set_wifi_list_items(
-                                [
-                                    "No networks found. "
-                                    "Try scanning again."
-                                ]
-                            )
+                        lambda: self._set_wifi_list_items(
+                            ["No networks found. " "Try scanning again."]
+                        ),
                     )
 
             except Exception as e:
-                print(
-                    f"[WIFI SCAN ERROR] {e}"
-                )
+                print(f"[WIFI SCAN ERROR] {e}")
 
                 try:
                     self.root.after(
                         0,
-                        lambda:
-                            self._set_wifi_list_items(
-                                [
-                                    "Wi-Fi scan failed. "
-                                    "Try again."
-                                ]
-                            )
+                        lambda: self._set_wifi_list_items(
+                            ["Wi-Fi scan failed. " "Try again."]
+                        ),
                     )
 
                 except Exception:
                     pass
 
-        threading.Thread(
-            target=execute_scan,
-            daemon=True
-        ).start()
+        threading.Thread(target=execute_scan, daemon=True).start()
 
     def connect_to_wifi(self):
         try:
-            selection = (
-                self.wifi_listbox.curselection()
-            )
+            selection = self.wifi_listbox.curselection()
 
             if not selection:
-                raise ValueError(
-                    "No network selected"
-                )
+                raise ValueError("No network selected")
 
-            selected_ssid = (
-                self.wifi_listbox.get(
-                    selection[0]
-                )
-            )
+            selected_ssid = self.wifi_listbox.get(selection[0])
 
         except Exception:
             self.show_notification(
                 "Selection Required",
                 "Please click an SSID from the list.",
-                color="#ef4444"
+                color="#ef4444",
             )
 
             return
 
         if (
             not selected_ssid
-            or selected_ssid.startswith(
-                "No networks found"
-            )
-            or selected_ssid.startswith(
-                "Turning on Wi-Fi"
-            )
-            or selected_ssid.startswith(
-                "Wi-Fi scan failed"
-            )
+            or selected_ssid.startswith("No networks found")
+            or selected_ssid.startswith("Turning on Wi-Fi")
+            or selected_ssid.startswith("Wi-Fi scan failed")
         ):
             self.show_notification(
                 "Invalid Network",
                 "Please select a valid Wi-Fi network.",
-                color="#ef4444"
+                color="#ef4444",
             )
 
             return
 
-        password = (
-            self.wifi_pass.get().strip()
-        )
+        password = self.wifi_pass.get().strip()
 
         def execute_connection():
             try:
@@ -3617,52 +2478,35 @@ class LabGuardClient:
 
                 temp_dir = tempfile.gettempdir()
 
-                safe_hash = abs(
-                    hash(selected_ssid)
-                )
+                safe_hash = abs(hash(selected_ssid))
 
-                filename = os.path.join(
-                    temp_dir,
-                    f"wifi_{safe_hash}.xml"
-                )
+                filename = os.path.join(temp_dir, f"wifi_{safe_hash}.xml")
 
-                with open(
-                    filename,
-                    "w",
-                    encoding="utf-8"
-                ) as f:
+                with open(filename, "w", encoding="utf-8") as f:
                     f.write(profile_xml)
 
                 subprocess.run(
-                    f'netsh wlan add profile '
-                    f'filename="{filename}"',
+                    f"netsh wlan add profile " f'filename="{filename}"',
                     shell=True,
                     capture_output=True,
                     text=True,
                     creationflags=(
                         subprocess.CREATE_NO_WINDOW
-                        if hasattr(
-                            subprocess,
-                            "CREATE_NO_WINDOW"
-                        )
+                        if hasattr(subprocess, "CREATE_NO_WINDOW")
                         else 0
-                    )
+                    ),
                 )
 
                 res_conn = subprocess.run(
-                    f'netsh wlan connect '
-                    f'name="{selected_ssid}"',
+                    f"netsh wlan connect " f'name="{selected_ssid}"',
                     shell=True,
                     capture_output=True,
                     text=True,
                     creationflags=(
                         subprocess.CREATE_NO_WINDOW
-                        if hasattr(
-                            subprocess,
-                            "CREATE_NO_WINDOW"
-                        )
+                        if hasattr(subprocess, "CREATE_NO_WINDOW")
                         else 0
-                    )
+                    ),
                 )
 
                 if os.path.exists(filename):
@@ -3674,186 +2518,103 @@ class LabGuardClient:
                 if res_conn.returncode == 0:
                     self.show_notification(
                         "Connecting",
-                        (
-                            f"Connecting to "
-                            f"{selected_ssid}..."
-                        ),
-                        color="#3b82f6"
+                        (f"Connecting to " f"{selected_ssid}..."),
+                        color="#3b82f6",
                     )
 
                 else:
                     self.show_notification(
                         "Wi-Fi Error",
-                        (
-                            "Could not connect to "
-                            "the selected network."
-                        ),
-                        color="#ef4444"
+                        ("Could not connect to " "the selected network."),
+                        color="#ef4444",
                     )
 
             except Exception as e:
-                print(
-                    f"[WIFI CONNECTION ERROR] {e}"
-                )
+                print(f"[WIFI CONNECTION ERROR] {e}")
 
                 self.show_notification(
                     "Wi-Fi Error",
-                    (
-                        "The Wi-Fi connection "
-                        "could not be completed."
-                    ),
-                    color="#ef4444"
+                    ("The Wi-Fi connection " "could not be completed."),
+                    color="#ef4444",
                 )
 
-        threading.Thread(
-            target=execute_connection,
-            daemon=True
-        ).start()
+        threading.Thread(target=execute_connection, daemon=True).start()
 
     # =================================================================
     # REPORT OVERLAY
     # =================================================================
 
-    def open_report_overlay(
-        self,
-        prefill=False
-    ):
-        if (
-            self.overlay
-            and self.overlay.winfo_exists()
-        ):
+    def open_report_overlay(self, prefill=False):
+        if self.overlay and self.overlay.winfo_exists():
             try:
                 self.overlay.lift()
 
-                self.overlay.attributes(
-                    "-topmost",
-                    True
-                )
+                self.overlay.attributes("-topmost", True)
 
             except Exception:
                 pass
 
             return
 
-        self.root.attributes(
-            "-topmost",
-            False
-        )
+        self.root.attributes("-topmost", False)
 
-        self.overlay = tk.Toplevel(
-            self.root
-        )
+        self.overlay = tk.Toplevel(self.root)
 
-        self.overlay.configure(
-            bg="#1e293b"
-        )
+        self.overlay.configure(bg="#1e293b")
 
-        self.overlay.overrideredirect(
-            True
-        )
+        self.overlay.overrideredirect(True)
 
         width = 480
 
-        height = (
-            540
-            if prefill
-            else 660
-        )
+        height = 540 if prefill else 660
 
-        screen_w = (
-            self.root.winfo_screenwidth()
-        )
+        screen_w = self.root.winfo_screenwidth()
 
-        screen_h = (
-            self.root.winfo_screenheight()
-        )
+        screen_h = self.root.winfo_screenheight()
 
-        x = (
-            screen_w
-            // 2
-        ) - (
-            width
-            // 2
-        )
+        x = (screen_w // 2) - (width // 2)
 
-        y = (
-            screen_h
-            // 2
-        ) - (
-            height
-            // 2
-        )
+        y = (screen_h // 2) - (height // 2)
 
-        self.overlay.geometry(
-            f"{width}x{height}+{x}+{y}"
-        )
+        self.overlay.geometry(f"{width}x{height}+{x}+{y}")
 
-        self.overlay.attributes(
-            "-topmost",
-            True
-        )
+        self.overlay.attributes("-topmost", True)
 
-        self.overlay.transient(
-            self.root
-        )
+        self.overlay.transient(self.root)
 
         tk.Label(
             self.overlay,
             text="REPORT A PROBLEM",
             fg="#ef4444",
             bg="#1e293b",
-            font=("Arial Black", 16)
-        ).pack(
-            pady=(22, 2)
-        )
+            font=("Arial Black", 16),
+        ).pack(pady=(22, 2))
 
         tk.Label(
             self.overlay,
-            text=(
-                f"Logging an issue for "
-                f"terminal {PC_NUMBER}"
-            ),
+            text=(f"Logging an issue for " f"terminal {PC_NUMBER}"),
             fg="#94a3b8",
             bg="#1e293b",
             font=("Arial", 9),
-        ).pack(
-            pady=(0, 8)
-        )
+        ).pack(pady=(0, 8))
 
-        self.report_student_id = tk.Entry(
-            self.overlay
-        )
+        self.report_student_id = tk.Entry(self.overlay)
 
-        self.report_password = tk.Entry(
-            self.overlay
-        )
+        self.report_password = tk.Entry(self.overlay)
 
-        if (
-            prefill
-            and self.current_student["id"]
-        ):
-            self.report_student_id.insert(
-                0,
-                self.current_student["id"]
-            )
+        if prefill and self.current_student["id"]:
+            self.report_student_id.insert(0, self.current_student["id"])
 
-            self.report_password.insert(
-                0,
-                self.current_student["password"]
-            )
+            self.report_password.insert(0, self.current_student["password"])
 
             identity_pill = tk.Frame(
                 self.overlay,
                 bg="#0f172a",
                 highlightthickness=1,
-                highlightbackground="#334155"
+                highlightbackground="#334155",
             )
 
-            identity_pill.pack(
-                fill="x",
-                padx=50,
-                pady=(6, 12)
-            )
+            identity_pill.pack(fill="x", padx=50, pady=(6, 12))
 
             tk.Label(
                 identity_pill,
@@ -3875,12 +2636,8 @@ class LabGuardClient:
                 text="Student Number / ID",
                 fg="white",
                 bg="#1e293b",
-                font=("Arial", 9, "bold")
-            ).pack(
-                anchor="w",
-                padx=50,
-                pady=(10, 2)
-            )
+                font=("Arial", 9, "bold"),
+            ).pack(anchor="w", padx=50, pady=(10, 2))
 
             self.report_student_id = tk.Entry(
                 self.overlay,
@@ -3888,36 +2645,22 @@ class LabGuardClient:
                 bg="#0f172a",
                 fg="white",
                 border=0,
-                insertbackground="white"
+                insertbackground="white",
             )
 
-            self.report_student_id.pack(
-                fill="x",
-                padx=50,
-                ipady=6
-            )
+            self.report_student_id.pack(fill="x", padx=50, ipady=6)
 
-            self.report_student_id.bind(
-                "<Key>",
-                self._filter_student_id_key
-            )
+            self.report_student_id.bind("<Key>", self._filter_student_id_key)
 
-            self.report_student_id.bind(
-                "<KeyRelease>",
-                self._format_student_id_entry
-            )
+            self.report_student_id.bind("<KeyRelease>", self._format_student_id_entry)
 
             tk.Label(
                 self.overlay,
                 text="Account Password",
                 fg="white",
                 bg="#1e293b",
-                font=("Arial", 9, "bold")
-            ).pack(
-                anchor="w",
-                padx=50,
-                pady=(10, 2)
-            )
+                font=("Arial", 9, "bold"),
+            ).pack(anchor="w", padx=50, pady=(10, 2))
 
             self.report_password = tk.Entry(
                 self.overlay,
@@ -3926,14 +2669,10 @@ class LabGuardClient:
                 bg="#0f172a",
                 fg="white",
                 border=0,
-                insertbackground="white"
+                insertbackground="white",
             )
 
-            self.report_password.pack(
-                fill="x",
-                padx=50,
-                ipady=6
-            )
+            self.report_password.pack(fill="x", padx=50, ipady=6)
 
         # -------------------------------------------------------------
         # CATEGORY
@@ -3944,12 +2683,8 @@ class LabGuardClient:
             text="Problem Category",
             fg="white",
             bg="#1e293b",
-            font=("Arial", 9, "bold")
-        ).pack(
-            anchor="w",
-            padx=50,
-            pady=(6, 2)
-        )
+            font=("Arial", 9, "bold"),
+        ).pack(anchor="w", padx=50, pady=(6, 2))
 
         categories = [
             "Missing / Faulty Hardware",
@@ -3960,26 +2695,20 @@ class LabGuardClient:
             "Keyboard Damaged / Missing Keys",
             "Loose / Damaged Cables",
             "No Internet / Wi-Fi Problem",
-            "Other Terminal Concern"
+            "Other Terminal Concern",
         ]
 
-        self.issue_var = tk.StringVar(
-            value=categories[0]
-        )
+        self.issue_var = tk.StringVar(value=categories[0])
 
         dropdown_btn = tk.Frame(
             self.overlay,
             bg="#0f172a",
             cursor="hand2",
             highlightthickness=1,
-            highlightbackground="#334155"
+            highlightbackground="#334155",
         )
 
-        dropdown_btn.pack(
-            fill="x",
-            padx=50,
-            ipady=6
-        )
+        dropdown_btn.pack(fill="x", padx=50, ipady=6)
 
         lbl_selected = tk.Label(
             dropdown_btn,
@@ -3987,13 +2716,10 @@ class LabGuardClient:
             fg="white",
             bg="#0f172a",
             font=("Arial", 10),
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        lbl_selected.pack(
-            side="left",
-            padx=10
-        )
+        lbl_selected.pack(side="left", padx=10)
 
         lbl_arrow = tk.Label(
             dropdown_btn,
@@ -4001,19 +2727,16 @@ class LabGuardClient:
             fg="#D4AF37",
             bg="#0f172a",
             font=("Arial", 9),
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        lbl_arrow.pack(
-            side="right",
-            padx=10
-        )
+        lbl_arrow.pack(side="right", padx=10)
 
         options_frame = tk.Frame(
             self.overlay,
             bg="#1e293b",
             highlightthickness=1,
-            highlightbackground="#D4AF37"
+            highlightbackground="#D4AF37",
         )
 
         for cat in categories:
@@ -4026,108 +2749,53 @@ class LabGuardClient:
                 anchor="w",
                 padx=10,
                 pady=4,
-                cursor="hand2"
+                cursor="hand2",
             )
 
-            row.pack(
-                fill="x"
-            )
+            row.pack(fill="x")
 
-            def make_hover(
-                r=row
-            ):
-                r.bind(
-                    "<Enter>",
-                    lambda e:
-                        r.config(
-                            bg="#334155",
-                            fg="#D4AF37"
-                        )
-                )
+            def make_hover(r=row):
+                r.bind("<Enter>", lambda e: r.config(bg="#334155", fg="#D4AF37"))
 
-                r.bind(
-                    "<Leave>",
-                    lambda e:
-                        r.config(
-                            bg="#1e293b",
-                            fg="white"
-                        )
-                )
+                r.bind("<Leave>", lambda e: r.config(bg="#1e293b", fg="white"))
 
             make_hover()
 
-            def pick_option(
-                c=cat
-            ):
-                self.issue_var.set(
-                    c
-                )
+            def pick_option(c=cat):
+                self.issue_var.set(c)
 
                 options_frame.place_forget()
 
-                lbl_arrow.config(
-                    text="▼"
-                )
+                lbl_arrow.config(text="▼")
 
-            row.bind(
-                "<Button-1>",
-                lambda e,
-                func=pick_option:
-                    func()
-            )
+            row.bind("<Button-1>", lambda e, func=pick_option: func())
 
-        def toggle_dropdown(
-            event=None
-        ):
+        def toggle_dropdown(event=None):
             if options_frame.winfo_ismapped():
                 options_frame.place_forget()
 
-                lbl_arrow.config(
-                    text="▼"
-                )
+                lbl_arrow.config(text="▼")
 
             else:
                 dropdown_btn.update_idletasks()
 
-                bx = (
-                    dropdown_btn.winfo_x()
-                )
+                bx = dropdown_btn.winfo_x()
 
-                by = (
-                    dropdown_btn.winfo_y()
-                    + dropdown_btn.winfo_height()
-                )
+                by = dropdown_btn.winfo_y() + dropdown_btn.winfo_height()
 
-                bw = (
-                    dropdown_btn.winfo_width()
-                )
+                bw = dropdown_btn.winfo_width()
 
-                options_frame.place(
-                    x=bx,
-                    y=by,
-                    width=bw
-                )
+                options_frame.place(x=bx, y=by, width=bw)
 
                 options_frame.lift()
 
-                lbl_arrow.config(
-                    text="▲"
-                )
+                lbl_arrow.config(text="▲")
 
-        dropdown_btn.bind(
-            "<Button-1>",
-            toggle_dropdown
-        )
+        dropdown_btn.bind("<Button-1>", toggle_dropdown)
 
-        lbl_selected.bind(
-            "<Button-1>",
-            toggle_dropdown
-        )
+        lbl_selected.bind("<Button-1>", toggle_dropdown)
 
-        lbl_arrow.bind(
-            "<Button-1>",
-            toggle_dropdown
-        )
+        lbl_arrow.bind("<Button-1>", toggle_dropdown)
 
         # -------------------------------------------------------------
         # REMARKS
@@ -4138,12 +2806,8 @@ class LabGuardClient:
             text="Describe the Problem",
             fg="white",
             bg="#1e293b",
-            font=("Arial", 9, "bold")
-        ).pack(
-            anchor="w",
-            padx=50,
-            pady=(10, 2)
-        )
+            font=("Arial", 9, "bold"),
+        ).pack(anchor="w", padx=50, pady=(10, 2))
 
         self.remarks_box = tk.Text(
             self.overlay,
@@ -4154,13 +2818,10 @@ class LabGuardClient:
             border=0,
             padx=12,
             pady=8,
-            insertbackground="white"
+            insertbackground="white",
         )
 
-        self.remarks_box.pack(
-            padx=50,
-            fill="x"
-        )
+        self.remarks_box.pack(padx=50, fill="x")
 
         # -------------------------------------------------------------
         # CLOSE OVERLAY
@@ -4182,10 +2843,7 @@ class LabGuardClient:
                     pass
 
             try:
-                self.root.attributes(
-                    "-topmost",
-                    True
-                )
+                self.root.attributes("-topmost", True)
 
                 self.root.lift()
 
@@ -4197,10 +2855,7 @@ class LabGuardClient:
         # -------------------------------------------------------------
 
         def handle_submit():
-            if (
-                not self.overlay
-                or not self.overlay.winfo_exists()
-            ):
+            if not self.overlay or not self.overlay.winfo_exists():
                 return
 
             student_id = (
@@ -4215,21 +2870,13 @@ class LabGuardClient:
                 else self.report_password.get()
             )
 
-            remarks = (
-                self.remarks_box.get(
-                    "1.0",
-                    tk.END
-                ).strip()
-            )
+            remarks = self.remarks_box.get("1.0", tk.END).strip()
 
             if not student_id or not password:
                 self.show_notification(
                     "Identity Required",
-                    (
-                        "Your student credentials are "
-                        "required to verify the report."
-                    ),
-                    color="#ef4444"
+                    ("Your student credentials are " "required to verify the report."),
+                    color="#ef4444",
                 )
 
                 return
@@ -4241,15 +2888,12 @@ class LabGuardClient:
                         "Please describe the hardware "
                         "or station issue before submitting."
                     ),
-                    color="#ef4444"
+                    color="#ef4444",
                 )
 
                 return
 
-            self.btn_send.config(
-                state="disabled",
-                text="DISPATCHING..."
-            )
+            self.btn_send.config(state="disabled", text="DISPATCHING...")
 
             payload = {
                 "pc_number": PC_NUMBER,
@@ -4261,20 +2905,14 @@ class LabGuardClient:
 
             def async_report():
                 try:
-                    session = (
-                        get_authenticated_session()
-                    )
+                    session = get_authenticated_session()
 
                     response = session.post(
-                        f"{API_URL}/alerts",
-                        json=payload,
-                        timeout=8
+                        f"{API_URL}/alerts", json=payload, timeout=8
                     )
 
-                    if response.status_code in (
-                        200,
-                        201
-                    ):
+                    if response.status_code in (200, 201):
+
                         def finish_success():
                             close_overlay()
 
@@ -4285,26 +2923,17 @@ class LabGuardClient:
                                     "successfully sent to "
                                     "technical support."
                                 ),
-                                color="#10b981"
+                                color="#10b981",
                             )
 
-                        self.root.after(
-                            0,
-                            finish_success
-                        )
+                        self.root.after(0, finish_success)
 
                     else:
                         try:
-                            response_data = (
-                                response.json()
-                            )
+                            response_data = response.json()
 
-                            msg = (
-                                response_data.get(
-                                    "message",
-                                    "The server could not "
-                                    "verify your report."
-                                )
+                            msg = response_data.get(
+                                "message", "The server could not " "verify your report."
                             )
 
                         except Exception:
@@ -4317,28 +2946,19 @@ class LabGuardClient:
 
                         def show_report_error():
                             self.show_notification(
-                                "Report Not Sent",
-                                msg,
-                                color="#ef4444"
+                                "Report Not Sent", msg, color="#ef4444"
                             )
 
                             try:
-                                if (
-                                    self.btn_send
-                                    and self.btn_send.winfo_exists()
-                                ):
+                                if self.btn_send and self.btn_send.winfo_exists():
                                     self.btn_send.config(
-                                        state="normal",
-                                        text="SUBMIT REPORT"
+                                        state="normal", text="SUBMIT REPORT"
                                     )
 
                             except Exception:
                                 pass
 
-                        self.root.after(
-                            0,
-                            show_report_error
-                        )
+                        self.root.after(0, show_report_error)
 
                 except requests.exceptions.Timeout:
 
@@ -4350,26 +2970,19 @@ class LabGuardClient:
                                 "because the server took too long "
                                 "to respond."
                             ),
-                            color="#ef4444"
+                            color="#ef4444",
                         )
 
                         try:
-                            if (
-                                self.btn_send
-                                and self.btn_send.winfo_exists()
-                            ):
+                            if self.btn_send and self.btn_send.winfo_exists():
                                 self.btn_send.config(
-                                    state="normal",
-                                    text="SUBMIT REPORT"
+                                    state="normal", text="SUBMIT REPORT"
                                 )
 
                         except Exception:
                             pass
 
-                    self.root.after(
-                        0,
-                        show_timeout
-                    )
+                    self.root.after(0, show_timeout)
 
                 except requests.exceptions.ConnectionError:
 
@@ -4381,31 +2994,22 @@ class LabGuardClient:
                                 "LabGuard server. Please check "
                                 "the network connection and try again."
                             ),
-                            color="#ef4444"
+                            color="#ef4444",
                         )
 
                         try:
-                            if (
-                                self.btn_send
-                                and self.btn_send.winfo_exists()
-                            ):
+                            if self.btn_send and self.btn_send.winfo_exists():
                                 self.btn_send.config(
-                                    state="normal",
-                                    text="SUBMIT REPORT"
+                                    state="normal", text="SUBMIT REPORT"
                                 )
 
                         except Exception:
                             pass
 
-                    self.root.after(
-                        0,
-                        show_connection_error
-                    )
+                    self.root.after(0, show_connection_error)
 
                 except Exception as e:
-                    print(
-                        f"[REPORT ERROR] {e}"
-                    )
+                    print(f"[REPORT ERROR] {e}")
 
                     def show_general_error():
                         self.show_notification(
@@ -4414,44 +3018,29 @@ class LabGuardClient:
                                 "Something went wrong while "
                                 "sending the report. Please try again."
                             ),
-                            color="#ef4444"
+                            color="#ef4444",
                         )
 
                         try:
-                            if (
-                                self.btn_send
-                                and self.btn_send.winfo_exists()
-                            ):
+                            if self.btn_send and self.btn_send.winfo_exists():
                                 self.btn_send.config(
-                                    state="normal",
-                                    text="SUBMIT REPORT"
+                                    state="normal", text="SUBMIT REPORT"
                                 )
 
                         except Exception:
                             pass
 
-                    self.root.after(
-                        0,
-                        show_general_error
-                    )
+                    self.root.after(0, show_general_error)
 
-            threading.Thread(
-                target=async_report,
-                daemon=True
-            ).start()
+            threading.Thread(target=async_report, daemon=True).start()
 
         # -------------------------------------------------------------
         # REPORT BUTTONS
         # -------------------------------------------------------------
 
-        btn_container = tk.Frame(
-            self.overlay,
-            bg="#1e293b"
-        )
+        btn_container = tk.Frame(self.overlay, bg="#1e293b")
 
-        btn_container.pack(
-            pady=18
-        )
+        btn_container.pack(pady=18)
 
         self.btn_send = tk.Button(
             btn_container,
@@ -4466,10 +3055,7 @@ class LabGuardClient:
             cursor="hand2",
         )
 
-        self.btn_send.pack(
-            side="left",
-            padx=6
-        )
+        self.btn_send.pack(side="left", padx=6)
 
         tk.Button(
             btn_container,
@@ -4482,10 +3068,7 @@ class LabGuardClient:
             height=2,
             relief="flat",
             cursor="hand2",
-        ).pack(
-            side="left",
-            padx=6
-        )
+        ).pack(side="left", padx=6)
 
     # =================================================================
     # FORCE WINDOW ON TOP
@@ -4500,60 +3083,36 @@ class LabGuardClient:
             # NOTIFICATION GETS FIRST PRIORITY
             # ---------------------------------------------------------
 
-            if (
-                self.active_notification
-                and self.active_notification.winfo_exists()
-            ):
+            if self.active_notification and self.active_notification.winfo_exists():
                 self.active_notification.lift()
 
-                self.active_notification.attributes(
-                    "-topmost",
-                    True
-                )
+                self.active_notification.attributes("-topmost", True)
 
             # ---------------------------------------------------------
             # WI-FI MODAL
             # ---------------------------------------------------------
 
-            elif (
-                self.wifi_modal
-                and self.wifi_modal.winfo_exists()
-            ):
+            elif self.wifi_modal and self.wifi_modal.winfo_exists():
                 self.wifi_modal.lift()
 
-                self.wifi_modal.attributes(
-                    "-topmost",
-                    True
-                )
+                self.wifi_modal.attributes("-topmost", True)
 
             # ---------------------------------------------------------
             # REPORT OVERLAY
             # ---------------------------------------------------------
 
-            elif (
-                self.overlay
-                and self.overlay.winfo_exists()
-            ):
+            elif self.overlay and self.overlay.winfo_exists():
                 self.overlay.lift()
 
-                self.overlay.attributes(
-                    "-topmost",
-                    True
-                )
+                self.overlay.attributes("-topmost", True)
             # ---------------------------------------------------------
             # SHUTDOWN MODAL
             # ---------------------------------------------------------
 
-            elif (
-                self.shutdown_modal
-                and self.shutdown_modal.winfo_exists()
-            ):
+            elif self.shutdown_modal and self.shutdown_modal.winfo_exists():
                 self.shutdown_modal.lift()
 
-                self.shutdown_modal.attributes(
-                    "-topmost",
-                    True
-                )
+                self.shutdown_modal.attributes("-topmost", True)
 
             # ---------------------------------------------------------
             # LOGIN
@@ -4562,25 +3121,16 @@ class LabGuardClient:
             else:
                 self.root.lift()
 
-                self.root.attributes(
-                    "-topmost",
-                    True
-                )
-            
+                self.root.attributes("-topmost", True)
 
         except tk.TclError:
             pass
 
         except Exception as e:
-            print(
-                f"[WINDOW STACK ERROR] {e}"
-            )
+            print(f"[WINDOW STACK ERROR] {e}")
 
         try:
-            self.root.after(
-                1000,
-                self.force_on_top
-            )
+            self.root.after(1000, self.force_on_top)
 
         except Exception:
             pass
@@ -4590,30 +3140,18 @@ class LabGuardClient:
     # =================================================================
 
     def attempt_login(self):
-        login_credential = (
-            self.entry_id.get().strip()
-        )
+        login_credential = self.entry_id.get().strip()
 
-        password = (
-            self.entry_password.get()
-        )
+        password = self.entry_password.get()
 
-        if (
-            not login_credential
-            or not password
-        ):
+        if not login_credential or not password:
             self.show_notification(
-                "Input Required",
-                "Enter your ID and account password.",
-                color="#D4AF37"
+                "Input Required", "Enter your ID and account password.", color="#D4AF37"
             )
 
             return
 
-        self.btn_unlock.config(
-            state="disabled",
-            text="VERIFYING..."
-        )
+        self.btn_unlock.config(state="disabled", text="VERIFYING...")
 
         payload = {
             "pc_number": PC_NUMBER,
@@ -4624,54 +3162,27 @@ class LabGuardClient:
 
         def perform_login():
             try:
-                session = (
-                    get_authenticated_session()
-                )
+                session = get_authenticated_session()
 
-                response = session.post(
-                    f"{API_URL}/login",
-                    json=payload,
-                    timeout=10
-                )
+                response = session.post(f"{API_URL}/login", json=payload, timeout=10)
 
                 if response.status_code == 200:
                     try:
-                        resp_json = (
-                            response.json()
-                        )
+                        resp_json = response.json()
 
                     except Exception:
                         resp_json = {}
 
-                    user_name = (
-                        resp_json.get(
-                            "name",
-                            "User"
-                        )
-                    )
+                    user_name = resp_json.get("name", "User")
 
                     user_role = str(
                         resp_json.get("role")
-                        or resp_json.get(
-                            "data",
-                            {}
-                        ).get(
-                            "role",
-                            "student"
-                        )
+                        or resp_json.get("data", {}).get("role", "student")
                     ).lower()
 
-                    session_id = (
-                        resp_json.get(
-                            "session_id"
-                        )
-                        or resp_json.get(
-                            "data",
-                            {}
-                        ).get(
-                            "session_id"
-                        )
-                    )
+                    session_id = resp_json.get("session_id") or resp_json.get(
+                        "data", {}
+                    ).get("session_id")
 
                     self.current_student = {
                         "id": login_credential,
@@ -4688,7 +3199,7 @@ class LabGuardClient:
                         "teacher",
                         "technician",
                         "faculty",
-                        "staff"
+                        "staff",
                     ]
 
                     if user_role in staff_roles:
@@ -4700,112 +3211,68 @@ class LabGuardClient:
 
                         self.root.after(
                             0,
-                            lambda:
-                                self._handle_staff_login_success(
-                                    user_name,
-                                    user_role
-                                )
+                            lambda: self._handle_staff_login_success(
+                                user_name, user_role
+                            ),
                         )
 
                     else:
                         self.root.after(
-                            0,
-                            lambda:
-                                self.show_checklist_screen(
-                                    user_name
-                                )
+                            0, lambda: self.show_checklist_screen(user_name)
                         )
 
                 else:
                     try:
-                        msg = (
-                            response.json().get(
-                                "message",
-                                "Invalid Credentials."
-                            )
-                        )
+                        msg = response.json().get("message", "Invalid Credentials.")
 
                     except Exception:
-                        msg = (
-                            f"HTTP Error "
-                            f"{response.status_code}"
-                        )
+                        msg = f"HTTP Error " f"{response.status_code}"
 
                     self.root.after(
                         0,
-                        lambda:
-                            self.show_notification(
-                                "Auth Failed",
-                                msg,
-                                color="#ef4444"
-                            )
+                        lambda: self.show_notification(
+                            "Auth Failed", msg, color="#ef4444"
+                        ),
                     )
 
                     self.root.after(
                         0,
-                        lambda:
-                            self.btn_unlock.config(
-                                state="normal",
-                                text=(
-                                    "AUTHENTICATE & INSPECT"
-                                )
-                            )
+                        lambda: self.btn_unlock.config(
+                            state="normal", text=("AUTHENTICATE & INSPECT")
+                        ),
                     )
 
             except Exception as e:
-                print(
-                    f"[LOGIN ERROR] {e}"
+                print(f"[LOGIN ERROR] {e}")
+
+                self.root.after(
+                    0,
+                    lambda: self.show_notification(
+                        "Connection Error",
+                        ("Server unreachable. " "Check your connection."),
+                        color="#ef4444",
+                    ),
                 )
 
                 self.root.after(
                     0,
-                    lambda:
-                        self.show_notification(
-                            "Connection Error",
-                            (
-                                "Server unreachable. "
-                                "Check your connection."
-                            ),
-                            color="#ef4444"
-                        )
+                    lambda: self.btn_unlock.config(
+                        state="normal", text=("AUTHENTICATE & INSPECT")
+                    ),
                 )
 
-                self.root.after(
-                    0,
-                    lambda:
-                        self.btn_unlock.config(
-                            state="normal",
-                            text=(
-                                "AUTHENTICATE & INSPECT"
-                            )
-                        )
-                )
+        threading.Thread(target=perform_login, daemon=True).start()
 
-        threading.Thread(
-            target=perform_login,
-            daemon=True
-        ).start()
-
-    def _handle_staff_login_success(
-        self,
-        user_name,
-        user_role
-    ):
+    def _handle_staff_login_success(self, user_name, user_role):
         self.login_screen_active = False
 
         self.show_notification(
             "Staff Access",
-            (
-                f"Welcome, {user_name} "
-                f"({user_role.upper()})!"
-            ),
-            color="#10b981"
+            (f"Welcome, {user_name} " f"({user_role.upper()})!"),
+            color="#10b981",
         )
 
-        self.root.after(
-            1000,
-            self.hide_terminal
-        )
+        self.root.after(1000, self.hide_terminal)
 
     # =================================================================
     # SESSION LIFECYCLE
@@ -4816,28 +3283,42 @@ class LabGuardClient:
         self.login_screen_active = False
 
         try:
-            self.root.attributes(
-                "-topmost",
-                False
-            )
-
+            self.root.attributes("-topmost", False)
         except Exception:
             pass
 
         show_taskbar()
         stop_keyboard_hook()
 
+        # Disable Task Manager for students
+        if self.current_student.get("role") == "student":
+            set_task_manager_disabled(True)
+
+        # RECORD HARDWARE & APP BASELINES
+        self.initial_installed_apps = get_user_installed_software()
+        print(f"[DEBUG BASELINE] Baseline apps captured: {len(self.initial_installed_apps)} programs.")
+        self.baseline_mice = count_raw_input_devices(0)
+        self.baseline_keyboards = count_raw_input_devices(1)
+        self.baseline_usb_drives = get_all_drive_letters()
+        
+
         try:
             self.root.withdraw()
-
         except Exception:
             pass
 
         self.start_system_tray()
         self.show_floating_signout_pill()
 
+        # Start Heartbeat Thread
         threading.Thread(
             target=self.heartbeat_loop,
+            daemon=True
+        ).start()
+
+        # START THE SECURITY GUARD THREAD (NEW)
+        threading.Thread(
+            target=self.student_session_guard_loop,
             daemon=True
         ).start()
 
@@ -4846,27 +3327,13 @@ class LabGuardClient:
     # =================================================================
 
     def create_tray_image(self):
-        img = Image.new(
-            "RGBA",
-            (64, 64),
-            color=(0, 0, 0, 0)
-        )
+        img = Image.new("RGBA", (64, 64), color=(0, 0, 0, 0))
 
-        draw = ImageDraw.Draw(
-            img
-        )
+        draw = ImageDraw.Draw(img)
 
-        draw.ellipse(
-            [4, 4, 60, 60],
-            fill="#0f172a",
-            outline="#D4AF37",
-            width=3
-        )
+        draw.ellipse([4, 4, 60, 60], fill="#0f172a", outline="#D4AF37", width=3)
 
-        draw.rectangle(
-            [22, 22, 42, 42],
-            fill="#10b981"
-        )
+        draw.rectangle([22, 22, 42, 42], fill="#10b981")
 
         return img
 
@@ -4879,25 +3346,15 @@ class LabGuardClient:
 
             return
 
-        def on_signout_click(
-            icon,
-            item
-        ):
+        def on_signout_click(icon, item):
             try:
-                self.root.after(
-                    0,
-                    self.request_manual_logout
-                )
+                self.root.after(0, self.request_manual_logout)
 
             except Exception:
                 pass
 
         menu = pystray.Menu(
-            pystray.MenuItem(
-                f"Station: {PC_NUMBER}",
-                lambda: None,
-                enabled=False
-            ),
+            pystray.MenuItem(f"Station: {PC_NUMBER}", lambda: None, enabled=False),
             pystray.MenuItem(
                 (
                     f"User: "
@@ -4905,33 +3362,21 @@ class LabGuardClient:
                     f"({self.current_student['role'].upper()})"
                 ),
                 lambda: None,
-                enabled=False
+                enabled=False,
             ),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "Sign Out & Lock PC",
-                on_signout_click,
-                default=True
-            ),
+            pystray.MenuItem("Sign Out & Lock PC", on_signout_click, default=True),
         )
 
         try:
             self.tray_icon = pystray.Icon(
-                "LabGuard",
-                self.create_tray_image(),
-                f"LabGuard ({PC_NUMBER})",
-                menu
+                "LabGuard", self.create_tray_image(), f"LabGuard ({PC_NUMBER})", menu
             )
 
-            threading.Thread(
-                target=self.tray_icon.run,
-                daemon=True
-            ).start()
+            threading.Thread(target=self.tray_icon.run, daemon=True).start()
 
         except Exception as e:
-            print(
-                f"[DEBUG] Tray creation error: {e}"
-            )
+            print(f"[DEBUG] Tray creation error: {e}")
 
     def stop_system_tray(self):
         if self.tray_icon:
@@ -4948,72 +3393,46 @@ class LabGuardClient:
     # =================================================================
 
     def show_floating_signout_pill(self):
-        if (
-            self.floating_pill
-            and self.floating_pill.winfo_exists()
-        ):
+        if self.floating_pill and self.floating_pill.winfo_exists():
             return
 
         self.floating_pill = tk.Toplevel()
 
-        self.floating_pill.overrideredirect(
-            True
-        )
+        self.floating_pill.overrideredirect(True)
 
-        self.floating_pill.attributes(
-            "-topmost",
-            True
-        )
+        self.floating_pill.attributes("-topmost", True)
 
-        self.floating_pill.configure(
-            bg="#0f172a"
-        )
+        self.floating_pill.configure(bg="#0f172a")
 
-        screen_w = (
-            self.root.winfo_screenwidth()
-        )
+        screen_w = self.root.winfo_screenwidth()
 
         p_w = 240
         p_h = 42
 
-        x = (
-            screen_w
-            - p_w
-            - 20
-        )
+        x = screen_w - p_w - 20
 
         y = 15
 
-        self.floating_pill.geometry(
-            f"{p_w}x{p_h}+{x}+{y}"
-        )
+        self.floating_pill.geometry(f"{p_w}x{p_h}+{x}+{y}")
 
         container = tk.Frame(
             self.floating_pill,
             bg="#1e293b",
             highlightbackground="#D4AF37",
-            highlightthickness=1
+            highlightthickness=1,
         )
 
-        container.pack(
-            fill="both",
-            expand=True
-        )
+        container.pack(fill="both", expand=True)
 
-        role_label = (
-            f"● {PC_NUMBER}"
-        )
+        role_label = f"● {PC_NUMBER}"
 
         tk.Label(
             container,
             text=role_label,
             fg="#10b981",
             bg="#1e293b",
-            font=("Arial", 9, "bold")
-        ).pack(
-            side="left",
-            padx=(10, 5)
-        )
+            font=("Arial", 9, "bold"),
+        ).pack(side="left", padx=(10, 5))
 
         btn = tk.Button(
             container,
@@ -5024,20 +3443,13 @@ class LabGuardClient:
             font=("Arial", 8, "bold"),
             relief="flat",
             padx=10,
-            cursor="hand2"
+            cursor="hand2",
         )
 
-        btn.pack(
-            side="right",
-            padx=8,
-            pady=6
-        )
+        btn.pack(side="right", padx=8, pady=6)
 
     def hide_floating_signout_pill(self):
-        if (
-            self.floating_pill
-            and self.floating_pill.winfo_exists()
-        ):
+        if self.floating_pill and self.floating_pill.winfo_exists():
             try:
                 self.floating_pill.destroy()
 
@@ -5052,10 +3464,7 @@ class LabGuardClient:
         send_logout_signal()
 
         try:
-            self.root.after(
-                0,
-                self.lock_ui_again
-            )
+            self.root.after(0, self.lock_ui_again)
 
         except Exception:
             self.lock_ui_again()
@@ -5072,9 +3481,7 @@ class LabGuardClient:
 
         self.shutdown_modal = tk.Toplevel(self.root)
         self.shutdown_modal.configure(
-            bg="#1e293b",
-            highlightbackground="#ef4444",
-            highlightthickness=2
+            bg="#1e293b", highlightbackground="#ef4444", highlightthickness=2
         )
         self.shutdown_modal.overrideredirect(True)
 
@@ -5135,8 +3542,8 @@ class LabGuardClient:
                         subprocess.CREATE_NO_WINDOW
                         if hasattr(subprocess, "CREATE_NO_WINDOW")
                         else 0
-                    )
-                )
+                    ),
+                ),
             )
 
         self.shutdown_modal.protocol("WM_DELETE_WINDOW", close_modal)
@@ -5206,95 +3613,345 @@ class LabGuardClient:
 
         self.shutdown_modal.lift()
         self.shutdown_modal.focus_force()
+    # =================================================================
+    # REMOTE POWER OFF HANDLER (FEATURE 5)
+    # =================================================================
+    def execute_remote_shutdown(self, countdown_seconds=15):
+        """Notifies the student, logs out cleanly, and shuts down Windows."""
+        print(f"[SHUTDOWN] Remote shutdown ordered. Powering down in {countdown_seconds}s...")
+        self.is_session_active = False
+
+        self.show_notification(
+            "Lab Workstation Shutdown",
+            f"Remote shutdown initiated by instructor. Workstation powering off in {countdown_seconds} seconds...",
+            color="#ef4444",
+        )
+
+        try:
+            send_logout_signal()
+        except Exception:
+            pass
+
+        try:
+            self.stop_system_tray()
+            self.hide_floating_signout_pill()
+        except Exception:
+            pass
+
+        cleanup_security()
+
+        # Execute Windows OS shutdown with countdown
+        self.root.after(
+            500,
+            lambda: subprocess.Popen(
+                ["shutdown", "/s", "/t", str(countdown_seconds)],
+                creationflags=(
+                    subprocess.CREATE_NO_WINDOW
+                    if hasattr(subprocess, "CREATE_NO_WINDOW")
+                    else 0
+                ),
+            ),
+        )
 
     # =================================================================
-    # HEARTBEAT
+    # HEARTBEAT (WITH BROADCAST, URL PUSH, SHUTDOWN & GRACE BUFFER)
     # =================================================================
-
     def heartbeat_loop(self):
-        time.sleep(10)
+        time.sleep(1)
 
+        # FEATURE 6: Network Grace Buffer
+        # 25 checks * 3 seconds sleep = ~75 to 80 seconds grace period
         consecutive_failures = 0
+        MAX_CONSECUTIVE_FAILURES = 25
 
         while self.is_session_active:
             try:
-                lab_param = urllib.parse.quote(
-                    str(LAB_ID)
-                )
+                lab_param = urllib.parse.quote(str(LAB_ID))
+                pc_param = urllib.parse.quote(str(PC_NUMBER))
 
-                pc_param = urllib.parse.quote(
-                    str(PC_NUMBER)
-                )
+                # 1. Grab current active window title
+                current_window = get_active_window_title()[:60]
+                encoded_window = urllib.parse.quote(current_window)
 
                 url = (
                     f"{API_URL}/status/"
                     f"{lab_param}/"
                     f"{pc_param}"
+                    f"?active_app={encoded_window}"
                 )
 
-                session = (
-                    get_authenticated_session()
-                )
-
-                response = session.get(
-                    url,
-                    timeout=5
-                )
+                session = get_authenticated_session()
+                response = session.get(url, timeout=5)
 
                 if response.status_code == 200:
+                    # Connection recovered after temporary disconnect
+                    if self.network_grace_warned:
+                        self.network_grace_warned = False
+                        self.show_notification(
+                            "Network Restored",
+                            "Connection to LabGuard server re-established.",
+                            color="#10b981",
+                        )
+
                     consecutive_failures = 0
 
                     try:
                         data = response.json()
-
                     except Exception:
                         data = {}
 
-                    pc_status = (
-                        data.get("status")
-                        or data.get(
-                            "data",
-                            {}
-                        ).get("status")
-                    )
-
-                    if (
-                        pc_status
-                        and str(
-                            pc_status
-                        ).lower()
-                        in [
-                            "released",
-                            "maintenance"
+                    # Synchronize dynamic banned applications
+                    if "banned_apps" in data and isinstance(data["banned_apps"], list):
+                        self.dynamic_banned_apps = [
+                            str(p).lower().strip() for p in data["banned_apps"]
                         ]
-                    ):
-                        self.root.after(
-                            0,
-                            self.lock_ui_again
+
+                    # FEATURE 2: Teacher Remote Broadcast Announcement
+                    broadcast_msg = data.get("broadcast_message") or data.get("message")
+                    if broadcast_msg and str(broadcast_msg).strip() and broadcast_msg != self.last_broadcast_message:
+                        self.last_broadcast_message = broadcast_msg
+                        self.show_notification(
+                            "Instructor Announcement",
+                            str(broadcast_msg).strip(),
+                            color="#38bdf8",
                         )
 
+                    # FEATURE 3: Remote URL Pusher
+                    pushed_url = data.get("open_url") or data.get("url")
+                    if pushed_url and str(pushed_url).strip() and pushed_url != self.last_pushed_url:
+                        clean_url = str(pushed_url).strip()
+                        self.last_pushed_url = clean_url
+                        if not clean_url.startswith(("http://", "https://")):
+                            clean_url = "https://" + clean_url
+
+                        print(f"[REMOTE URL] Opening link: {clean_url}")
+                        webbrowser.open(clean_url)
+                        self.show_notification(
+                            "Class Resource Shared",
+                            f"Opened in browser:\n{clean_url[:45]}...",
+                            color="#10b981",
+                        )
+
+                    # FEATURE 5: Remote Power Off
+                    remote_cmd = str(data.get("command", "")).lower().strip()
+                    if remote_cmd in ("shutdown", "poweroff"):
+                        self.root.after(0, lambda: self.execute_remote_shutdown(15))
                         break
+
+                    # Check release / maintenance state from dashboard
+                    pc_status = data.get("status") or data.get("data", {}).get("status")
+                    if pc_status and str(pc_status).lower() in ["released", "maintenance"]:
+                        print(f"[SESSION TERMINATED] Server status changed to: {pc_status}")
+                        self.root.after(0, self.lock_ui_again)
+                        break
+
+                else:
+                    consecutive_failures += 1
 
             except Exception as e:
                 consecutive_failures += 1
+                print(f"[HEARTBEAT] Ping failure ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES}): {e}")
 
-                print(
-                    f"[HEARTBEAT] Failure "
-                    f"{consecutive_failures}: {e}"
-                )
-
-                if (
-                    consecutive_failures
-                    >= 5
-                ):
-                    self.root.after(
-                        0,
-                        self.lock_ui_again
+                # FEATURE 6: Show amber warning after ~12s (4 drops) without kicking the student
+                if consecutive_failures == 4 and not self.network_grace_warned:
+                    self.network_grace_warned = True
+                    self.show_notification(
+                        "Network Instability",
+                        "Connection dropped. Reconnecting in background (session preserved)...",
+                        color="#f59e0b",
                     )
 
+                # Only lock out when the full ~80-second grace window expires
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    print(f"[HEARTBEAT EXPIRED] Grace period exhausted. Locking terminal...")
+                    self.root.after(0, self.lock_ui_again)
                     break
 
+            time.sleep(3)
+    
+    # =================================================================
+    # AUTOMATIC SECURITY INCIDENT DISPATCHER
+    # =================================================================
+
+    def auto_report_security_violation(self, issue_type, remarks):
+        """Automatically dispatches an alert to Laravel's Alerts Ledger."""
+        payload = {
+            "pc_number": PC_NUMBER,
+            "student_id": self.current_student.get("id"),
+            "password": self.current_student.get("password"),
+            "issue_type": issue_type,
+            "remarks": f"AUTOMATED AUDIT: {remarks}",
+        }
+
+        def async_post():
+            try:
+                session = get_authenticated_session()
+                session.post(f"{API_URL}/alerts", json=payload, timeout=6)
+                print(f"[SECURITY ALERT FILED] {issue_type}: {remarks}")
+            except Exception as e:
+                print(f"[SECURITY ALERT FAILED] {e}")
+
+        threading.Thread(target=async_post, daemon=True).start()
+
+    # =================================================================
+    # SESSION GUARD LOOP (PERIPHERALS, INSTALLS, BANNED APPS, IDLE)
+    # =================================================================
+    def student_session_guard_loop(self):
+        """Monitors banned apps, idle timeout, peripherals, and software installations."""
+        MAX_IDLE_SECONDS = 300
+
+        print(f"[DEBUG GUARD] Guard loop started! Monitoring student: {self.current_student.get('id')}")
+
+        while self.is_session_active:
             time.sleep(5)
+
+            # Check role (lowercase match)
+            user_role = str(self.current_student.get("role", "")).lower()
+            if user_role not in ("student", ""):
+                continue
+
+            # ---------------------------------------------------------
+            # 1. KILL TEACHER-BANNED APPLICATIONS (NO DB ALERT, POP-UP ONLY)
+            # ---------------------------------------------------------
+            active_title = get_active_window_title().lower()
+            hwnd = user32.GetForegroundWindow()
+
+            for proc_name in self.dynamic_banned_apps:
+                clean_name = proc_name.replace(".exe", "").strip().lower()
+                if not clean_name:
+                    continue
+
+                killed = False
+
+                # A. Terminate if current active window matches the banned name
+                if hwnd and clean_name in active_title:
+                    try:
+                        pid = wintypes.DWORD()
+                        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                        # Prevent terminating our own process
+                        if pid.value and pid.value != os.getpid():
+                            k_res = subprocess.run(
+                                f"taskkill /f /pid {pid.value}",
+                                shell=True,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                            )
+                            if k_res.returncode == 0:
+                                killed = True
+                    except Exception:
+                        pass
+
+                # B. Terminate by executable name (with wildcard support)
+                try:
+                    target_proc = f"*{clean_name}*" if not proc_name.endswith(".exe") else proc_name
+                    p_res = subprocess.run(
+                        f"taskkill /f /im {target_proc}",
+                        shell=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                    )
+                    if p_res.returncode == 0:
+                        killed = True
+                except Exception:
+                    pass
+
+                # If the app was closed: Show on-screen banner ONLY (No Laravel Alert sent)
+                if killed:
+                    print(f"[SECURITY] Terminated banned application: {proc_name}")
+                    self.show_notification(
+                        "Application Blocked",
+                        f"This application has been blocked by your professor for this laboratory session.",
+                        color="#ef4444"
+                    )
+
+            # ---------------------------------------------------------
+            # 2. DETECT NEW SOFTWARE INSTALLATION
+            # ---------------------------------------------------------
+            current_apps = get_user_installed_software()
+            new_apps = current_apps - self.initial_installed_apps
+
+            if new_apps:
+                for app in new_apps:
+                    print(f"[SECURITY] NEW INSTALLATION DETECTED: {app}")
+                    self.auto_report_security_violation(
+                        "Other Terminal Concern",
+                        f"Unauthorized software installation detected: '{app}'"
+                    )
+                    self.show_notification(
+                        "Security Violation",
+                        f"Installation of '{app}' was logged to technical support.",
+                        color="#ef4444"
+                    )
+                self.initial_installed_apps = current_apps
+
+            # ---------------------------------------------------------
+            # 3. DETECT PERIPHERALS REMOVED (MOUSE & KEYBOARD)
+            # ---------------------------------------------------------
+            current_mice = count_raw_input_devices(0)
+            if self.baseline_mice > 0 and current_mice < self.baseline_mice:
+                self.auto_report_security_violation(
+                    "Optical Mouse Unresponsive",
+                    f"Physical mouse disconnected! (Expected {self.baseline_mice}, detected {current_mice})"
+                )
+                self.show_notification(
+                    "Hardware Alert",
+                    "Mouse disconnection detected and reported to lab personnel.",
+                    color="#ef4444"
+                )
+                self.baseline_mice = current_mice
+
+            current_keyboards = count_raw_input_devices(1)
+            if self.baseline_keyboards > 0 and current_keyboards < self.baseline_keyboards:
+                self.auto_report_security_violation(
+                    "Keyboard Damaged / Missing Keys",
+                    f"Physical keyboard disconnected! (Expected {self.baseline_keyboards}, detected {current_keyboards})"
+                )
+                self.show_notification(
+                    "Hardware Alert",
+                    "Keyboard disconnection detected and reported to lab personnel.",
+                    color="#ef4444"
+                )
+                self.baseline_keyboards = current_keyboards
+
+            # ---------------------------------------------------------
+            # 4. DETECT USB STORAGE DRIVE INSERTION
+            # ---------------------------------------------------------
+            current_drives = get_all_drive_letters()
+            new_drives = current_drives - self.baseline_usb_drives
+
+            if new_drives:
+                for drive in new_drives:
+                    drive_type = kernel32.GetDriveTypeW(drive)
+                    if drive_type in (2, 3):
+                        print(f"[SECURITY] NEW USB DRIVE DETECTED: {drive}")
+                        self.auto_report_security_violation(
+                            "Other Terminal Concern",
+                            f"External USB storage drive mounted at {drive}"
+                        )
+                        self.show_notification(
+                            "Security Alert",
+                            f"External USB drive ({drive}) detected and reported to lab personnel.",
+                            color="#ef4444"
+                        )
+                self.baseline_usb_drives = current_drives
+
+            removed_drives = self.baseline_usb_drives - current_drives
+            if removed_drives:
+                for drive in removed_drives:
+                    print(f"[SECURITY] USB Drive removed: {drive}")
+                self.baseline_usb_drives = current_drives
+
+            # ---------------------------------------------------------
+            # 5. IDLE INACTIVITY TIMEOUT
+            # ---------------------------------------------------------
+            idle_seconds = get_idle_seconds()
+            if idle_seconds >= MAX_IDLE_SECONDS:
+                print(f"[IDLE TIMEOUT] {idle_seconds}s. Relocking workstation...")
+                self.root.after(0, self.request_manual_logout)
+                break
+    
 
     # =================================================================
     # LOCK UI AGAIN
@@ -5304,33 +3961,31 @@ class LabGuardClient:
         self.is_session_active = False
         self.login_screen_active = True
 
+        set_task_manager_disabled(False)
+
         self.stop_system_tray()
 
         self.hide_floating_signout_pill()
+
+        self.last_broadcast_message = ""
+        self.last_pushed_url = ""
+        self.network_grace_warned = False
+        
 
         self.current_student = {
             "id": "",
             "password": "",
             "name": "",
             "role": "student",
-            "session_id": None
+            "session_id": None,
         }
 
         try:
-            self.entry_id.delete(
-                0,
-                tk.END
-            )
+            self.entry_id.delete(0, tk.END)
 
-            self.entry_password.delete(
-                0,
-                tk.END
-            )
+            self.entry_password.delete(0, tk.END)
 
-            self.btn_unlock.config(
-                state="normal",
-                text="AUTHENTICATE & INSPECT"
-            )
+            self.btn_unlock.config(state="normal", text="AUTHENTICATE & INSPECT")
 
             self.checklist_view.pack_forget()
 
@@ -5343,37 +3998,25 @@ class LabGuardClient:
 
             self.root.lift()
 
-            self.root.attributes(
-                "-topmost",
-                True
-            )
+            self.root.attributes("-topmost", True)
 
             self.root.update_idletasks()
 
-            self.root.after(
-                100,
-                self.restore_login_focus
-            )
+            self.root.after(100, self.restore_login_focus)
 
         except tk.TclError:
             pass
 
         except Exception as e:
-            print(
-                f"[LOCK UI ERROR] {e}"
-            )
+            print(f"[LOCK UI ERROR] {e}")
 
     # =================================================================
     # EMERGENCY ADMIN EXIT
     # =================================================================
 
-    def emergency_admin_exit(
-        self,
-        event=None
-    ):
+    def emergency_admin_exit(self, event=None):
         print(
-            "[ADMIN] Emergency exit invoked. "
-            "Restoring full workstation control..."
+            "[ADMIN] Emergency exit invoked. " "Restoring full workstation control..."
         )
 
         self.stop_system_tray()
@@ -5381,20 +4024,14 @@ class LabGuardClient:
         self.hide_floating_signout_pill()
 
         try:
-            if (
-                self.active_notification
-                and self.active_notification.winfo_exists()
-            ):
+            if self.active_notification and self.active_notification.winfo_exists():
                 self.active_notification.destroy()
 
         except Exception:
             pass
 
         try:
-            if (
-                self.wifi_modal
-                and self.wifi_modal.winfo_exists()
-            ):
+            if self.wifi_modal and self.wifi_modal.winfo_exists():
                 try:
                     self.wifi_modal.grab_release()
 
@@ -5432,9 +4069,7 @@ class LabGuardClient:
 if __name__ == "__main__":
     app_root = tk.Tk()
 
-    client = LabGuardClient(
-        app_root
-    )
+    client = LabGuardClient(app_root)
 
     app_root.update()
 

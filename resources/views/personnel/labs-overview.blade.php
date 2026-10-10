@@ -15,10 +15,7 @@
 
             {{-- System Telemetry Pulse --}}
             <div class="flex items-center gap-3 bg-white border border-slate-200/80 p-2 sm:p-2.5 rounded-2xl shadow-xs">
-                <div class="px-3 py-1.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 flex items-center gap-2">
-                    <span class="size-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span class="text-[9px] font-black text-emerald-700 uppercase tracking-wider">Sync Active</span>
-                </div>
+
                 <div class="px-2 pr-3 border-l border-slate-100">
                     <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest">System Date</p>
                     <p class="text-[11px] font-mono font-black text-slate-800">{{ now()->format('D, M d • h:i A') }}</p>
@@ -379,12 +376,7 @@
                                 Hardware Defect Reported
                             </span>
                             @else
-                            <span class="inline-flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                <svg class="size-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                                </svg>
-                                Peripherals Verified
-                            </span>
+
                             @endif
 
                             <a href="{{ route('personnel.lab.show', $lab) }}"
@@ -451,9 +443,7 @@
                             <span>Reset All Filters</span>
                         </button>
                     </div>
-
                 </div>
-
             </div>
         </div>
 </x-app-layout>

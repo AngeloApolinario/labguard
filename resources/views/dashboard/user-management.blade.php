@@ -19,20 +19,8 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                 </div>
             </div>
 
-            {{-- Header Action Badges --}}
-            <div class="flex items-center gap-2">
-                <button @click="archiveModal = true"
-                    type="button"
-                    class="group px-4 py-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-[#D4AF37]/50 hover:shadow-md transition-all flex items-center gap-2.5 cursor-pointer">
-                    <div class="size-2 rounded-full {{ $archivedUsers->count() > 0 ? 'bg-amber-500 animate-pulse' : 'bg-slate-300' }}"></div>
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-600 group-hover:text-slate-900">
-                        Archive Vault
-                    </span>
-                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black font-mono {{ $archivedUsers->count() > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500' }}">
-                        {{ $archivedUsers->count() }}
-                    </span>
-                </button>
-            </div>
+
+
         </div>
     </x-slot>
 
@@ -113,12 +101,7 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                         <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-black">
                             {{ $users->count() }} Total
                         </span>
-                        @if($archivedUsers->count() > 0)
-                        <button @click="archiveModal = true" class="text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60 px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
-                            <span class="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                            {{ $archivedUsers->count() }} Soft-Deleted in Archive
-                        </button>
-                        @endif
+
                     </div>
                 </div>
 

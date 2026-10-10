@@ -27,6 +27,7 @@ return new class extends Migration
             $table->enum('status', ['available', 'active', 'maintenance', 'released'])->default('available');
 
             $table->timestamp('last_ping_at')->nullable();
+            $table->string('active_app')->nullable();
 
             $table->timestamps();
 

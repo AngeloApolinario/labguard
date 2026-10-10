@@ -38,59 +38,76 @@
     }" @keydown.escape.window="modalOpen = false" class="py-6 sm:py-8 md:py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto min-h-screen">
 
         {{-- ========================================================================= --}}
-        {{-- FILTER BAR (Updated with Laboratory Filter)                               --}}
+        {{-- FILTER BAR (LIVE DYNAMIC SUBMISSION)                                      --}}
         {{-- ========================================================================= --}}
-        <div class="mb-6 sm:mb-8">
-            <div class="bg-white border border-slate-200/80 p-5 sm:p-7 rounded-3xl sm:rounded-[2.2rem] shadow-xl shadow-slate-900/5">
-                <form action="{{ url()->current() }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+        <div class="mb-6 sm:mb-8" x-data="{
+            studentName: '{{ request('student_name') }}',
+            pcNumber: '{{ request('pc_number') }}',
+            labId: '{{ request('lab_id') }}',
+            date: '{{ request('date') }}',
+            submitForm() {
+                const url = new URL(window.location.href);
+                
+                if (this.studentName) url.searchParams.set('student_name', this.studentName);
+                else url.searchParams.delete('student_name');
 
-                    {{-- 1. Student Name --}}
+                if (this.pcNumber) url.searchParams.set('pc_number', this.pcNumber);
+                else url.searchParams.delete('pc_number');
+
+                if (this.labId) url.searchParams.set('lab_id', this.labId);
+                else url.searchParams.delete('lab_id');
+                
+                if (this.date) url.searchParams.set('date', this.date);
+                else url.searchParams.delete('date');
+
+                window.location.href = url.toString();
+            }
+        }">
+            <div class="bg-white border border-slate-200/80 p-5 sm:p-7 rounded-3xl sm:rounded-[2.2rem] shadow-xl shadow-slate-900/5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+
+                    {{-- 1. Student Name (Debounced live search) --}}
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1">Student Name</label>
-                        <input type="text" name="student_name" value="{{ request('student_name') }}" placeholder="Search Student..."
+                        <input type="text" x-model="studentName" @input.debounce.500ms="submitForm()" placeholder="Search Student..."
                             class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] placeholder:text-slate-400 py-3 px-4 transition-all">
                     </div>
 
-                    {{-- 2. Terminal ID --}}
+                    {{-- 2. Terminal ID (Debounced live search) --}}
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1">Terminal ID</label>
-                        <input type="text" name="pc_number" value="{{ request('pc_number') }}" placeholder="E.g. PC-01..."
+                        <input type="text" x-model="pcNumber" @input.debounce.500ms="submitForm()" placeholder="E.g. PC-01..."
                             class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] placeholder:text-slate-400 py-3 px-4 transition-all">
                     </div>
 
-                    {{-- 3. NEW: Laboratory Filter --}}
+                    {{-- 3. Laboratory Filter (Live on change) --}}
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1">Laboratory</label>
-                        <select name="lab_id" class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] py-3 px-3.5 transition-all cursor-pointer">
+                        <select x-model="labId" @change="submitForm()" class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] py-3 px-3.5 transition-all cursor-pointer">
                             <option value="">All Laboratories</option>
                             @foreach($allLabs ?? $labs ?? \App\Models\Lab::orderBy('name')->get() as $l)
-                            <option value="{{ $l->id }}" {{ request('lab_id') == $l->id ? 'selected' : '' }}>
-                                {{ $l->name }}
-                            </option>
+                            <option value="{{ $l->id }}">{{ $l->name }}</option>
                             @endforeach
                         </select>
                     </div>
 
-                    {{-- 4. Activity Date --}}
+                    {{-- 4. Activity Date (Live on change) --}}
                     <div>
                         <label class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 block ml-1">Activity Date</label>
-                        <input type="date" name="date" value="{{ request('date') }}"
+                        <input type="date" x-model="date" @change="submitForm()"
                             class="w-full bg-slate-50 border-slate-200 text-slate-900 rounded-2xl text-xs font-semibold focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] [color-scheme:light] py-3 px-4 transition-all cursor-pointer">
                     </div>
 
-                    {{-- 5. Action Buttons --}}
+                    {{-- 5. Reset Action --}}
                     <div class="flex items-center gap-2 w-full">
-                        <button type="submit" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-black uppercase text-[10px] tracking-wider py-3.5 rounded-2xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5">
+                        <a href="{{ url()->current() }}" class="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider rounded-2xl transition-all text-center flex items-center justify-center gap-1.5">
                             <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
-                            <span>Filter</span>
-                        </button>
-                        <a href="{{ url()->current() }}" class="px-4 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider rounded-2xl transition-all text-center shrink-0">
-                            Reset
+                            <span>Reset Filters</span>
                         </a>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
 

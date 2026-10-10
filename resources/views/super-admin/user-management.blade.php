@@ -1,5 +1,5 @@
 @php
-    $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('deleted_at')->get();
+$archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('deleted_at')->get();
 @endphp
 
 <x-app-layout>
@@ -16,20 +16,7 @@
                 </h2>
             </div>
 
-            {{-- Header Action Badges --}}
-            <div class="flex items-center gap-2">
-                <button @click="archiveModal = true" 
-                    type="button"
-                    class="group px-4 py-2.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-[#D4AF37]/50 hover:shadow-md transition-all flex items-center gap-2.5 cursor-pointer">
-                    <div class="size-2 rounded-full {{ $archivedUsers->count() > 0 ? 'bg-amber-500 animate-pulse' : 'bg-slate-300' }}"></div>
-                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-600 group-hover:text-slate-900">
-                        Archive Vault
-                    </span>
-                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black font-mono {{ $archivedUsers->count() > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500' }}">
-                        {{ $archivedUsers->count() }}
-                    </span>
-                </button>
-            </div>
+
         </div>
     </x-slot>
 
@@ -111,12 +98,7 @@
                         <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-black">
                             {{ $users->count() }} Total
                         </span>
-                        @if($archivedUsers->count() > 0)
-                        <button @click="archiveModal = true" class="text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60 px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
-                            <span class="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                            {{ $archivedUsers->count() }} Soft-Deleted in Archive
-                        </button>
-                        @endif
+
                     </div>
                 </div>
 
@@ -222,31 +204,31 @@
         {{-- SUPER ADMIN ARCHIVE VAULT MODAL (WITH RESTORE & PERMANENT PURGE)          --}}
         {{-- ========================================================================= --}}
         <div x-show="archiveModal"
-             x-cloak
-             class="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
-             role="dialog" aria-modal="true">
+            x-cloak
+            class="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+            role="dialog" aria-modal="true">
 
             {{-- Backdrop --}}
             <div x-show="archiveModal"
-                 x-transition:enter="ease-out duration-300"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="ease-in duration-200"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 @click="archiveModal = false"
-                 class="fixed inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity"></div>
+                x-transition:enter="ease-out duration-300"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="ease-in duration-200"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                @click="archiveModal = false"
+                class="fixed inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity"></div>
 
             {{-- Modal Dialog --}}
             <div x-show="archiveModal"
-                 x-transition:enter="ease-out duration-300"
-                 x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                 x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
-                 x-transition:leave="ease-in duration-200"
-                 x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
-                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                 @click.stop
-                 class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-slate-800 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-4xl max-h-[92vh] flex flex-col">
+                x-transition:enter="ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave="ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                @click.stop
+                class="relative transform overflow-hidden rounded-[2.5rem] bg-slate-900 border border-slate-800 text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-4xl max-h-[92vh] flex flex-col">
 
                 {{-- Header --}}
                 <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 p-6 sm:p-8 shrink-0 relative">
@@ -348,7 +330,7 @@
                         <div class="flex items-center justify-end gap-2 shrink-0 pt-2 md:pt-0 border-t border-slate-700/40 md:border-t-0">
                             {{-- Restore Action --}}
                             <form method="POST" action="{{ Route::has('super-admin.users.restore') ? route('super-admin.users.restore', $archived->id) : url('/super-admin/users/' . $archived->id . '/restore') }}"
-                                  onsubmit="return confirm('Restore this user account? The user will immediately be reinstated across the platform.')">
+                                onsubmit="return confirm('Restore this user account? The user will immediately be reinstated across the platform.')">
                                 @csrf
                                 @method('PATCH')
                                 <button type="submit"
@@ -362,7 +344,7 @@
 
                             {{-- Permanent Wipe Action (Super Admin Only) --}}
                             <form method="POST" action="{{ Route::has('super-admin.users.forceDelete') ? route('super-admin.users.forceDelete', $archived->id) : url('/super-admin/users/' . $archived->id . '/force-delete') }}"
-                                  onsubmit="return confirm('CRITICAL WARNING: This will permanently wipe this record from the database forever. This cannot be undone. Proceed?')">
+                                onsubmit="return confirm('CRITICAL WARNING: This will permanently wipe this record from the database forever. This cannot be undone. Proceed?')">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit"

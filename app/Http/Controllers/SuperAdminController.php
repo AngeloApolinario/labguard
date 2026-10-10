@@ -369,15 +369,184 @@ class SuperAdminController extends Controller
 
     public function viewSchedule(Lab $lab)
     {
-        $schedules = Schedule::where('lab_id', $lab->id)
-            ->with('user')
-            ->orderByRaw("FIELD(day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')")
-            ->orderBy('start_time', 'asc')
+        $todayDate = now()->toDateString();
+        $currentTime = now()->format('H:i:s');
+
+        // 1. Fetch upcoming & ongoing events
+        $activeEvents = Schedule::where(
+            'lab_id',
+            $lab->id
+        )
+            ->where(
+                'is_event',
+                true
+            )
+            ->where(function ($q) use (
+                $todayDate,
+                $currentTime
+            ) {
+                $q->whereDate(
+                    'event_date',
+                    '>',
+                    $todayDate
+                )
+                    ->orWhere(function (
+                        $todayQ
+                    ) use (
+                        $todayDate,
+                        $currentTime
+                    ) {
+                        $todayQ->whereDate(
+                            'event_date',
+                            $todayDate
+                        )
+                            ->whereTime(
+                                'end_time',
+                                '>=',
+                                $currentTime
+                            );
+                    });
+            })
             ->get();
 
-        $teachers = User::whereIn('role', ['personnel', 'admin', 'super-admin'])->get();
+        // 2. Fetch all recurring classes
+        $allClasses = Schedule::where(
+            'lab_id',
+            $lab->id
+        )
+            ->where(
+                'is_event',
+                false
+            )
+            ->with('user')
+            ->get();
 
-        return view('super-admin.schedule', compact('lab', 'schedules', 'teachers'));
+        // 3. Hide regular classes that collide with an active event
+        $visibleClasses = $allClasses->filter(
+            function ($class) use ($activeEvents) {
+                $isMasked = $activeEvents->contains(
+                    function ($event) use ($class) {
+                        return $event->day === $class->day
+                            && Carbon::parse(
+                                $event->event_date
+                            )->isSameWeek(now())
+                            && $event->start_time < $class->end_time
+                            && $event->end_time > $class->start_time;
+                    }
+                );
+
+                return !$isMasked;
+            }
+        );
+
+        // 4. Attach live attendee counts to events
+        foreach ($activeEvents as $event) {
+            $event->attendees_count = LabSession::where(
+                'lab_id',
+                $lab->id
+            )
+                ->whereDate(
+                    'time_in',
+                    $event->event_date
+                )
+                ->whereTime(
+                    'time_in',
+                    '>=',
+                    $event->start_time
+                )
+                ->whereTime(
+                    'time_in',
+                    '<=',
+                    $event->end_time
+                )
+                ->count();
+        }
+
+        // 5. Combine active events + non-masked classes
+        $schedules = $visibleClasses
+            ->concat($activeEvents)
+            ->sortBy('start_time');
+
+        // 6. Fetch past completed events
+        $pastEvents = Schedule::where(
+            'lab_id',
+            $lab->id
+        )
+            ->where(
+                'is_event',
+                true
+            )
+            ->where(function ($q) use (
+                $todayDate,
+                $currentTime
+            ) {
+                $q->whereDate(
+                    'event_date',
+                    '<',
+                    $todayDate
+                )
+                    ->orWhere(function (
+                        $todayQ
+                    ) use (
+                        $todayDate,
+                        $currentTime
+                    ) {
+                        $todayQ->whereDate(
+                            'event_date',
+                            $todayDate
+                        )
+                            ->whereTime(
+                                'end_time',
+                                '<',
+                                $currentTime
+                            );
+                    });
+            })
+            ->latest('event_date')
+            ->get();
+
+        foreach ($pastEvents as $pe) {
+            $pe->attendees_count = LabSession::where(
+                'lab_id',
+                $lab->id
+            )
+                ->whereDate(
+                    'time_in',
+                    $pe->event_date
+                )
+                ->whereTime(
+                    'time_in',
+                    '>=',
+                    $pe->start_time
+                )
+                ->whereTime(
+                    'time_in',
+                    '<=',
+                    $pe->end_time
+                )
+                ->count();
+        }
+
+        $teachers = User::whereIn(
+            'role',
+            [
+                'personnel',
+                'teacher',
+                'admin'
+            ]
+        )
+            ->orderBy('name')
+            ->get();
+
+        return view(
+            'dashboard.labs.schedule',
+            compact(
+                'lab',
+                'schedules',
+                'pastEvents',
+                'teachers'
+            )
+        );
     }
 
     public function storeSchedule(Request $request, Lab $lab)

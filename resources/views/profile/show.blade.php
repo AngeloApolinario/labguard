@@ -88,7 +88,7 @@
             <div class="mt-24 text-center">
                 <div class="inline-block px-6 py-2 bg-slate-100 rounded-full">
                     <p class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.5em]">
-                        LabGuard Digital Environment &bull; Secure Protocol
+                        LabGuard &bull; Computer Laboratory Management System
                     </p>
                 </div>
             </div>

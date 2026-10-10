@@ -29,9 +29,14 @@ class CheckLabAccess
 
         // If a schedule exists AND it's not assigned to the logged-in teacher
         if ($activeSchedule && $activeSchedule->user_id !== auth()->id()) {
+            $reservedBy = $activeSchedule->speaker_name
+                ?: ($activeSchedule->user?->name ?? 'another instructor');
+
+            $subject = $activeSchedule->subject_code ?? 'a scheduled event';
+
             return redirect()->route('dashboard.index')->with(
                 'error',
-                "Unauthorized Access: This lab is currently reserved for {$activeSchedule->subject_code} by another instructor."
+                "Unauthorized Access: This lab is currently reserved for {$subject} by {$reservedBy}."
             );
         }
 

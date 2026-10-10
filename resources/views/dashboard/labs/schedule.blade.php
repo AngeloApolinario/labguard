@@ -129,8 +129,9 @@
             async handleFormSubmit(event) {
                 const form = event.target || document.getElementById('scheduleEntryForm');
 
-                // Extract values safely using elements
-                const teacherId = form.elements['user_id'] ? form.elements['user_id'].value : '';
+                // Extract values safely from the currently active fields
+                const activeTeacherSelect = form.querySelector('select[name=\'user_id\']:not([disabled])');
+                const teacherId = activeTeacherSelect ? activeTeacherSelect.value : '';
                 const speakerName = form.elements['speaker_name'] ? form.elements['speaker_name'].value.trim() : '';
                 const eventDateVal = form.elements['event_date'] ? form.elements['event_date'].value : '';
                 const startTime = form.elements['start_time'] ? form.elements['start_time'].value : '';
@@ -249,29 +250,46 @@
                     {{-- Class: Instructor Selection --}}
                     <div x-show="mode === 'class'" x-transition>
                         <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1.5 block">Instructor Assigned <span class="text-rose-500">*</span></label>
-                        <select name="user_id" :disabled="mode === 'event'" class="w-full rounded-2xl border-slate-200 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-bold text-slate-800 focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] transition-all">
-                            <option value="" disabled selected>Select Instructor...</option>
+                        <select name="user_id" :disabled="mode !== 'class'" class="w-full rounded-2xl border-slate-200 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-bold text-slate-800 focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] transition-all">
+                            <option value="" disabled {{ old('user_id') ? '' : 'selected' }}>Select Instructor...</option>
                             @foreach($teachers as $teacher)
                             <option value="{{ $teacher->id }}" {{ old('user_id') == $teacher->id ? 'selected' : '' }}>{{ $teacher->name }}</option>
                             @endforeach
                         </select>
                     </div>
 
-                    {{-- Event: Guest Speaker / Host --}}
+                    {{-- Event: Guest Speaker / Presenter --}}
                     <div x-show="mode === 'event'" x-transition style="display: none;">
-                        <label class="text-[9px] font-black text-[#D4AF37] uppercase tracking-widest ml-2 mb-1.5 block">Guest Speaker / Host <span class="text-rose-500">*</span></label>
+                        <label class="text-[9px] font-black text-[#D4AF37] uppercase tracking-widest ml-2 mb-1.5 block">Guest Speaker / Presenter <span class="text-rose-500">*</span></label>
                         <input type="text"
                             name="speaker_name"
-                            :disabled="mode === 'class'"
+                            :disabled="mode !== 'event'"
                             value="{{ old('speaker_name') }}"
                             placeholder="E.g. Engr. Maria Santos (Keynote)"
                             class="w-full rounded-2xl border-amber-200/80 bg-amber-50/20 text-xs sm:text-sm py-3 px-4 font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] transition-all">
                     </div>
 
+                    {{-- Event: Lab Facilitator / Staff In-Charge (Assigns user_id for event) --}}
+                    <div x-show="mode === 'event'" x-transition style="display: none;">
+                        <div class="flex items-center justify-between ml-2 mb-1.5">
+                            <label class="text-[9px] font-black text-[#D4AF37] uppercase tracking-widest block">Lab Facilitator / Staff In-Charge</label>
+                            <span class="text-[8px] font-mono text-slate-400 uppercase font-semibold">Optional</span>
+                        </div>
+                        <select name="user_id" :disabled="mode !== 'event'" class="w-full rounded-2xl border-amber-200/80 bg-amber-50/20 text-xs sm:text-sm py-3 px-4 font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] transition-all">
+                            <option value="" {{ old('user_id') ? '' : 'selected' }}>None (Open to Any On-Duty Personnel)</option>
+                            @foreach($teachers as $teacher)
+                            <option value="{{ $teacher->id }}" {{ old('user_id') == $teacher->id ? 'selected' : '' }}>
+                                {{ $teacher->name }} (Facilitator)
+                            </option>
+                            @endforeach
+                        </select>
+                        <p class="text-[9px] text-slate-400 mt-1 ml-2 font-medium">Assigned staff gains access to the Command Center to control workstations for the speaker.</p>
+                    </div>
+
                     {{-- Class: Day Selection --}}
                     <div x-show="mode === 'class'" x-transition>
                         <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-2 mb-1.5 block">Weekly Recurring Day</label>
-                        <select name="day" :disabled="mode === 'event'" class="w-full rounded-2xl border-slate-200 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-bold text-slate-800 focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] transition-all">
+                        <select name="day" :disabled="mode !== 'class'" class="w-full rounded-2xl border-slate-200 bg-slate-50 text-xs sm:text-sm py-3 px-4 font-bold text-slate-800 focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] transition-all">
                             @foreach(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $day)
                             <option value="{{ $day }}" {{ old('day') == $day ? 'selected' : '' }}>Every {{ $day }}</option>
                             @endforeach
@@ -284,7 +302,7 @@
                         <input type="date"
                             name="event_date"
                             x-model="eventDate"
-                            :disabled="mode === 'class'"
+                            :disabled="mode !== 'event'"
                             min="{{ now()->toDateString() }}"
                             class="w-full rounded-2xl border-amber-200/80 bg-amber-50/20 text-xs sm:text-sm py-3 px-4 font-mono font-bold text-slate-900 focus:ring-2 focus:ring-[#D4AF37]/30 focus:border-[#D4AF37] transition-all [color-scheme:light]">
 
@@ -408,7 +426,7 @@
                     </div>
                 </div>
 
-                {{-- Desktop Table View (Header set to z-[1] so it never competes with modals) --}}
+                {{-- Desktop Table View --}}
                 <div class="hidden sm:block overflow-y-auto max-h-[520px] pr-2 custom-scroll relative">
                     <table class="w-full text-left border-collapse">
                         <thead class="sticky top-0 bg-slate-900/95 backdrop-blur-md z-[1]">
@@ -444,6 +462,13 @@
                                             </span>
                                             <span class="text-[10px] font-mono text-slate-200">{{ $entry->subject_code }}</span>
                                         </div>
+                                        {{-- Shows Facilitator if one was assigned --}}
+                                        @if($entry->user)
+                                        <div class="flex items-center gap-1.5 text-[9px] text-slate-400 mt-1 font-mono">
+                                            <span class="text-slate-500">In-Charge:</span>
+                                            <span class="text-slate-300 font-bold uppercase">{{ $entry->user->name }}</span>
+                                        </div>
+                                        @endif
                                         @else
                                         <span>{{ $entry->user->name ?? 'Instructor' }}</span>
                                         @if($isOpenOrFree)
@@ -520,6 +545,9 @@
                                     <span>🎙️ {{ $entry->speaker_name ?? 'Guest Speaker' }}</span>
                                 </div>
                                 <p class="text-[9px] text-slate-300 font-bold uppercase mt-0.5">{{ $entry->subject_code }}</p>
+                                @if($entry->user)
+                                <p class="text-[8px] text-slate-400 font-mono uppercase mt-0.5">In-Charge: <span class="text-slate-300 font-bold">{{ $entry->user->name }}</span></p>
+                                @endif
                                 @else
                                 <h5 class="text-white font-black text-sm uppercase">{{ $entry->user->name ?? 'Instructor' }}</h5>
                                 <p class="text-[9px] text-[#D4AF37] font-bold uppercase mt-0.5">{{ $entry->subject_code }}</p>
@@ -563,7 +591,7 @@
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- TELEPORTED MODALS (Teleports directly to <body> so NO TABLE HEADER CAN OVERLAP) --}}
+        {{-- TELEPORTED MODALS                                                         --}}
         {{-- ========================================================================= --}}
 
         {{-- 1. CONFLICT MODAL --}}
@@ -753,7 +781,7 @@
             </div>
         </template>
 
-        {{-- 4. PAST EVENTS ARCHIVE MODAL (NOW TELEPORTED: Cannot be overlapped by headers) --}}
+        {{-- 4. PAST EVENTS ARCHIVE MODAL --}}
         <template x-teleport="body">
             <div x-cloak x-show="archiveModal"
                 class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
@@ -783,7 +811,12 @@
                                         {{ \Carbon\Carbon::parse($pe->event_date)->format('M d, Y') }}
                                     </span>
                                 </div>
-                                <p class="text-xs text-slate-400 mt-1">Speaker: <strong class="text-[#D4AF37]">{{ $pe->speaker_name ?? 'Guest Speaker' }}</strong></p>
+                                <p class="text-xs text-slate-400 mt-1">
+                                    Speaker: <strong class="text-[#D4AF37]">{{ $pe->speaker_name ?? 'Guest Speaker' }}</strong>
+                                    @if($pe->user)
+                                    <span class="text-slate-500 font-mono text-[9px] ml-1.5">• In-Charge: {{ $pe->user->name }}</span>
+                                    @endif
+                                </p>
                                 <p class="text-[9px] font-mono text-slate-500 mt-0.5">{{ date('h:i A', strtotime($pe->start_time)) }} — {{ date('h:i A', strtotime($pe->end_time)) }}</p>
                             </div>
 

@@ -11,7 +11,7 @@ class Computer extends Model
     const STATUS_RELEASED = 'released';
     const STATUS_AVAILABLE = 'available';
     const STATUS_ACTIVE = 'active';
-    
+
     use HasFactory;
 
     protected $fillable = [
@@ -21,6 +21,7 @@ class Computer extends Model
         'asset_tag',
         'status',
         'last_ping_at',
+        'active_app',
     ];
 
     /**

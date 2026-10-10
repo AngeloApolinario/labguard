@@ -13,6 +13,8 @@ use App\Models\SubjectEnrollment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use App\Models\BannedApp;
+use App\Models\TerminalCommand;
 
 class TerminalController extends Controller
 {
@@ -154,9 +156,7 @@ class TerminalController extends Controller
             'teacher' => $activeSchedule?->user?->name ?? ($isEvent ? 'Special Event' : 'No active class')
         ], 200);
     }
-    /**
-     * Heartbeat check for Python background thread
-     */
+
     public function checkStatus($lab_id, $pc_number)
     {
         $cleanLabId = strtolower(trim($lab_id));
@@ -170,26 +170,101 @@ class TerminalController extends Controller
             ->whereRaw('LOWER(pc_number) = ?', [$cleanPcNumber])
             ->first();
 
-        // 2. Fallback lookup directly by pc_number
         if (!$pc) {
             $pc = Computer::whereRaw('LOWER(pc_number) = ?', [$cleanPcNumber])->first();
         }
 
-        // 3. If PC doesn't exist, tell terminal to stay locked
         if (!$pc) {
-            return response()->json(['status' => 'available'], 200);
+            return response()->json(['status' => 'available', 'banned_apps' => []], 200);
         }
 
-        // 4. Record Heartbeat Ping Timestamp
-        $pc->update(['last_ping_at' => now()]);
 
-        // 5. Cleanup stale active PCs whose pings stopped > 30s ago
-        Computer::cleanupStaleSessions();
+        $pendingCommand = TerminalCommand::where('computer_id', $pc->id)
+            ->whereNull('delivered_at')
+            ->orderBy('id')
+            ->first();
 
-        // 6. Return actual PC status
-        return response()->json([
-            'status' => strtolower($pc->status)
-        ], 200);
+        $commandResponse = [];
+
+        if ($pendingCommand) {
+            $commandResponse = match ($pendingCommand->type) {
+                'broadcast' => [
+                    'broadcast_message' => $pendingCommand->payload,
+                ],
+                'open_url' => [
+                    'open_url' => $pendingCommand->payload,
+                ],
+                'shutdown' => [
+                    'command' => 'shutdown',
+                ],
+                default => [],
+            };
+
+            $pendingCommand->update([
+                'delivered_at' => now(),
+            ]);
+        }
+
+
+        // -------------------------------------------------------------
+        // 2. SAVE ACTIVE APP & UPDATE PING TELEMETRY 
+        // -------------------------------------------------------------
+        $pc->last_ping_at = now();
+
+        if (request()->has('active_app') && request('active_app') !== '') {
+            $pc->active_app = trim(urldecode(request('active_app')));
+        }
+
+        // Direct save to ensure MySQL writes it immediately
+        $pc->save();
+
+        // Cleanup stale sessions (if method exists on your model)
+        if (method_exists(Computer::class, 'cleanupStaleSessions')) {
+            Computer::cleanupStaleSessions();
+        }
+
+        // -------------------------------------------------------------
+        // 3. RESOLVE BANNED APPS WITH TESTING FALLBACK
+        // -------------------------------------------------------------
+        $currentDay = now()->format('l');
+        $currentTime = now()->format('H:i:s');
+
+        $activeSchedule = Schedule::where('lab_id', $pc->lab_id)
+            ->where('is_event', false)
+            ->where('day', $currentDay)
+            ->whereTime('start_time', '<=', $currentTime)
+            ->whereTime('end_time', '>=', $currentTime)
+            ->first();
+
+        $bannedApps = [];
+
+        if ($activeSchedule && $activeSchedule->user_id) {
+            // Active class: load that teacher's apps
+            $bannedApps = BannedApp::where('user_id', $activeSchedule->user_id)
+                ->pluck('process_name')
+                ->toArray();
+        } else {
+            // FALLBACK FOR TESTING & UNSCHEDULED SESSIONS:
+            // Load all configured banned apps so rules still protect the lab
+            $bannedApps = BannedApp::pluck('process_name')->toArray();
+        }
+
+        // Clean and split comma-separated aliases
+        $flattenedBanned = [];
+        foreach ($bannedApps as $appStr) {
+            foreach (explode(',', $appStr) as $single) {
+                $cleaned = strtolower(trim($single));
+                if ($cleaned) {
+                    $flattenedBanned[] = $cleaned;
+                }
+            }
+        }
+        $flattenedBanned = array_values(array_unique($flattenedBanned));
+
+        return response()->json(array_merge([
+            'status' => strtolower($pc->status),
+            'banned_apps' => $flattenedBanned,
+        ], $commandResponse), 200);
     }
 
     /**
@@ -260,7 +335,10 @@ class TerminalController extends Controller
             }
 
             if (strtolower($computer->status) !== 'maintenance') {
-                $computer->update(['status' => 'available']);
+                $computer->update([
+                    'status'     => 'available',
+                    'active_app' => null, // <-- Clears the title on logout
+                ]);
             }
 
             return response()->json(['status' => strtolower($computer->status)]);

@@ -8,11 +8,14 @@ use App\Models\LabSession;
 use App\Models\Schedule;
 use App\Models\User;
 use App\Models\Alert;
+use App\Models\BannedApp;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Models\SubjectEnrollment;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Auth;
+use App\Models\TerminalCommand;
 
 class PersonnelController extends Controller
 {
@@ -70,45 +73,74 @@ class PersonnelController extends Controller
         return view('personnel.index', compact('labs'));
     }
 
+
     /**
      * Show a specific lab grid for assigning students to PCs
      */
     public function showLab(Lab $lab)
     {
         $currentTime = now()->format('H:i:s');
-        $currentDay = now()->format('l');
+        $currentDate = now()->toDateString();
+        $currentDay  = now()->format('l');
 
+        // 1. PRIORITY: Check for an Event in this lab TODAY during this time window
         $currentSchedule = $lab->schedules()
-            ->where('day', $currentDay)
+            ->where('is_event', true)
+            ->whereDate('event_date', $currentDate)
             ->where('start_time', '<=', $currentTime)
             ->where('end_time', '>=', $currentTime)
             ->first();
 
+        // 2. FALLBACK: Check for a regular weekly recurring class
+        if (! $currentSchedule) {
+            $currentSchedule = $lab->schedules()
+                ->where(function ($q) {
+                    $q->where('is_event', false)->orWhereNull('is_event');
+                })
+                ->where('day', $currentDay)
+                ->where('start_time', '<=', $currentTime)
+                ->where('end_time', '>=', $currentTime)
+                ->first();
+        }
+
+        // 3. STRICT LOCK ENFORCEMENT
         if ($currentSchedule) {
-            if (
-                auth()->id() !== $currentSchedule->user_id &&
-                auth()->user()->role !== 'admin'
-            ) {
+            $currentUser = auth()->user();
+            $isAdmin = $currentUser && in_array($currentUser->role, ['admin', 'superadmin']);
+
+            // If an instructor/facilitator is assigned, ONLY that exact user (or admin) can enter
+            if ($currentSchedule->user_id) {
+                $isAuthorized = $isAdmin || ((int) $currentUser->id === (int) $currentSchedule->user_id);
+            } else {
+                // If NO facilitator is assigned (open event), only admin can enter
+                $isAuthorized = $isAdmin;
+            }
+
+            if (! $isAuthorized) {
+                $reservedFor = $currentSchedule->speaker_name
+                    ?: ($currentSchedule->user?->name ?? 'another instructor');
+
                 $this->logActivity(
                     'auth',
-                    "Unauthorized attempt to access {$lab->name}, which is reserved for {$currentSchedule->user->name}.",
+                    "Unauthorized attempt to access {$lab->name}, which is reserved for {$reservedFor}.",
                     'danger',
                     $lab,
                     [
-                        'lab_id' => $lab->id,
+                        'lab_id'            => $lab->id,
                         'scheduled_user_id' => $currentSchedule->user_id,
-                        'attempted_by' => auth()->id(),
+                        'speaker_name'      => $currentSchedule->speaker_name,
+                        'attempted_by'      => auth()->id(),
                     ]
                 );
 
                 $this->flashToast(
                     'danger',
                     'Access Denied',
-                    "This lab is currently reserved for {$currentSchedule->user->name}."
+                    "This lab is currently reserved for {$reservedFor}."
                 );
 
                 return redirect()->route('personnel.index')
-                    ->with('error', "Access Denied: This lab is currently reserved for {$currentSchedule->user->name}.");
+                    ->with('error', "Access Denied: This lab is currently reserved for {$reservedFor}.");
             }
         }
 
@@ -117,15 +149,23 @@ class PersonnelController extends Controller
             ->orderBy('pc_number')
             ->get();
 
+        // Pass today's schedules (including today's events) to the view
         $schedules = $lab->schedules()
             ->with('user')
-            ->where('day', $currentDay)
+            ->where(function ($q) use ($currentDay, $currentDate) {
+                $q->where(function ($sub) use ($currentDate) {
+                    $sub->where('is_event', true)->whereDate('event_date', $currentDate);
+                })->orWhere(function ($sub) use ($currentDay) {
+                    $sub->where(function ($e) {
+                        $e->where('is_event', false)->orWhereNull('is_event');
+                    })->where('day', $currentDay);
+                });
+            })
             ->orderBy('start_time')
             ->get();
 
         return view('personnel.lab-view', compact('lab', 'computers', 'schedules', 'currentSchedule'));
     }
-
     /**
      * Assign a student to a specific computer
      */
@@ -862,5 +902,288 @@ class PersonnelController extends Controller
             'title'   => 'Roster Cleared',
             'message' => "Cleared all {$count} enrolled student(s) from {$subjectCode}.",
         ]);
+    }
+
+
+    /**
+     * Display the teacher's personal list of banned apps.
+     */
+    public function bannedApps()
+    {
+        $myBannedApps = BannedApp::where('user_id', Auth::id())
+            ->latest()
+            ->get();
+
+        return view('personnel.banned_apps', compact('myBannedApps'));
+    }
+
+    /**
+     * Store a new banned app for this teacher only.
+     */
+    /**
+     * Store a new banned app for this teacher only.
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name'         => 'required|string|max:100',
+            'process_name' => 'required|string|max:100',
+        ]);
+
+        $proc = strtolower(trim($validated['process_name']));
+
+        if (!str_ends_with($proc, '.exe')) {
+            $proc .= '.exe';
+        }
+
+        // Check if this process already exists for the authenticated user
+        $exists = BannedApp::where('user_id', Auth::id())
+            ->where('process_name', $proc)
+            ->exists();
+
+        if ($exists) {
+            $message = "The application rule for '{$proc}' is already in your restrictions.";
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                ], 422); // Unprocessable Entity code
+            }
+
+            return back()->with('toast', [
+                'type'    => 'warning',
+                'title'   => 'Already Exists',
+                'message' => $message,
+            ]);
+        }
+
+        $app = BannedApp::create([
+            'user_id'      => Auth::id(),
+            'name'         => $validated['name'],
+            'process_name' => $proc,
+        ]);
+
+        $message = "Rule for '{$proc}' added to your class restrictions.";
+
+        // AJAX requests receive JSON.
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'app'     => $app,
+            ]);
+        }
+
+        // Normal form submissions receive a session flash notification.
+        return back()->with('toast', [
+            'type'    => 'success',
+            'title'   => 'Restriction Added',
+            'message' => $message,
+        ]);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $app = BannedApp::where('user_id', Auth::id())
+            ->findOrFail($id);
+
+        $procName = $app->process_name;
+
+        $app->delete();
+
+        $message = "Removed '{$procName}' from your restrictions.";
+
+        // AJAX requests receive JSON.
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+            ]);
+        }
+
+        // Normal form submissions receive a session flash notification.
+        return back()->with('toast', [
+            'type'    => 'success',
+            'title'   => 'Restriction Removed',
+            'message' => $message,
+        ]);
+    }
+
+    private function resolveCommandTargets($labId, $target)
+    {
+        $computers = Computer::where('lab_id', $labId)->get();
+
+        if (strtolower(trim((string) $target)) === 'all') {
+            return $computers;
+        }
+
+        $requested = array_values(array_unique(array_filter(
+            array_map('trim', explode(',', (string) $target)),
+            fn($value) => $value !== ''
+        )));
+
+        if (empty($requested)) {
+            abort(response()->json([
+                'status' => 'error',
+                'message' => 'Enter at least one workstation number, or select Entire Lab.',
+            ], 422));
+        }
+
+        $normalized = collect($requested)->map(function ($value) {
+            return strtolower($value);
+        });
+
+        $matched = $computers->filter(function ($computer) use ($normalized) {
+            $pcNumber = strtolower(trim((string) $computer->pc_number));
+
+            if ($normalized->contains($pcNumber)) {
+                return true;
+            }
+
+            $pcDigits = preg_replace('/\D/', '', $pcNumber);
+
+            foreach ($normalized as $requestedNumber) {
+                if (!preg_match('/^\d+$/', $requestedNumber)) {
+                    continue;
+                }
+
+                if ($pcDigits !== '' && (int) $pcDigits === (int) $requestedNumber) {
+                    return true;
+                }
+            }
+
+            return false;
+        })->values();
+
+        if ($matched->count() !== count($requested)) {
+            $matchedNumbers = $matched->map(
+                fn($computer) => strtolower(trim((string) $computer->pc_number))
+            );
+
+            $missing = collect($requested)->filter(function ($number) use ($matchedNumbers, $computers) {
+                $digits = preg_replace('/\D/', '', $number);
+
+                return !$computers->contains(function ($computer) use ($number, $digits) {
+                    $pcNumber = strtolower(trim((string) $computer->pc_number));
+                    $pcDigits = preg_replace('/\D/', '', $pcNumber);
+
+                    return $pcNumber === strtolower($number)
+                        || ($digits !== '' && $pcDigits !== '' && (int) $digits === (int) $pcDigits);
+                });
+            })->values();
+
+            abort(response()->json([
+                'status' => 'error',
+                'message' => 'These workstations were not found in the selected lab: ' . $missing->implode(', '),
+            ], 422));
+        }
+
+        return $matched;
+    }
+
+    private function queueTerminalCommand($labId, $target, $type, $payload = null)
+    {
+        $targets = $this->resolveCommandTargets($labId, $target);
+
+        if ($targets->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No workstations exist in this laboratory.',
+            ], 422);
+        }
+
+        foreach ($targets as $computer) {
+            TerminalCommand::create([
+                'computer_id' => $computer->id,
+                'type' => $type,
+                'payload' => $payload,
+            ]);
+        }
+
+        $message = ucfirst(str_replace('_', ' ', $type))
+            . ' queued for '
+            . $targets->count()
+            . ' workstation(s).';
+
+        $this->logActivity(
+            'lab_management',
+            $message,
+            $type === 'shutdown' ? 'warning' : 'info',
+            null,
+            [
+                'lab_id' => $labId,
+                'target' => $target,
+                'computer_ids' => $targets->pluck('id')->all(),
+                'command_type' => $type,
+            ]
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $message,
+            'target_count' => $targets->count(),
+        ]);
+    }
+
+    public function broadcast(Request $request, $labId)
+    {
+        $validated = $request->validate([
+            'message' => 'required|string|max:2000',
+            'target' => 'required|string|max:1000',
+        ]);
+
+        abort_unless(
+            \App\Models\Lab::whereKey($labId)->exists(),
+            404,
+            'Laboratory not found.'
+        );
+
+        return $this->queueTerminalCommand(
+            $labId,
+            $validated['target'],
+            'broadcast',
+            trim($validated['message'])
+        );
+    }
+
+    public function pushUrl(Request $request, $labId)
+    {
+        $validated = $request->validate([
+            'url' => 'required|url:http,https|max:2048',
+            'target' => 'required|string|max:1000',
+        ]);
+
+        abort_unless(
+            \App\Models\Lab::whereKey($labId)->exists(),
+            404,
+            'Laboratory not found.'
+        );
+
+        return $this->queueTerminalCommand(
+            $labId,
+            $validated['target'],
+            'open_url',
+            trim($validated['url'])
+        );
+    }
+
+    public function shutdownWorkstations(Request $request, $labId)
+    {
+        $validated = $request->validate([
+            'target' => 'required|string|max:1000',
+        ]);
+
+        abort_unless(
+            \App\Models\Lab::whereKey($labId)->exists(),
+            404,
+            'Laboratory not found.'
+        );
+
+        return $this->queueTerminalCommand(
+            $labId,
+            $validated['target'],
+            'shutdown'
+        );
     }
 }

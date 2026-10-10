@@ -33,10 +33,12 @@ class LabController extends Controller
             },
         ])->get();
 
-        return view(
-            'dashboard.labs.index',
-            compact('labs')
-        );
+        // Dynamically choose view based on URL path context
+        $viewPath = request()->is('super-admin*')
+            ? 'super-admin.labs'
+            : 'dashboard.labs.index';
+
+        return view($viewPath, compact('labs'));
     }
 
     public function viewSchedule(Lab $lab)
@@ -45,92 +47,41 @@ class LabController extends Controller
         $currentTime = now()->format('H:i:s');
 
         // 1. Fetch upcoming & ongoing events
-        $activeEvents = Schedule::where(
-            'lab_id',
-            $lab->id
-        )
-            ->where(
-                'is_event',
-                true
-            )
-            ->where(function ($q) use (
-                $todayDate,
-                $currentTime
-            ) {
-                $q->whereDate(
-                    'event_date',
-                    '>',
-                    $todayDate
-                )
-                    ->orWhere(function (
-                        $todayQ
-                    ) use (
-                        $todayDate,
-                        $currentTime
-                    ) {
-                        $todayQ->whereDate(
-                            'event_date',
-                            $todayDate
-                        )
-                            ->whereTime(
-                                'end_time',
-                                '>=',
-                                $currentTime
-                            );
+        $activeEvents = Schedule::where('lab_id', $lab->id)
+            ->where('is_event', true)
+            ->where(function ($q) use ($todayDate, $currentTime) {
+                $q->whereDate('event_date', '>', $todayDate)
+                    ->orWhere(function ($todayQ) use ($todayDate, $currentTime) {
+                        $todayQ->whereDate('event_date', $todayDate)
+                            ->whereTime('end_time', '>=', $currentTime);
                     });
             })
             ->get();
 
         // 2. Fetch all recurring classes
-        $allClasses = Schedule::where(
-            'lab_id',
-            $lab->id
-        )
-            ->where(
-                'is_event',
-                false
-            )
+        $allClasses = Schedule::where('lab_id', $lab->id)
+            ->where('is_event', false)
             ->with('user')
             ->get();
 
         // 3. Hide regular classes that collide with an active event
-        $visibleClasses = $allClasses->filter(
-            function ($class) use ($activeEvents) {
-                $isMasked = $activeEvents->contains(
-                    function ($event) use ($class) {
-                        return $event->day === $class->day
-                            && Carbon::parse(
-                                $event->event_date
-                            )->isSameWeek(now())
-                            && $event->start_time < $class->end_time
-                            && $event->end_time > $class->start_time;
-                    }
-                );
+        $visibleClasses = $allClasses->filter(function ($class) use ($activeEvents) {
+            $isMasked = $activeEvents->contains(function ($event) use ($class) {
+                return $event->day === $class->day
+                    && Carbon::parse($event->event_date)->isSameWeek(now())
+                    && $event->start_time < $class->end_time
+                    && $event->end_time > $class->start_time;
+            });
 
-                return !$isMasked;
-            }
-        );
+            return !$isMasked;
+        });
 
         // 4. Attach live attendee counts to events
         foreach ($activeEvents as $event) {
-            $event->attendees_count = LabSession::where(
-                'lab_id',
-                $lab->id
-            )
-                ->whereDate(
-                    'time_in',
-                    $event->event_date
-                )
-                ->whereTime(
-                    'time_in',
-                    '>=',
-                    $event->start_time
-                )
-                ->whereTime(
-                    'time_in',
-                    '<=',
-                    $event->end_time
-                )
+            $event->attendees_count = LabSession::where('lab_id', $lab->id)
+                ->whereDate('time_in', $event->event_date)
+                ->whereTime('time_in', '>=', $event->start_time)
+                ->whereTime('time_in', '<=', $event->end_time)
                 ->count();
         }
 
@@ -139,192 +90,74 @@ class LabController extends Controller
             ->concat($activeEvents)
             ->sortBy('start_time');
 
-        // 6. Fetch past completed events
-        $pastEvents = Schedule::where(
-            'lab_id',
-            $lab->id
-        )
-            ->where(
-                'is_event',
-                true
-            )
-            ->where(function ($q) use (
-                $todayDate,
-                $currentTime
-            ) {
-                $q->whereDate(
-                    'event_date',
-                    '<',
-                    $todayDate
-                )
-                    ->orWhere(function (
-                        $todayQ
-                    ) use (
-                        $todayDate,
-                        $currentTime
-                    ) {
-                        $todayQ->whereDate(
-                            'event_date',
-                            $todayDate
-                        )
-                            ->whereTime(
-                                'end_time',
-                                '<',
-                                $currentTime
-                            );
+        // 6. Fetch past completed events (Guaranteed to return a collection, never null)
+        $pastEvents = Schedule::where('lab_id', $lab->id)
+            ->where('is_event', true)
+            ->where(function ($q) use ($todayDate, $currentTime) {
+                $q->whereDate('event_date', '<', $todayDate)
+                    ->orWhere(function ($todayQ) use ($todayDate, $currentTime) {
+                        $todayQ->whereDate('event_date', $todayDate)
+                            ->whereTime('end_time', '<', $currentTime);
                     });
             })
             ->latest('event_date')
-            ->get();
+            ->get() ?? collect();
 
         foreach ($pastEvents as $pe) {
-            $pe->attendees_count = LabSession::where(
-                'lab_id',
-                $lab->id
-            )
-                ->whereDate(
-                    'time_in',
-                    $pe->event_date
-                )
-                ->whereTime(
-                    'time_in',
-                    '>=',
-                    $pe->start_time
-                )
-                ->whereTime(
-                    'time_in',
-                    '<=',
-                    $pe->end_time
-                )
+            $pe->attendees_count = LabSession::where('lab_id', $lab->id)
+                ->whereDate('time_in', $pe->event_date)
+                ->whereTime('time_in', '>=', $pe->start_time)
+                ->whereTime('time_in', '<=', $pe->end_time)
                 ->count();
         }
 
-        $teachers = User::whereIn(
-            'role',
-            [
-                'personnel',
-                'teacher',
-                'admin'
-            ]
-        )
+        $teachers = User::whereIn('role', ['personnel', 'teacher', 'admin'])
             ->orderBy('name')
             ->get();
 
-        return view(
-            'dashboard.labs.schedule',
-            compact(
-                'lab',
-                'schedules',
-                'pastEvents',
-                'teachers'
-            )
-        );
+        // Dynamically choose view path based on URL context
+        $viewPath = request()->is('super-admin*')
+            ? 'super-admin.schedule'
+            : 'dashboard.labs.schedule';
+
+        return view($viewPath, compact('lab', 'schedules', 'pastEvents', 'teachers'));
     }
 
     /**
      * Check for Overlaps Before Submission
      */
-    public function checkConflict(
-        Request $request,
-        $labId
-    ) {
-        $isEvent = $request->input(
-            'schedule_type'
-        ) === 'event';
-
-        $startTime = $request->input(
-            'start_time'
-        );
-
-        $endTime = $request->input(
-            'end_time'
-        );
-
-        $eventDate = $request->input(
-            'event_date'
-        );
+    public function checkConflict(Request $request, $labId)
+    {
+        $isEvent = $request->input('schedule_type') === 'event';
+        $startTime = $request->input('start_time');
+        $endTime = $request->input('end_time');
+        $eventDate = $request->input('event_date');
 
         $day = $isEvent
-            ? (
-                $eventDate
-                ? Carbon::parse(
-                    $eventDate
-                )->format('l')
-                : null
-            )
-            : $request->input(
-                'day'
-            );
+            ? ($eventDate ? Carbon::parse($eventDate)->format('l') : null)
+            : $request->input('day');
 
-        if (
-            !$startTime
-            || !$endTime
-            || (!$day && !$eventDate)
-        ) {
+        if (!$startTime || !$endTime || (!$day && !$eventDate)) {
             return response()->json([
                 'has_conflict' => false
             ]);
         }
 
-        $conflict = Schedule::where(
-            'lab_id',
-            $labId
-        )
-            ->where(function ($q) use (
-                $isEvent,
-                $eventDate,
-                $day
-            ) {
+        $conflict = Schedule::where('lab_id', $labId)
+            ->where(function ($q) use ($isEvent, $eventDate, $day) {
                 if ($isEvent) {
-                    $q->where(function (
-                        $sub
-                    ) use (
-                        $eventDate
-                    ) {
-                        $sub->where(
-                            'is_event',
-                            true
-                        )
-                            ->whereDate(
-                                'event_date',
-                                $eventDate
-                            );
-                    })
-                        ->orWhere(function (
-                            $sub
-                        ) use (
-                            $day
-                        ) {
-                            $sub->where(
-                                'is_event',
-                                false
-                            )
-                                ->where(
-                                    'day',
-                                    $day
-                                );
-                        });
+                    $q->where(function ($sub) use ($eventDate) {
+                        $sub->where('is_event', true)->whereDate('event_date', $eventDate);
+                    })->orWhere(function ($sub) use ($day) {
+                        $sub->where('is_event', false)->where('day', $day);
+                    });
                 } else {
-                    $q->where(
-                        'day',
-                        $day
-                    );
+                    $q->where('day', $day);
                 }
             })
-            ->where(function ($q) use (
-                $startTime,
-                $endTime
-            ) {
-                $q->where(
-                    'start_time',
-                    '<',
-                    $endTime
-                )
-                    ->where(
-                        'end_time',
-                        '>',
-                        $startTime
-                    );
+            ->where(function ($q) use ($startTime, $endTime) {
+                $q->where('start_time', '<', $endTime)
+                    ->where('end_time', '>', $startTime);
             })
             ->with('user')
             ->first();
@@ -333,35 +166,14 @@ class LabController extends Controller
             return response()->json([
                 'has_conflict' => true,
                 'conflict' => [
-                    'subject_code' =>
-                    $conflict->subject_code
-                        ?? 'Reservation',
-
-                    'host_name' =>
-                    $conflict->is_event
-                        ? (
-                            $conflict->speaker_name
-                            ?? 'Guest Speaker'
-                        )
-                        : (
-                            $conflict->user->name
-                            ?? 'Instructor'
-                        ),
-
-                    'is_event' =>
-                    (bool) $conflict->is_event,
-
-                    'day' =>
-                    $conflict->day,
-
-                    'time_window' =>
-                    Carbon::parse(
-                        $conflict->start_time
-                    )->format('h:i A')
-                        . ' — ' .
-                        Carbon::parse(
-                            $conflict->end_time
-                        )->format('h:i A'),
+                    'subject_code' => $conflict->subject_code ?? 'Reservation',
+                    'host_name' => $conflict->is_event
+                        ? ($conflict->speaker_name ?? 'Guest Speaker')
+                        : ($conflict->user->name ?? 'Instructor'),
+                    'is_event' => (bool) $conflict->is_event,
+                    'day' => $conflict->day,
+                    'time_window' => Carbon::parse($conflict->start_time)->format('h:i A')
+                        . ' — ' . Carbon::parse($conflict->end_time)->format('h:i A'),
                 ]
             ]);
         }
@@ -374,105 +186,41 @@ class LabController extends Controller
     /**
      * Store Schedule or Event
      */
-    public function storeSchedule(
-        Request $request,
-        $labId
-    ) {
-        $isEvent = $request->input(
-            'schedule_type'
-        ) === 'event';
+    public function storeSchedule(Request $request, $labId)
+    {
+        $isEvent = $request->input('schedule_type') === 'event';
 
         $request->validate([
-            'schedule_type' =>
-            'required|in:class,event',
-
-            'user_id' =>
-            $isEvent
-                ? 'nullable'
-                : 'required|exists:users,id',
-
-            'speaker_name' =>
-            $isEvent
-                ? 'required|string|max:255'
-                : 'nullable',
-
-            'event_date' =>
-            $isEvent
-                ? 'required|date|after_or_equal:today'
-                : 'nullable',
-
-            'day' =>
-            $isEvent
-                ? 'nullable'
-                : 'required|string',
-
-            'subject_code' =>
-            'required|string|max:100',
-
-            'start_time' =>
-            'required',
-
-            'end_time' =>
-            'required|after:start_time',
+            'schedule_type' => 'required|in:class,event',
+            'user_id' => $isEvent ? 'nullable|exists:users,id' : 'required|exists:users,id',
+            'speaker_name' => $isEvent ? 'required|string|max:255' : 'nullable',
+            'event_date' => $isEvent ? 'required|date|after_or_equal:today' : 'nullable',
+            'day' => $isEvent ? 'nullable' : 'required|string',
+            'subject_code' => 'required|string|max:100',
+            'start_time' => 'required',
+            'end_time' => 'required|after:start_time',
         ]);
 
         $day = $isEvent
-            ? Carbon::parse(
-                $request->event_date
-            )->format('l')
+            ? Carbon::parse($request->event_date)->format('l')
             : $request->day;
 
         Schedule::create([
-            'lab_id' =>
-            $labId,
-
-            'is_event' =>
-            $isEvent,
-
-            'event_date' =>
-            $isEvent
-                ? $request->event_date
-                : null,
-
-            'user_id' =>
-            $isEvent
-                ? null
-                : $request->user_id,
-
-            'speaker_name' =>
-            $isEvent
-                ? $request->speaker_name
-                : null,
-
-            'day' =>
-            $day,
-
-            'subject_code' =>
-            strtoupper(
-                trim(
-                    $request->subject_code
-                )
-            ),
-
-            'start_time' =>
-            $request->start_time,
-
-            'end_time' =>
-            $request->end_time,
+            'lab_id' => $labId,
+            'is_event' => $isEvent,
+            'event_date' => $isEvent ? $request->event_date : null,
+            'user_id' => $request->filled('user_id') ? $request->user_id : null,
+            'speaker_name' => $isEvent ? $request->speaker_name : null,
+            'day' => $day,
+            'subject_code' => strtoupper(trim($request->subject_code)),
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
         ]);
 
         if ($isEvent) {
-            $this->flashToast(
-                'success',
-                'Event Scheduled',
-                'Event scheduled successfully. Overlapping classes are masked for the event date.'
-            );
+            $this->flashToast('success', 'Event Scheduled', 'Event scheduled successfully. Overlapping classes are masked for the event date.');
         } else {
-            $this->flashToast(
-                'success',
-                'Class Scheduled',
-                'Class schedule established successfully.'
-            );
+            $this->flashToast('success', 'Class Scheduled', 'Class schedule established successfully.');
         }
 
         return back();
@@ -481,430 +229,215 @@ class LabController extends Controller
     /**
      * Stream CSV of Event Attendees
      */
-    public function exportEventAttendance(
-        Schedule $schedule
-    ) {
-        $filename =
-            "Attendance_"
-            . str_replace(
-                ' ',
-                '_',
-                $schedule->subject_code
-            )
-            . "_"
-            . (
-                $schedule->event_date
-                ?? now()->toDateString()
-            )
+    public function exportEventAttendance(Schedule $schedule)
+    {
+        $filename = "Attendance_"
+            . str_replace(' ', '_', $schedule->subject_code)
+            . "_" . ($schedule->event_date ?? now()->toDateString())
             . ".csv";
 
-        $sessions = LabSession::with(
-            'computer'
-        )
-            ->where(
-                'lab_id',
-                $schedule->lab_id
-            )
-            ->whereDate(
-                'time_in',
-                $schedule->event_date
-            )
-            ->whereTime(
-                'time_in',
-                '>=',
-                $schedule->start_time
-            )
-            ->whereTime(
-                'time_in',
-                '<=',
-                $schedule->end_time
-            )
+        $sessions = LabSession::with('computer')
+            ->where('lab_id', $schedule->lab_id)
+            ->whereDate('time_in', $schedule->event_date)
+            ->whereTime('time_in', '>=', $schedule->start_time)
+            ->whereTime('time_in', '<=', $schedule->end_time)
             ->orderBy('time_in')
             ->get();
 
         $headers = [
-            "Content-type" =>
-            "text/csv; charset=UTF-8",
-
-            "Content-Disposition" =>
-            "attachment; filename={$filename}",
-
-            "Pragma" =>
-            "no-cache",
-
-            "Cache-Control" =>
-            "must-revalidate, post-check=0, pre-check=0",
-
-            "Expires" =>
-            "0"
+            "Content-type"        => "text/csv; charset=UTF-8",
+            "Content-Disposition" => "attachment; filename={$filename}",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
         ];
 
-        return response()->stream(
-            function () use (
-                $sessions,
-                $schedule
-            ) {
-                $handle = fopen(
-                    'php://output',
-                    'w'
-                );
+        return response()->stream(function () use ($sessions, $schedule) {
+            $handle = fopen('php://output', 'w');
+            fprintf($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
-                fprintf(
-                    $handle,
-                    chr(0xEF)
-                        . chr(0xBB)
-                        . chr(0xBF)
-                );
+            fputcsv($handle, ['EVENT / TOPIC', $schedule->subject_code]);
+            fputcsv($handle, ['SPEAKER / HOST', $schedule->speaker_name ?? 'Guest Speaker']);
+            fputcsv($handle, ['EVENT DATE', $schedule->event_date]);
+            fputcsv($handle, ['TIME WINDOW', Carbon::parse($schedule->start_time)->format('h:i A') . ' - ' . Carbon::parse($schedule->end_time)->format('h:i A')]);
+            fputcsv($handle, ['TOTAL ATTENDEES', $sessions->count()]);
+            fputcsv($handle, []);
+            fputcsv($handle, ['#', 'Student Name', 'Student ID Number', 'Workstation', 'Time In', 'Time Out', 'Session Duration']);
 
-                fputcsv(
-                    $handle,
-                    [
-                        'EVENT / TOPIC',
-                        $schedule->subject_code
-                    ]
-                );
+            foreach ($sessions as $i => $s) {
+                fputcsv($handle, [
+                    $i + 1,
+                    $s->student_name,
+                    $s->student_id_number,
+                    $s->computer->pc_number ?? 'PC-??',
+                    $s->time_in ? Carbon::parse($s->time_in)->format('h:i A') : 'N/A',
+                    $s->time_out ? Carbon::parse($s->time_out)->format('h:i A') : 'Active',
+                    $s->time_out ? Carbon::parse($s->time_in)->diffForHumans(Carbon::parse($s->time_out), true) : 'Ongoing',
+                ]);
+            }
 
-                fputcsv(
-                    $handle,
-                    [
-                        'SPEAKER / HOST',
-                        $schedule->speaker_name
-                            ?? 'Guest Speaker'
-                    ]
-                );
-
-                fputcsv(
-                    $handle,
-                    [
-                        'EVENT DATE',
-                        $schedule->event_date
-                    ]
-                );
-
-                fputcsv(
-                    $handle,
-                    [
-                        'TIME WINDOW',
-                        Carbon::parse(
-                            $schedule->start_time
-                        )->format('h:i A')
-                            . ' - ' .
-                            Carbon::parse(
-                                $schedule->end_time
-                            )->format('h:i A')
-                    ]
-                );
-
-                fputcsv(
-                    $handle,
-                    [
-                        'TOTAL ATTENDEES',
-                        $sessions->count()
-                    ]
-                );
-
-                fputcsv(
-                    $handle,
-                    []
-                );
-
-                fputcsv(
-                    $handle,
-                    [
-                        '#',
-                        'Student Name',
-                        'Student ID Number',
-                        'Workstation',
-                        'Time In',
-                        'Time Out',
-                        'Session Duration'
-                    ]
-                );
-
-                foreach (
-                    $sessions as $i => $s
-                ) {
-                    fputcsv(
-                        $handle,
-                        [
-                            $i + 1,
-
-                            $s->student_name,
-
-                            $s->student_id_number,
-
-                            $s->computer->pc_number
-                                ?? 'PC-??',
-
-                            $s->time_in
-                                ? Carbon::parse(
-                                    $s->time_in
-                                )->format('h:i A')
-                                : 'N/A',
-
-                            $s->time_out
-                                ? Carbon::parse(
-                                    $s->time_out
-                                )->format('h:i A')
-                                : 'Active',
-
-                            $s->time_out
-                                ? Carbon::parse(
-                                    $s->time_in
-                                )->diffForHumans(
-                                    Carbon::parse(
-                                        $s->time_out
-                                    ),
-                                    true
-                                )
-                                : 'Ongoing',
-                        ]
-                    );
-                }
-
-                fclose($handle);
-            },
-            200,
-            $headers
-        );
+            fclose($handle);
+        }, 200, $headers);
     }
 
-    public function destroySchedule(
-        Request $request,
-        $id
-    ) {
-        $schedule = Schedule::findOrFail(
-            $id
-        );
-
+    public function destroySchedule(Request $request, $id)
+    {
+        $schedule = Schedule::findOrFail($id);
         $labId = $schedule->lab_id;
-
-        $day = $request->input(
-            'day',
-            'All'
-        );
-
-        $scheduleType = $schedule->is_event
-            ? 'Event'
-            : 'Class';
+        $day = $request->input('day', 'All');
+        $scheduleType = $schedule->is_event ? 'Event' : 'Class';
 
         $schedule->delete();
 
-        $this->flashToast(
-            'success',
-            "{$scheduleType} Removed",
-            "{$scheduleType} slot revoked successfully."
-        );
+        $this->flashToast('success', "{$scheduleType} Removed", "{$scheduleType} slot revoked successfully.");
 
-        return redirect()->route(
-            'dashboard.labs.schedule',
-            [
-                'lab' => $labId,
-                'day' => $day
-            ]
-        );
+        // Dynamically direct back to correct prefix path
+        $routePrefix = request()->is('super-admin*') ? 'super-admin.' : 'dashboard.';
+
+        return redirect()->route($routePrefix . 'labs.schedule', [
+            'lab' => $labId,
+            'day' => $day
+        ]);
     }
 
-    public function destroyByDay(
-        Request $request,
-        $labId
-    ) {
-        $day = $request->input(
-            'day',
-            'All'
-        );
-
+    public function destroyByDay(Request $request, $labId)
+    {
+        $day = $request->input('day', 'All');
         $todayDate = now()->toDateString();
         $currentTime = now()->format('H:i:s');
 
-        // Query only regular classes OR active/upcoming events (NEVER past archived events)
-        $query = Schedule::where(
-            'lab_id',
-            $labId
-        )->where(function ($q) use (
-            $todayDate,
-            $currentTime
-        ) {
-            // 1. Regular recurring classes
-            $q->where(
-                'is_event',
-                false
-            )
-                // 2. OR active/future events only
-                ->orWhere(function ($activeEventQ) use (
-                    $todayDate,
-                    $currentTime
-                ) {
-                    $activeEventQ->where(
-                        'is_event',
-                        true
-                    )->where(function ($timeQ) use (
-                        $todayDate,
-                        $currentTime
-                    ) {
-                        $timeQ->whereDate(
-                            'event_date',
-                            '>',
-                            $todayDate
-                        )->orWhere(function ($todayQ) use (
-                            $todayDate,
-                            $currentTime
-                        ) {
-                            $todayQ->whereDate(
-                                'event_date',
-                                $todayDate
-                            )->whereTime(
-                                'end_time',
-                                '>=',
-                                $currentTime
-                            );
-                        });
+        $query = Schedule::where('lab_id', $labId)->where(function ($q) use ($todayDate, $currentTime) {
+            $q->where('is_event', false)
+                ->orWhere(function ($activeEventQ) use ($todayDate, $currentTime) {
+                    $activeEventQ->where('is_event', true)->where(function ($timeQ) use ($todayDate, $currentTime) {
+                        $timeQ->whereDate('event_date', '>', $todayDate)
+                            ->orWhere(function ($todayQ) use ($todayDate, $currentTime) {
+                                $todayQ->whereDate('event_date', $todayDate)
+                                    ->whereTime('end_time', '>=', $currentTime);
+                            });
                     });
                 });
         });
 
-        if (
-            $day
-            && $day !== 'All'
-        ) {
-            $deletedCount = $query->where(
-                'day',
-                $day
-            )->delete();
-
-            $message =
-                "Active slots for {$day} "
-                . "revoked successfully. Past event archives were preserved.";
-
+        if ($day && $day !== 'All') {
+            $deletedCount = $query->where('day', $day)->delete();
+            $message = "Active slots for {$day} revoked successfully. Past event archives were preserved.";
             $title = "Day Schedule Cleared";
         } else {
             $deletedCount = $query->delete();
-
-            $message =
-                "All active laboratory schedule slots "
-                . "revoked successfully. Past event archives were preserved.";
-
+            $message = "All active laboratory schedule slots revoked successfully. Past event archives were preserved.";
             $title = "All Schedules Cleared";
         }
 
         if ($deletedCount > 0) {
-            $this->flashToast(
-                'success',
-                $title,
-                $message
-            );
+            $this->flashToast('success', $title, $message);
         } else {
-            $this->flashToast(
-                'info',
-                'Nothing to Remove',
-                'There were no active schedule slots to revoke.'
-            );
+            $this->flashToast('info', 'Nothing to Remove', 'There were no active schedule slots to revoke.');
         }
 
-        return redirect()->route(
-            'dashboard.labs.schedule',
-            [
-                'lab' => $labId,
-                'day' => $day
-            ]
-        );
+        $routePrefix = request()->is('super-admin*') ? 'super-admin.' : 'dashboard.';
+
+        return redirect()->route($routePrefix . 'labs.schedule', [
+            'lab' => $labId,
+            'day' => $day
+        ]);
     }
 
-    public function update(
-        Request $request,
-        Lab $lab
-    ) {
+    public function update(Request $request, Lab $lab)
+    {
         $validated = $request->validate([
-            'name' =>
-            'required|string|max:255',
-
-            'location' =>
-            'required|string|max:255',
-
-            'pc_count' =>
-            'required|integer|min:1|max:60',
+            'name' => 'required|string|max:255',
+            'location' => 'required|string|max:255',
+            'pc_count' => 'required|integer|min:1|max:60',
         ]);
 
         $lab->update([
-            'name' =>
-            $validated['name'],
-
-            'location' =>
-            $validated['location'],
+            'name' => $validated['name'],
+            'location' => $validated['location'],
         ]);
 
         $currentCount = $lab->computers()->count();
-
-        $targetCount = (int)
-        $validated['pc_count'];
+        $targetCount = (int) $validated['pc_count'];
 
         $unitsAdded = 0;
         $unitsRemoved = 0;
 
-        if (
-            $targetCount
-            > $currentCount
-        ) {
-            $unitsAdded =
-                $targetCount
-                - $currentCount;
-
-            for (
-                $i = 1;
-                $i <= $unitsAdded;
-                $i++
-            ) {
-                $nextPcNumber =
-                    $currentCount + $i;
-
+        if ($targetCount > $currentCount) {
+            $unitsAdded = $targetCount - $currentCount;
+            for ($i = 1; $i <= $unitsAdded; $i++) {
+                $nextPcNumber = $currentCount + $i;
                 $lab->computers()->create([
-                    'pc_number' =>
-                    'PC-'
-                        . str_pad(
-                            $nextPcNumber,
-                            2,
-                            '0',
-                            STR_PAD_LEFT
-                        ),
-
-                    'status' =>
-                    'available',
+                    'pc_number' => 'PC-' . str_pad($nextPcNumber, 2, '0', STR_PAD_LEFT),
+                    'status' => 'available',
                 ]);
             }
-        } elseif (
-            $targetCount
-            < $currentCount
-        ) {
-            $unitsRemoved =
-                $currentCount
-                - $targetCount;
-
-            $lab->computers()
-                ->latest('id')
-                ->take($unitsRemoved)
-                ->delete();
+        } elseif ($targetCount < $currentCount) {
+            $unitsRemoved = $currentCount - $targetCount;
+            $lab->computers()->latest('id')->take($unitsRemoved)->delete();
         }
 
         if ($unitsAdded > 0) {
-            $this->flashToast(
-                'success',
-                'Lab Updated',
-                "Laboratory details updated and {$unitsAdded} computer unit(s) added successfully."
-            );
+            $this->flashToast('success', 'Lab Updated', "Laboratory details updated and {$unitsAdded} computer unit(s) added successfully.");
         } elseif ($unitsRemoved > 0) {
-            $this->flashToast(
-                'success',
-                'Lab Updated',
-                "Laboratory details updated and {$unitsRemoved} computer unit(s) removed successfully."
-            );
+            $this->flashToast('success', 'Lab Updated', "Laboratory details updated and {$unitsRemoved} computer unit(s) removed successfully.");
         } else {
-            $this->flashToast(
-                'success',
-                'Lab Updated',
-                'Laboratory details and unit capacity updated successfully.'
-            );
+            $this->flashToast('success', 'Lab Updated', 'Laboratory details and unit capacity updated successfully.');
         }
 
         return redirect()->back();
+    }
+
+    /**
+     * Store a newly created laboratory facility.
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'name'     => 'required|string|max:255',
+            'location' => 'required|string|max:255',
+            'pc_count' => 'required|integer|min:1|max:60',
+        ]);
+
+        $lab = Lab::create([
+            'name'     => $validated['name'],
+            'location' => $validated['location'],
+        ]);
+
+        for ($i = 1; $i <= (int)$validated['pc_count']; $i++) {
+            $lab->computers()->create([
+                'pc_number' => 'PC-' . str_pad($i, 2, '0', STR_PAD_LEFT),
+                'status'    => 'available',
+            ]);
+        }
+
+        $this->flashToast(
+            'success',
+            'Facility Initialized',
+            "Laboratory '{$lab->name}' created successfully with {$validated['pc_count']} unit(s)."
+        );
+
+        return redirect()->back();
+    }
+
+    /**
+     * Permanently delete a laboratory facility and its units.
+     */
+    public function destroy(Lab $lab)
+    {
+        $labName = $lab->name;
+
+        $lab->computers()->delete();
+        $lab->schedules()->delete();
+        $lab->delete();
+
+        $this->flashToast(
+            'success',
+            'Facility Removed',
+            "Laboratory '{$labName}' has been permanently deleted."
+        );
+
+        $routePrefix = request()->is('super-admin*') ? 'super-admin.' : 'dashboard.';
+
+        return redirect()->route($routePrefix . 'labs');
     }
 }

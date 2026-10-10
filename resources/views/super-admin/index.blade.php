@@ -271,9 +271,7 @@
                             <span class="size-2 bg-amber-500 rounded-full animate-ping"></span>
                             <span class="text-xs font-black text-amber-900 uppercase">Lockdown Active</span>
                         </div>
-                        <button @click="restoreModal = true" type="button" class="text-[9px] font-black uppercase bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-lg transition">
-                            Clear
-                        </button>
+
                     </div>
                     @endif
 

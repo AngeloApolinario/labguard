@@ -194,6 +194,15 @@ Route::middleware([
     Route::post('/release/{computer}', [PersonnelController::class, 'release'])->name('release');
     // Terminate All PCs in Lab
     Route::post('/terminate-all/{labId}', [PersonnelController::class, 'terminateAll'])->name('terminateAll');
+    //BROADCAST, SEND URL, AND SHUTDOWN TERMINAL
+    Route::post('/broadcast/{labId}', [PersonnelController::class, 'broadcast'])
+        ->name('broadcast');
+
+    Route::post('/push-url/{labId}', [PersonnelController::class, 'pushUrl'])
+        ->name('push-url');
+
+    Route::post('/shutdown/{labId}', [PersonnelController::class, 'shutdownWorkstations'])
+        ->name('shutdown');
 
     // SCHEDULES & REPORT EXPORTS
     Route::get('/schedule-overview', [PersonnelController::class, 'fullSchedule'])->name('full-schedule');
@@ -202,6 +211,11 @@ Route::middleware([
     Route::post('/enroll-student', [PersonnelController::class, 'enrollStudent'])->name('enroll');
     Route::delete('/unenroll/{enrollment}', [PersonnelController::class, 'unenrollStudent'])->name('unenroll');
     Route::delete('/clear-roster', [PersonnelController::class, 'clearRoster'])->name('clear-roster');
+
+    //BANNED APPS 
+
+    Route::post('/banned-apps', [PersonnelController::class, 'store'])->name('banned_apps.store');
+    Route::delete('/banned-apps/{id}', [PersonnelController::class, 'destroy'])->name('banned_apps.destroy');
 
     // LOGS & ALERTS
     Route::get('/sessions', [PersonnelController::class, 'sessionHistory'])->name('sessions');
@@ -249,12 +263,21 @@ Route::middleware([
     Route::post('/users/import', [SuperAdminController::class, 'import'])->name('users.import');
 
 
-    // GLOBAL LAB INVENTORY & SCHEDULING
-    Route::get('/labs', [SuperAdminController::class, 'labs'])->name('labs');
-    Route::get('/labs/{lab}', [SuperAdminController::class, 'show'])->name('labs.show');
-    Route::get('/labs/{lab}/schedule', [SuperAdminController::class, 'viewSchedule'])->name('labs.schedule');
-    Route::post('/labs/{lab}/schedule', [SuperAdminController::class, 'storeSchedule'])->name('labs.schedule.store');
-    Route::delete('/schedule/{schedule}', [SuperAdminController::class, 'destroySchedule'])->name('labs.schedule.destroy');
+    // GLOBAL LAB INVENTORY & SCHEDULING (Reusing LabController securely)
+    Route::get('/labs', [LabController::class, 'index'])->name('labs');
+    Route::post('/labs', [LabController::class, 'store'])->name('labs.store'); // FIXED: Changed from index to store
+    Route::put('/labs/{lab}', [LabController::class, 'update'])->name('labs.update');
+    Route::delete('/labs/{lab}', [LabController::class, 'destroy'])->name('labs.destroy');
+
+    Route::get('/labs/{lab}/schedule', [LabController::class, 'viewSchedule'])->name('labs.schedule');
+    Route::post('/labs/{lab}/schedule', [LabController::class, 'storeSchedule'])->name('labs.schedule.store');
+    Route::delete('/schedule/{schedule}', [LabController::class, 'destroySchedule'])->name('labs.schedule.destroy');
+    Route::delete('/labs/{lab}/schedule/day', [LabController::class, 'destroyByDay'])->name('labs.schedule.destroyByDay');
+    Route::post('/labs/{lab}/schedule/check-conflict', [LabController::class, 'checkConflict'])
+        ->name('labs.schedule.checkConflict');
+    Route::get('/labs/schedule/event/{schedule}/attendance', [LabController::class, 'exportEventAttendance'])
+        ->name('labs.schedule.exportEvent');
+
 
     // GLOBAL SESSIONS & SYSTEM ALERTS
     Route::get('/sessions', [SuperAdminController::class, 'sessions'])->name('sessions');

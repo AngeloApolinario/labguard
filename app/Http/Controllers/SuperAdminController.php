@@ -195,14 +195,30 @@ class SuperAdminController extends Controller
     // USER MANAGEMENT
     // ==========================================================
 
-    public function userManagement()
-    {
-        $users = User::orderBy('role', 'asc')
-            ->orderBy('name', 'asc')
-            ->paginate(15);
+public function userManagement(Request $request)
+{
+    $search = $request->input('search');
+    $role = $request->input('role');
 
-        return view('super-admin.user-management', compact('users'));
-    }
+    $users = User::query()
+        ->where('role', '!=', 'super-admin')
+        ->when($search, function ($query, $search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('student_number', 'like', "%{$search}%");
+            });
+        })
+        ->when($role, function ($query, $role) {
+            $query->where('role', $role);
+        })
+        ->orderBy('created_at', 'desc')
+        ->paginate(10)
+        ->withQueryString();
+
+    return view('super-admin.user-management', compact('users'));
+}
+
 
     public function storeUser(Request $request)
     {
@@ -1420,6 +1436,7 @@ class SuperAdminController extends Controller
     // USER CSV IMPORT
     // ==========================================================
 
+
     public function import(Request $request)
     {
         $request->validate([
@@ -1428,66 +1445,184 @@ class SuperAdminController extends Controller
 
         $file = $request->file('file');
 
-        if (!$file || !($handle = fopen($file->getRealPath(), 'r'))) {
-            $this->flashToast('danger', 'Import Failed', 'Could not open uploaded file.');
-            return back()->withErrors(['file' => 'Could not open uploaded file.']);
+        if (!$file) {
+            $this->flashToast(
+                'danger',
+                'Import Failed',
+                'Could not open uploaded file.'
+            );
+
+            return back()->withErrors([
+                'file' => 'Could not open uploaded file.'
+            ]);
         }
 
+        /*
+    |--------------------------------------------------------------------------
+    | Read and normalize CSV encoding
+    |--------------------------------------------------------------------------
+    */
+
+        $contents = file_get_contents($file->getRealPath());
+
+        if ($contents === false) {
+            $this->flashToast(
+                'danger',
+                'Import Failed',
+                'Could not read uploaded file.'
+            );
+
+            return back()->withErrors([
+                'file' => 'Could not read uploaded file.'
+            ]);
+        }
+
+        // Remove UTF-8 BOM if the CSV was exported by Excel.
+        if (substr($contents, 0, 3) === "\xEF\xBB\xBF") {
+            $contents = substr($contents, 3);
+        }
+
+        // Convert legacy Windows-1252 CSV content to UTF-8.
+        // Already-valid UTF-8 files are left unchanged.
+        if (!mb_check_encoding($contents, 'UTF-8')) {
+            $contents = mb_convert_encoding(
+                $contents,
+                'UTF-8',
+                'Windows-1252'
+            );
+        }
+
+        // Give fgetcsv() a stream containing the normalized data.
+        $handle = fopen('php://temp', 'r+');
+
+        if ($handle === false || fwrite($handle, $contents) === false) {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+
+            $this->flashToast(
+                'danger',
+                'Import Failed',
+                'Could not prepare the uploaded CSV file.'
+            );
+
+            return back()->withErrors([
+                'file' => 'Could not prepare the uploaded CSV file.'
+            ]);
+        }
+
+        rewind($handle);
+
+        /*
+    |--------------------------------------------------------------------------
+    | Read and validate CSV headers
+    |--------------------------------------------------------------------------
+    */
+
         $rawHeader = fgetcsv($handle, 1000, ',');
+
         if (!$rawHeader) {
             fclose($handle);
-            $this->flashToast('danger', 'Import Failed', 'The uploaded file is empty.');
-            return back()->withErrors(['file' => 'The uploaded file is empty.']);
+
+            $this->flashToast(
+                'danger',
+                'Import Failed',
+                'The uploaded file is empty.'
+            );
+
+            return back()->withErrors([
+                'file' => 'The uploaded file is empty.'
+            ]);
         }
 
         $header = array_map(function ($col) {
-            $col = preg_replace('/[\x{EF}\x{BB}\x{BF}]/u', '', $col);
+            $col = preg_replace(
+                '/^\xEF\xBB\xBF/',
+                '',
+                (string) $col
+            );
+
             return strtolower(trim($col));
         }, $rawHeader);
 
-        $requiredColumns = ['name', 'email', 'student_number', 'phone', 'role', 'password'];
-        $missingColumns  = array_diff($requiredColumns, $header);
+        $requiredColumns = [
+            'name',
+            'email',
+            'student_number',
+            'phone',
+            'role',
+            'password'
+        ];
+
+        $missingColumns = array_diff(
+            $requiredColumns,
+            $header
+        );
 
         if (!empty($missingColumns)) {
             fclose($handle);
+
             $missingStr = implode(', ', $missingColumns);
-            $this->logActivity('user_management', 'User CSV import was rejected because required columns were missing.', 'warning', null, [
-                'missing_columns' => $missingColumns,
+
+            $this->flashToast(
+                'danger',
+                'Invalid CSV Format',
+                "Missing required columns: {$missingStr}"
+            );
+
+            return back()->withErrors([
+                'file' => "Missing required columns: {$missingStr}"
             ]);
-            $this->flashToast('danger', 'Invalid CSV Format', "Missing required columns: {$missingStr}");
-            return back()->withErrors(['file' => "Missing required columns: {$missingStr}"]);
         }
 
         $importedCount = 0;
-        $skippedCount  = 0;
+        $skippedCount = 0;
 
         DB::beginTransaction();
+
         try {
             while (($row = fgetcsv($handle, 1000, ',')) !== false) {
+                // Skip empty lines.
                 if (empty(array_filter($row))) {
                     continue;
                 }
+
+                // Skip incomplete rows.
                 if (count($row) < count($header)) {
                     $skippedCount++;
                     continue;
                 }
 
-                $data          = array_combine($header, $row);
-                $email         = trim($data['email'] ?? '');
+                $data = array_combine($header, $row);
+
+                $email = trim($data['email'] ?? '');
                 $studentNumber = trim($data['student_number'] ?? '');
 
-                if (empty($email) || User::where('email', $email)->orWhere('student_number', $studentNumber)->exists()) {
+                // Skip duplicate users or records without an email.
+                if (
+                    empty($email) ||
+                    User::where('email', $email)
+                    ->orWhere('student_number', $studentNumber)
+                    ->exists()
+                ) {
                     $skippedCount++;
                     continue;
                 }
 
                 User::create([
-                    'name'           => trim($data['name']),
-                    'email'          => $email,
+                    'name' => trim($data['name'] ?? ''),
+                    'email' => $email,
                     'student_number' => $studentNumber,
-                    'phone'          => trim($data['phone']),
-                    'role'           => in_array(strtolower(trim($data['role'])), ['student', 'personnel', 'admin']) ? strtolower(trim($data['role'])) : 'student',
-                    'password'       => Hash::make(trim($data['password'])),
+                    'phone' => trim($data['phone'] ?? ''),
+                    'role' => in_array(
+                        strtolower(trim($data['role'] ?? '')),
+                        ['student', 'personnel', 'admin']
+                    )
+                        ? strtolower(trim($data['role']))
+                        : 'student',
+                    'password' => Hash::make(
+                        trim($data['password'] ?? '')
+                    ),
                 ]);
 
                 $importedCount++;
@@ -1498,34 +1633,47 @@ class SuperAdminController extends Controller
 
             if ($importedCount === 0) {
                 $message = "No new users were imported. ({$skippedCount} duplicate or invalid records skipped).";
-                $this->logActivity('user_management', 'User CSV import completed with no new users added.', 'warning', null, [
-                    'imported_count' => 0,
-                    'skipped_count'  => $skippedCount,
-                ]);
-                $this->flashToast('warning', 'Import Completed', $message);
+
+                $this->flashToast(
+                    'warning',
+                    'Import Completed',
+                    $message
+                );
+
                 return back()->with('status', $message);
             }
 
             $message = "Successfully enrolled {$importedCount} new user(s).";
+
             if ($skippedCount > 0) {
                 $message .= " ({$skippedCount} duplicate/invalid records were skipped).";
             }
 
-            $this->logActivity('user_management', "Imported {$importedCount} new user account(s).", $skippedCount > 0 ? 'warning' : 'info', null, [
-                'imported_count' => $importedCount,
-                'skipped_count'  => $skippedCount,
-            ]);
-            $this->flashToast('success', 'Mass Enrollment Complete', $message);
+            $this->flashToast(
+                'success',
+                'Mass Enrollment Complete',
+                $message
+            );
 
             return back()->with('success', $message);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            fclose($handle);
 
-            $this->logActivity('user_management', 'User CSV import failed.', 'danger', null, ['error' => $e->getMessage()]);
-            $this->flashToast('danger', 'Import Failed', 'Critical System Error: ' . $e->getMessage());
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
 
-            return back()->withErrors(['file' => 'Import failed: ' . $e->getMessage()]);
+            report($e);
+
+            $this->flashToast(
+                'danger',
+                'Import Failed',
+                'The import failed due to a system or data error. Check the application logs for details.'
+            );
+
+            return back()->withErrors([
+                'file' => 'Import failed. Check the Laravel log for details.'
+            ]);
         }
     }
 }

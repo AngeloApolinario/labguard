@@ -3930,13 +3930,13 @@ class LabGuardClient:
                             "Other Terminal Concern",
                             f"External USB storage drive mounted at {drive}"
                         )
-                        self.show_notification(
+                        self.show_notification(  
                             "Security Alert",
                             f"External USB drive ({drive}) detected and reported to lab personnel.",
                             color="#ef4444"
                         )
                 self.baseline_usb_drives = current_drives
-
+   
             removed_drives = self.baseline_usb_drives - current_drives
             if removed_drives:
                 for drive in removed_drives:

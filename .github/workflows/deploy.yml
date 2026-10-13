@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "16" # Using a more stable version
           cache: "npm"
 
       - name: Install NPM dependencies
@@ -52,7 +52,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/html/labguard
-            chmod -R 777 storage bootstrap/cache
             php artisan migrate --force
             php artisan config:cache
             php artisan route:cache

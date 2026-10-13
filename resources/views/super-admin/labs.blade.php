@@ -56,56 +56,6 @@
     <div class="py-6 sm:py-12 px-4 sm:px-6 min-h-screen">
         <div class="max-w-7xl mx-auto">
 
-            {{-- Flash Success Message --}}
-            @if(session('success'))
-            <div
-                id="flash-message"
-                class="mb-6 sm:mb-8 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-between gap-3">
-
-                <div class="flex items-center gap-3">
-                    <div class="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
-
-                    <p class="text-[10px] font-black text-emerald-700 uppercase tracking-widest">
-                        {{ session('success') }}
-                    </p>
-                </div>
-
-                <button
-                    onclick="document.getElementById('flash-message').remove()"
-                    class="text-emerald-400 hover:text-emerald-600">
-
-                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path d="M6 18L18 6M6 6l12 12" stroke-width="2" />
-                    </svg>
-                </button>
-            </div>
-            @endif
-
-            {{-- Flash Error Message --}}
-            @if(session('error'))
-            <div
-                id="flash-error"
-                class="mb-6 sm:mb-8 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-between gap-3">
-
-                <div class="flex items-center gap-3">
-                    <div class="size-2 bg-rose-500 rounded-full animate-pulse"></div>
-
-                    <p class="text-[10px] font-black text-rose-700 uppercase tracking-widest">
-                        {{ session('error') }}
-                    </p>
-                </div>
-
-                <button
-                    onclick="document.getElementById('flash-error').remove()"
-                    class="text-rose-400 hover:text-rose-600">
-
-                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path d="M6 18L18 6M6 6l12 12" stroke-width="2" />
-                    </svg>
-                </button>
-            </div>
-            @endif
-
             {{-- LAB CARDS --}}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-10">
 
@@ -330,6 +280,66 @@
         </div>
     </div>
 
+    {{-- DYNAMIC TOAST NOTIFICATION COMPONENT --}}
+    @php
+    $toast = session('toast');
+    if (!$toast && session('success')) {
+    $toast = [
+    'type' => 'success',
+    'title' => 'Success',
+    'message' => session('success'),
+    ];
+    } elseif (!$toast && session('error')) {
+    $toast = [
+    'type' => 'error',
+    'title' => 'System Alert',
+    'message' => session('error'),
+    ];
+    }
+    @endphp
+
+    @if($toast)
+    <div id="dynamic-toast" class="fixed bottom-4 right-4 sm:bottom-auto sm:top-6 sm:right-6 z-[100000] max-w-sm sm:max-w-md w-[calc(100%-2rem)] sm:w-auto bg-slate-900 border {{ ($toast['type'] ?? 'success') === 'error' ? 'border-rose-500' : 'border-[#D4AF37]' }} text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 transition-all duration-500 ease-out translate-y-0 opacity-100">
+        <div class="size-8 rounded-xl {{ ($toast['type'] ?? 'success') === 'error' ? 'bg-rose-500/20 border-rose-500/40 text-rose-400' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' }} border flex items-center justify-center shrink-0 mt-0.5">
+            @if(($toast['type'] ?? 'success') === 'error')
+            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            @else
+            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+            @endif
+        </div>
+
+        <div class="flex-1 pr-2">
+            <h4 class="text-xs font-black uppercase tracking-widest {{ ($toast['type'] ?? 'success') === 'error' ? 'text-rose-400' : 'text-[#D4AF37]' }}">
+                {{ $toast['title'] ?? 'Notification' }}
+            </h4>
+            <p class="text-xs font-semibold text-slate-300 mt-0.5 leading-relaxed">
+                {{ $toast['message'] ?? '' }}
+            </p>
+        </div>
+
+        <button onclick="dismissToast()" class="text-slate-400 hover:text-white transition-colors p-1 cursor-pointer">
+            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
+
+    <script>
+        function dismissToast() {
+            const toast = document.getElementById('dynamic-toast');
+            if (toast) {
+                toast.classList.add('opacity-0', '-translate-y-4');
+                setTimeout(() => toast.remove(), 500);
+            }
+        }
+        setTimeout(dismissToast, 5000);
+    </script>
+    @endif
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // Attach listener to all Inspect buttons via data attributes
@@ -421,8 +431,8 @@
 
         function closeInspectModal() {
             const modal = document.getElementById('inspectModal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         // =========================================================
@@ -458,7 +468,6 @@
             return confirm('Are you sure you want to permanently delete this laboratory and all of its computer units?');
         }
 
-        // FIXED: Corrected JavaScript syntax bug from "Id," to "if"
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeLabModal();

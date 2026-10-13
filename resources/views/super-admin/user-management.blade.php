@@ -15,8 +15,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                     User <span class="text-[#D4AF37]">Administration</span>
                 </h2>
             </div>
-
-
         </div>
     </x-slot>
 
@@ -27,8 +25,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
         massEnrollModal: {{ $errors->has('file') ? 'true' : 'false' }},
         archiveModal: false,
         currentUser: {},
-        search: '',
-        selectedRole: '',
         archiveSearch: '',
         archiveRole: ''
     }">
@@ -36,7 +32,9 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
 
             <!-- Controls Header: Search, Role Filter, Action Buttons -->
             <div class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 mb-6 sm:mb-8">
-                <div class="flex flex-col sm:flex-row flex-1 items-stretch sm:items-center gap-3 w-full">
+
+                {{-- Server-Side Search & Role Filter Form --}}
+                <form method="GET" action="{{ request()->url() }}" class="flex flex-col sm:flex-row flex-1 items-stretch sm:items-center gap-3 w-full">
                     <!-- Search Input -->
                     <div class="relative w-full sm:w-72 md:w-80">
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -45,20 +43,37 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                             </svg>
                         </span>
                         <input type="text"
-                            x-model="search"
+                            name="search"
+                            value="{{ request('search') }}"
                             placeholder="Search name, email, or ID..."
-                            class="block w-full pl-10 pr-3 py-2.5 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm transition-all">
+                            class="block w-full pl-10 pr-9 py-2.5 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm transition-all">
+
+                        @if(request('search'))
+                        <a href="{{ request()->fullUrlWithQuery(['search' => null]) }}"
+                            class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition-colors"
+                            title="Clear search">
+                            ✕
+                        </a>
+                        @endif
                     </div>
 
                     <!-- Role Filter Dropdown (Includes super-admin) -->
-                    <select x-model="selectedRole" class="py-2.5 px-4 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm font-semibold text-slate-600 transition-all cursor-pointer w-full sm:w-auto">
+                    <select name="role"
+                        onchange="this.form.submit()"
+                        class="py-2.5 px-4 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm font-semibold text-slate-600 transition-all cursor-pointer w-full sm:w-auto">
                         <option value="">All Roles</option>
-                        <option value="student">Student</option>
-                        <option value="personnel">Personnel</option>
-                        <option value="admin">Admin</option>
-                        <option value="super-admin">Super Admin</option>
+                        <option value="student" {{ request('role') === 'student' ? 'selected' : '' }}>Student</option>
+                        <option value="personnel" {{ request('role') === 'personnel' ? 'selected' : '' }}>Personnel</option>
+                        <option value="admin" {{ request('role') === 'admin' ? 'selected' : '' }}>Admin</option>
+                        <option value="super-admin" {{ request('role') === 'super-admin' ? 'selected' : '' }}>Super Admin</option>
                     </select>
-                </div>
+
+                    @if(request('search') || request('role'))
+                    <a href="{{ request()->url() }}" class="inline-flex items-center justify-center text-xs font-bold text-slate-500 hover:text-rose-600 px-3 py-2 transition-colors">
+                        Reset Filters
+                    </a>
+                    @endif
+                </form>
 
                 <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                     <!-- Archive Vault Trigger Button -->
@@ -96,9 +111,8 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                     <div class="flex items-center gap-3">
                         <h3 class="text-lg sm:text-xl font-black text-slate-800 tracking-tight">System Accounts</h3>
                         <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-black">
-                            {{ $users->count() }} Total
+                            {{ $users->total() }} Total
                         </span>
-
                     </div>
                 </div>
 
@@ -113,13 +127,8 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                             </tr>
                         </thead>
                         <tbody class="block md:table-row-group space-y-3 md:space-y-0">
-                            @foreach($users as $user)
-                            <tr class="group bg-white md:bg-transparent rounded-2xl border border-slate-100 md:border-none p-4 md:p-0 shadow-sm md:shadow-none hover:bg-slate-50/80 transition-all block md:table-row"
-                                x-show="(search === '' || $el.innerText.toLowerCase().includes(search.toLowerCase())) && (selectedRole === '' || '{{ $user->role }}' === selectedRole)"
-                                x-transition:enter="transition ease-out duration-200"
-                                x-transition:enter-start="opacity-0 transform scale-[0.98]"
-                                x-transition:enter-end="opacity-100 transform scale-100">
-
+                            @forelse($users as $user)
+                            <tr class="group bg-white md:bg-transparent rounded-2xl border border-slate-100 md:border-none p-4 md:p-0 shadow-sm md:shadow-none hover:bg-slate-50/80 transition-all block md:table-row">
                                 <!-- Name Column / Header Block on Mobile -->
                                 <td class="py-2 md:py-5 px-0 md:px-4 rounded-l-2xl block md:table-cell">
                                     <div class="flex items-center justify-between md:justify-start gap-3">
@@ -193,10 +202,57 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                     </div>
                                 </td>
                             </tr>
-                            @endforeach
+                            @empty
+                            <tr class="block md:table-row">
+                                <td colspan="4" class="py-12 text-center text-slate-400 block md:table-cell">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <div class="size-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                                            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </div>
+                                        <p class="text-sm font-bold text-slate-600">No matching accounts found</p>
+                                        <p class="text-xs text-slate-400 mt-1">Try adjusting your search query or resetting filters.</p>
+                                        @if(request('search') || request('role'))
+                                        <a href="{{ request()->url() }}" class="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all">
+                                            Clear Filters
+                                        </a>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
+
+                {{-- User Pagination --}}
+                @if ($users instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator)
+                <div class="mt-6 border-t border-slate-100 pt-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <p class="text-xs font-medium text-slate-500">
+                            Showing
+                            <span class="font-bold text-slate-800">
+                                {{ $users->firstItem() ?? 0 }}
+                            </span>
+                            to
+                            <span class="font-bold text-slate-800">
+                                {{ $users->lastItem() ?? 0 }}
+                            </span>
+                            of
+                            <span class="font-bold text-slate-800">
+                                {{ $users->total() }}
+                            </span>
+                            users
+                        </p>
+
+                        <div>
+                            {{ $users->onEachSide(1)->links() }}
+                        </div>
+                    </div>
+                </div>
+                @endif
+
             </div>
         </div>
 
@@ -299,10 +355,10 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                 <div class="flex flex-wrap items-center gap-2">
                                     <h4 class="text-sm font-black text-white tracking-tight">{{ $archived->name }}</h4>
                                     <span class="px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider
-                                        {{ $archived->role == 'super-admin' ? 'bg-yellow-400 text-slate-950 font-black' : '' }}
-                                        {{ $archived->role == 'admin' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : '' }}
-                                        {{ $archived->role == 'student' ? 'bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30' : '' }}
-                                        {{ $archived->role == 'personnel' ? 'bg-slate-700 text-slate-300 border border-slate-600' : '' }}">
+                                            {{ $archived->role == 'super-admin' ? 'bg-yellow-400 text-slate-950 font-black' : '' }}
+                                            {{ $archived->role == 'admin' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : '' }}
+                                            {{ $archived->role == 'student' ? 'bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30' : '' }}
+                                            {{ $archived->role == 'personnel' ? 'bg-slate-700 text-slate-300 border border-slate-600' : '' }}">
                                         {{ $archived->role }}
                                     </span>
                                 </div>
@@ -438,7 +494,7 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                             <select name="role" class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm py-3 px-4 focus:ring-[#D4AF37]">
                                 <option value="student" {{ old('role') == 'student' ? 'selected' : '' }}>Student</option>
                                 <option value="personnel" {{ old('role') == 'personnel' ? 'selected' : '' }}>Personnel (Teacher)</option>
-                                <option value="admin" {{ old('role') == 'admin' ? 'selected' : '' }}>System Admin</option>
+                                <option value="admin" {{ old('role') == 'admin' ? 'selected' : '' }}>Admin</option>
                                 <option value="super-admin" {{ old('role') == 'super-admin' ? 'selected' : '' }}>Super Admin (Master)</option>
                             </select>
                             @error('role') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
@@ -456,41 +512,41 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
 
                         {{-- Password Suite --}}
                         <div class="space-y-1" x-data="{
-                            show: false,
-                            password: '',
-                            get minLength() { return this.password.length >= 8; },
-                            get hasUpper() { return /[A-Z]/.test(this.password); },
-                            get hasLower() { return /[a-z]/.test(this.password); },
-                            get hasNumber() { return /[0-9]/.test(this.password); },
-                            get hasSpecial() { return /[^A-Za-z0-9]/.test(this.password); },
-                            get score() {
-                                let s = 0;
-                                if (this.minLength) s++;
-                                if (this.hasUpper && this.hasLower) s++;
-                                if (this.hasNumber) s++;
-                                if (this.hasSpecial) s++;
-                                return s;
-                            },
-                            get label() {
-                                if (!this.password) return '';
-                                if (this.score <= 1) return 'Weak';
-                                if (this.score === 2) return 'Fair';
-                                if (this.score === 3) return 'Good';
-                                return 'Strong';
-                            },
-                            get barColor() {
-                                if (this.score <= 1) return 'bg-rose-500/80';
-                                if (this.score === 2) return 'bg-amber-400/80';
-                                if (this.score === 3) return 'bg-sky-400/80';
-                                return 'bg-emerald-500';
-                            },
-                            get textColor() {
-                                if (this.score <= 1) return 'text-rose-500';
-                                if (this.score === 2) return 'text-amber-500';
-                                if (this.score === 3) return 'text-sky-500';
-                                return 'text-emerald-600';
-                            }
-                        }">
+                                show: false,
+                                password: '',
+                                get minLength() { return this.password.length >= 8; },
+                                get hasUpper() { return /[A-Z]/.test(this.password); },
+                                get hasLower() { return /[a-z]/.test(this.password); },
+                                get hasNumber() { return /[0-9]/.test(this.password); },
+                                get hasSpecial() { return /[^A-Za-z0-9]/.test(this.password); },
+                                get score() {
+                                    let s = 0;
+                                    if (this.minLength) s++;
+                                    if (this.hasUpper && this.hasLower) s++;
+                                    if (this.hasNumber) s++;
+                                    if (this.hasSpecial) s++;
+                                    return s;
+                                },
+                                get label() {
+                                    if (!this.password) return '';
+                                    if (this.score <= 1) return 'Weak';
+                                    if (this.score === 2) return 'Fair';
+                                    if (this.score === 3) return 'Good';
+                                    return 'Strong';
+                                },
+                                get barColor() {
+                                    if (this.score <= 1) return 'bg-rose-500/80';
+                                    if (this.score === 2) return 'bg-amber-400/80';
+                                    if (this.score === 3) return 'bg-sky-400/80';
+                                    return 'bg-emerald-500';
+                                },
+                                get textColor() {
+                                    if (this.score <= 1) return 'text-rose-500';
+                                    if (this.score === 2) return 'text-amber-500';
+                                    if (this.score === 3) return 'text-sky-500';
+                                    return 'text-emerald-600';
+                                }
+                            }">
                             <div class="flex items-center justify-between ml-1">
                                 <label class="text-[10px] font-black text-slate-400 uppercase">Password</label>
                                 <span :class="textColor" x-text="label" class="uppercase text-[8px] font-black tracking-wider transition-colors"></span>

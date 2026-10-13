@@ -18,9 +18,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                     </p>
                 </div>
             </div>
-
-
-
         </div>
     </x-slot>
 
@@ -31,16 +28,15 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
         massEnrollModal: {{ $errors->has('file') ? 'true' : 'false' }},
         archiveModal: false,
         currentUser: {},
-        search: '',
-        selectedRole: '',
         archiveSearch: '',
         archiveRole: ''
     }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-
             <!-- Controls Header: Search, Role Filter, Action Buttons -->
             <div class="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 mb-6 sm:mb-8">
-                <div class="flex flex-col sm:flex-row flex-1 items-stretch sm:items-center gap-3 w-full">
+
+                {{-- Server-Side Search & Role Filter Form --}}
+                <form method="GET" action="{{ request()->url() }}" class="flex flex-col sm:flex-row flex-1 items-stretch sm:items-center gap-3 w-full">
                     <!-- Search Input -->
                     <div class="relative w-full sm:w-72 md:w-80">
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -49,19 +45,36 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                             </svg>
                         </span>
                         <input type="text"
-                            x-model="search"
+                            name="search"
+                            value="{{ request('search') }}"
                             placeholder="Search name, email, or ID..."
-                            class="block w-full pl-10 pr-3 py-2.5 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm transition-all">
+                            class="block w-full pl-10 pr-9 py-2.5 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm transition-all">
+
+                        @if(request('search'))
+                        <a href="{{ request()->fullUrlWithQuery(['search' => null]) }}"
+                            class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 transition-colors"
+                            title="Clear search">
+                            ✕
+                        </a>
+                        @endif
                     </div>
 
                     <!-- Role Filter Dropdown -->
-                    <select x-model="selectedRole" class="py-2.5 px-4 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm font-semibold text-slate-600 transition-all cursor-pointer w-full sm:w-auto">
+                    <select name="role"
+                        onchange="this.form.submit()"
+                        class="py-2.5 px-4 border-none rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#D4AF37] text-sm font-semibold text-slate-600 transition-all cursor-pointer w-full sm:w-auto">
                         <option value="">All Roles</option>
-                        <option value="student">Student</option>
-                        <option value="personnel">Personnel</option>
-                        <option value="admin">Admin</option>
+                        <option value="student" {{ request('role') === 'student' ? 'selected' : '' }}>Student</option>
+                        <option value="personnel" {{ request('role') === 'personnel' ? 'selected' : '' }}>Personnel</option>
+                        <option value="admin" {{ request('role') === 'admin' ? 'selected' : '' }}>Admin</option>
                     </select>
-                </div>
+
+                    @if(request('search') || request('role'))
+                    <a href="{{ request()->url() }}" class="inline-flex items-center justify-center text-xs font-bold text-slate-500 hover:text-rose-600 px-3 py-2 transition-colors">
+                        Reset Filters
+                    </a>
+                    @endif
+                </form>
 
                 <div class="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                     <!-- Archive Vault Trigger Button -->
@@ -99,9 +112,8 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                     <div class="flex items-center gap-3">
                         <h3 class="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Active Users</h3>
                         <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-black">
-                            {{ $users->count() }} Total
+                            {{ $users->total() }} Total
                         </span>
-
                     </div>
                 </div>
 
@@ -115,14 +127,10 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                 <th class="pb-4 px-4 text-right pr-10">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="block md:table-row-group space-y-3 md:space-y-0">
-                            @foreach($users as $user)
-                            <tr class="group bg-white md:bg-transparent rounded-2xl border border-slate-100 md:border-none p-4 md:p-0 shadow-sm md:shadow-none hover:bg-slate-50/80 transition-all block md:table-row"
-                                x-show="(search === '' || $el.innerText.toLowerCase().includes(search.toLowerCase())) && (selectedRole === '' || '{{ $user->role }}' === selectedRole)"
-                                x-transition:enter="transition ease-out duration-200"
-                                x-transition:enter-start="opacity-0 transform scale-[0.98]"
-                                x-transition:enter-end="opacity-100 transform scale-100">
 
+                        <tbody class="block md:table-row-group space-y-3 md:space-y-0">
+                            @forelse($users as $user)
+                            <tr class="group bg-white md:bg-transparent rounded-2xl border border-slate-100 md:border-none p-4 md:p-0 shadow-sm md:shadow-none hover:bg-slate-50/80 transition-all block md:table-row">
                                 <!-- Name Column / Header Block on Mobile -->
                                 <td class="py-2 md:py-5 px-0 md:px-4 rounded-l-2xl block md:table-cell">
                                     <div class="flex items-center justify-between md:justify-start gap-3">
@@ -170,20 +178,16 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                         <div class="flex md:block justify-end">
                                             <button @click="dropdown = !dropdown" class="text-slate-400 hover:text-slate-800 transition-colors text-xl md:text-2xl px-2 py-1 bg-slate-50 md:bg-transparent rounded-lg">⋮</button>
                                         </div>
-
                                         <div x-show="dropdown"
                                             x-cloak
                                             @click.away="dropdown = false"
                                             x-transition
                                             class="absolute right-0 z-50 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 text-left">
-
                                             <button @click="editModal = true; currentUser = {{ $user }}; dropdown = false"
                                                 class="w-full text-left px-5 py-3 text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 transition-colors">
                                                 Edit Profile
                                             </button>
-
                                             <hr class="border-slate-50">
-
                                             <form method="POST" action="{{ route('dashboard.users.destroy', $user->id) }}" onsubmit="return confirm('Soft-delete this account? The user will be moved to the Archive Vault.')">
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="w-full text-left px-5 py-3 text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 transition-colors">
@@ -194,21 +198,59 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                     </div>
                                 </td>
                             </tr>
-                            @endforeach
+                            @empty
+                            <tr class="block md:table-row">
+                                <td colspan="4" class="py-12 text-center text-slate-400 block md:table-cell">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <div class="size-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                                            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                        </div>
+                                        <p class="text-sm font-bold text-slate-600">No matching users found</p>
+                                        <p class="text-xs text-slate-400 mt-1">Try adjusting your search criteria or resetting filters.</p>
+                                        @if(request('search') || request('role'))
+                                        <a href="{{ request()->url() }}" class="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all">
+                                            Clear Filters
+                                        </a>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
+
+                {{-- Pagination and total record range --}}
+                <div class="mt-6 border-t border-slate-100 pt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <p class="text-xs font-medium text-slate-500">
+                        Showing
+                        <span class="font-bold text-slate-800">{{ $users->firstItem() ?? 0 }}</span>
+                        to
+                        <span class="font-bold text-slate-800">{{ $users->lastItem() ?? 0 }}</span>
+                        of
+                        <span class="font-bold text-slate-800">{{ $users->total() }}</span>
+                        active users
+                    </p>
+
+                    @if ($users->hasPages())
+                    <div class="w-full sm:w-auto">
+                        {{ $users->onEachSide(1)->links() }}
+                    </div>
+                    @endif
+                </div>
+
             </div>
         </div>
 
         {{-- ========================================================================= --}}
-        {{-- ARCHIVE VAULT MODAL (AWARD-WINNING LUXURY INTERFACE)                     --}}
+        {{-- ARCHIVE VAULT MODAL                                                       --}}
         {{-- ========================================================================= --}}
         <div x-show="archiveModal"
             x-cloak
             class="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
             role="dialog" aria-modal="true">
-
             {{-- Backdrop --}}
             <div x-show="archiveModal"
                 x-transition:enter="ease-out duration-300"
@@ -267,7 +309,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                     placeholder="Filter archived records..."
                                     class="w-full bg-slate-800/90 border border-slate-700/80 text-white rounded-xl text-xs py-2 pl-9 pr-3 focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] placeholder:text-slate-500">
                             </div>
-
                             <select x-model="archiveRole"
                                 class="bg-slate-800/90 border border-slate-700/80 text-white rounded-xl text-xs py-2 px-3 focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] cursor-pointer">
                                 <option value="">All</option>
@@ -285,7 +326,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                     <div class="p-4 sm:p-5 rounded-2xl bg-slate-800/60 border border-slate-700/60 hover:border-slate-600 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
                         x-show="(archiveSearch === '' || '{{ strtolower($archived->name . ' ' . $archived->email . ' ' . $archived->student_number) }}'.includes(archiveSearch.toLowerCase())) && (archiveRole === '' || '{{ $archived->role }}' === archiveRole)"
                         x-transition>
-
                         {{-- Left: User Meta --}}
                         <div class="flex items-start sm:items-center gap-3.5">
                             <div class="size-11 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-center font-bold text-slate-400 text-xs shrink-0 shadow-inner">
@@ -327,7 +367,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
 
                         {{-- Right: Actions --}}
                         <div class="flex items-center justify-end gap-2 shrink-0 pt-2 md:pt-0 border-t border-slate-700/40 md:border-t-0">
-                            {{-- Restore Action --}}
                             <form method="POST" action="{{ Route::has('dashboard.users.restore') ? route('dashboard.users.restore', $archived->id) : url('/dashboard/users/' . $archived->id . '/restore') }}"
                                 onsubmit="return confirm('Restore this user account? The user will immediately be able to login and access workstations.')">
                                 @csrf
@@ -378,7 +417,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Add Personnel or Student</p>
                 </div>
 
-                {{-- Prominent Validation Alert inside the Modal --}}
                 @if($errors->hasAny(['name', 'email', 'student_number', 'role', 'phone', 'password']))
                 <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-2.5 mb-4 text-xs font-semibold shrink-0">
                     <svg class="size-4 shrink-0 text-rose-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -393,7 +431,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
 
                 <form action="{{ route('dashboard.users.store') }}" method="POST" class="space-y-4 sm:space-y-5 overflow-y-auto pr-1">
                     @csrf
-
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="space-y-1">
                             <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Full Name</label>
@@ -402,6 +439,7 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                 placeholder="Juan Dela Cruz" required>
                             @error('name') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
                         </div>
+
                         <div class="space-y-1">
                             <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Email</label>
                             <input type="email" name="email" value="{{ old('email') }}"
@@ -419,6 +457,7 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                 placeholder="01-2324-048389" required>
                             @error('student_number') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
                         </div>
+
                         <div class="space-y-1">
                             <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Role</label>
                             <select name="role" class="w-full rounded-xl border-slate-200 bg-slate-50 text-sm py-3 px-4 focus:ring-[#D4AF37]">
@@ -439,7 +478,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                             @error('phone') <p class="text-[10px] text-red-500 font-bold uppercase mt-1">{{ $message }}</p> @enderror
                         </div>
 
-                        {{-- Subtle Interactive Password Suite --}}
                         <div class="space-y-1" x-data="{
                             show: false,
                             password: '',
@@ -480,6 +518,7 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                 <label class="text-[10px] font-black text-slate-400 uppercase">Password</label>
                                 <span :class="textColor" x-text="label" class="uppercase text-[8px] font-black tracking-wider transition-colors"></span>
                             </div>
+
                             <div class="relative">
                                 <input :type="show ? 'text' : 'password'"
                                     name="password"
@@ -498,7 +537,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                 </button>
                             </div>
 
-                            {{-- 2px Progress Line --}}
                             <div class="grid grid-cols-4 gap-1 h-[2px] w-full bg-slate-200 rounded-full overflow-hidden mt-1.5">
                                 <div class="h-full rounded-full transition-all duration-300" :class="score >= 1 ? barColor : 'bg-transparent'"></div>
                                 <div class="h-full rounded-full transition-all duration-300" :class="score >= 2 ? barColor : 'bg-transparent'"></div>
@@ -506,7 +544,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                                 <div class="h-full rounded-full transition-all duration-300" :class="score >= 4 ? barColor : 'bg-transparent'"></div>
                             </div>
 
-                            {{-- Inline Requirements --}}
                             <div class="justify-between flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[8px] font-medium tracking-wide text-slate-500 pt-0.5">
                                 <span :class="minLength ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="transition-colors flex items-center gap-1">
                                     <span class="size-1 rounded-full" :class="minLength ? 'bg-emerald-500' : 'bg-slate-300'"></span> 8+ chars
@@ -543,7 +580,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
         <!-- Edit User Modal -->
         <div x-show="editModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak>
             <div class="bg-white rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-10 max-w-2xl w-full shadow-2xl border border-white max-h-[90vh] flex flex-col" @click.away="editModal = false">
-
                 <div class="mb-6 shrink-0">
                     <h3 class="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">Edit Personal Information</h3>
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Updating Account: <span x-text="currentUser.name" class="text-[#D4AF37]"></span></p>
@@ -551,7 +587,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
 
                 <form :action="'/dashboard/users/' + currentUser.id" method="POST" class="space-y-4 sm:space-y-6 overflow-y-auto pr-1">
                     @csrf @method('PATCH')
-
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div class="space-y-1">
                             <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Full Legal Name</label>
@@ -598,14 +633,12 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
         <!-- Mass Enroll Modal -->
         <div x-show="massEnrollModal" class="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm" x-cloak>
             <div class="bg-white rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-white max-h-[90vh] flex flex-col" @click.away="massEnrollModal = false">
-
                 <div class="mb-4 sm:mb-6 shrink-0">
                     <h3 class="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tight">Mass User Enrollment</h3>
                     <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Upload Excel or CSV file to enroll multiple users</p>
                 </div>
 
                 <div class="overflow-y-auto pr-1">
-                    <!-- Step-by-Step Instructions & Format Guide -->
                     <div class="bg-slate-50 rounded-2xl p-4 sm:p-5 mb-6 border border-slate-200/80">
                         <h4 class="text-xs font-black uppercase text-[#D4AF37] tracking-wider mb-2 flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -613,7 +646,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                             </svg>
                             Excel / CSV File Format Instructions
                         </h4>
-
                         <ol class="list-decimal list-inside text-xs text-slate-600 space-y-1 font-medium mb-4">
                             <li>The first row of your spreadsheet <strong>must</strong> contain exact column header names.</li>
                             <li>Valid roles are: <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">student</code>, <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">personnel</code>, or <code class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">admin</code>.</li>
@@ -621,7 +653,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                         </ol>
 
                         <p class="text-[10px] font-black text-slate-400 uppercase mb-2">Required Columns & Sample Header:</p>
-
                         <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
                             <table class="w-full text-left text-[11px] font-mono text-slate-700 min-w-[500px]">
                                 <thead class="bg-slate-100 text-[10px] font-black uppercase text-slate-500">
@@ -651,7 +682,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
                     <!-- File Upload Form -->
                     <form action="{{ route('dashboard.users.import') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
                         @csrf
-
                         <div class="space-y-2">
                             <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Upload File (.csv, .xlsx)</label>
                             <input type="file" name="file" accept=".csv, .xlsx, .xls" required
@@ -690,7 +720,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
             </p>
         </div>
     </div>
-
     <script>
         setTimeout(() => {
             const toast = document.getElementById('error-toast');
@@ -717,7 +746,6 @@ $archivedUsers = $archivedUsers ?? \App\Models\User::onlyTrashed()->latest('dele
             </p>
         </div>
     </div>
-
     <script>
         setTimeout(() => {
             const toast = document.getElementById('success-toast');

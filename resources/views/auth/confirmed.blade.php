@@ -17,7 +17,7 @@
                 Email <span class="text-emerald-600">Verified</span>
             </h2>
             <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] mt-1">
-                LabGuard Authorization Control
+                LabGuard Computer Laboratory Management System
             </p>
 
             <div class="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">

@@ -313,3 +313,12 @@ Route::get('/download/client-setup', function () {
         'Content-Type' => 'application/octet-stream',
     ]);
 })->middleware(['auth'])->name('downloads.setup');
+
+
+Route::get('/check-limits', function () {
+    return response()->json([
+        'upload_max_filesize' => ini_get('upload_max_filesize'),
+        'post_max_size'       => ini_get('post_max_size'),
+        'memory_limit'        => ini_get('memory_limit'),
+    ]);
+});
